@@ -335,9 +335,32 @@ XS|
 XS|1. **Delegates** specific tasks to specialized skills
 XS|2. **Coordinates** hand-offs between skills (e.g., TDD -> debugging -> verification)
 XS|3. **Persists** context via planning-with-files across all phases
-XS|4. **Reminds** user to update tracking files via hooks
-XS|
-XS|**Why this works:** Each sub-skill is an expert in its domain. By orchestrating them together, you get best-in-class functionality for each phase without reinventing the wheel.
+TW|**Why this works:** Each sub-skill is an expert in its domain. By orchestrating them together, you get best-in-class functionality for each phase without reinventing the wheel.
+KK|
+KK|## Zero-Dependency Hybrid Mode
+KK|
+KK|This skill works in **two modes**:
+KK|
+KK|### Mode 1: Advanced (with sub-skills)
+KK|If sub-skills are installed, this skill delegates to them for optimal experience:
+KK|
+KK|- Try `skill("brainstorming")` first
+KK|- If skill not found, use inline fallback guide
+KK|
+KK|### Mode 2: Standalone (zero-dependency)
+KK|If sub-skills are NOT installed, this skill uses **built-in fallback** content:
+KK|
+KK|- All core workflows are documented inline
+KK|- Templates are embedded in this skill
+KK|- You follow the same process, but with guidance in this file
+KK|
+KK|### How It Works
+KK|
+KK|1. **First**: Try to invoke sub-skill `skill("xxx")`
+KK|2. **If not found**: Use the inline fallback guide for that step
+KK|3. **Result**: Works identically either way - just different experience levels
+KK|
+KK|**Recommended**: Install sub-skills for best experience, but skill works completely without them!
 XS|
 XS|---
 XS|
