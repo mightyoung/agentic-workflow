@@ -2,10 +2,13 @@
 
 > **One command to start everything.** A complete development workflow orchestrator for AI coding agents.
 
-#JM|[![npm version](https://img.shields.io/npm/v/integrated-dev-workflow.svg)](https://www.npmjs.com/package/integrated-dev-workflow)
-#MX|[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-#HN|
-#BV|> **English** | [中文](README.zh-CN.md)
+[![npm version](https://img.shields.io/npm/v/integrated-dev-workflow.svg)](https://www.npmjs.com/package/integrated-dev-workflow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **English** | [中文](README.zh-CN.md)
+
+---
+
 ## The Problem
 
 AI coding agents often struggle with:
@@ -295,14 +298,16 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-TJ|Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-#HN|
-#XZ|---
-#HN|
-#XZ|## Documentation
-#XZ|
-#XZ|| Document | English | 中文 |
-#XZ||----------|---------|------|
-#XZ|| Usage Guide | [README.md](README.md) | [README.zh-CN.md](README.zh-CN.md) |
-#XZ|| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) |
-#XZ|| Pressure Tests | [tests/scenarios/pressure-tests.md](tests/scenarios/pressure-tests.md) | [tests/scenarios/pressure-tests.zh-CN.md](tests/scenarios/pressure-tests.zh-CN.md)
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## Documentation
+
+| Document | English | 中文 |
+|----------|---------|------|
+| Usage Guide | [README.md](README.md) | [README.zh-CN.md](README.zh-CN.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) |
+| Pressure Tests | [tests/scenarios/pressure-tests.md](tests/scenarios/pressure-tests.md) | [tests/scenarios/pressure-tests.zh-CN.md](tests/scenarios/pressure-tests.zh-CN.md) |
