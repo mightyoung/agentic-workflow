@@ -32,14 +32,30 @@ This skill provides a **complete, orchestrated workflow** that guides the agent 
 
 ### Claude Code / Claude Desktop
 
-1. Navigate to your project root
-2. Create `.claude/skills` directory if it doesn't exist
-3. Copy this skill folder into `.claude/skills/`
-4. Restart Claude Code
-
 ```bash
 mkdir -p .claude/skills
 cp -r /path/to/integrated-dev-workflow .claude/skills/
+```
+
+### OpenCode
+
+```bash
+mkdir -p .agents/skills
+cp -r /path/to/integrated-dev-workflow .agents/skills/
+```
+
+### Cursor
+
+```bash
+mkdir -p .cursor/skills
+cp -r /path/to/integrated-dev-workflow .cursor/skills/
+```
+
+### Trae
+
+```bash
+mkdir -p .trae/skills
+cp -r /path/to/integrated-dev-workflow .trae/skills/
 ```
 
 ### Pi Agent
@@ -50,9 +66,10 @@ pi install npm:integrated-dev-workflow
 
 ### Manual Install
 
-1. Navigate to your project root
-2. Create `.agents/skills` directory if it doesn't exist
-3. Copy this skill folder into `.agents/skills/`
+```bash
+mkdir -p .agents/skills
+cp -r /path/to/integrated-dev-workflow .agents/skills/
+```
 
 ---
 
@@ -71,16 +88,15 @@ Simply tell the agent what you want to build:
 ```
 
 The skill will automatically:
-1. ✅ Check for previous session
-2. ✅ Create tracking files (task_plan.md, findings.md, progress.md)
-3. ✅ Guide through requirements
-4. ✅ Plan the implementation
-5. ✅ Execute with best practices
+1. Check for previous session
+2. Create tracking files (task_plan.md, findings.md, progress.md)
+3. Guide through requirements
+4. Plan the implementation
+5. Execute with best practices
 
 ### Manual Invocation
 
 ```bash
-# Invoke the skill directly
 skill("integrated-dev-workflow")
 ```
 
@@ -88,20 +104,45 @@ skill("integrated-dev-workflow")
 
 ## Agent Compatibility
 
-| Feature | Claude Code | Pi Agent | Generic |
-|---------|-------------|----------|---------|
-| Hooks (PreToolUse/PostToolUse) | ✅ Full support | ⚠️ Limited | ❌ Not supported |
-| Session recovery | ✅ Automatic | ⚠️ Via script | ❌ Manual |
-| File templates | ✅ All | ✅ All | ✅ All |
-| TDD workflow | ✅ Full | ✅ Full | ✅ Full |
-| Code review workflow | ✅ Full | ✅ Full | ✅ Full |
+| Feature | Claude Code | OpenCode | Cursor | Trae | Pi Agent |
+|---------|-------------|----------|--------|------|----------|
+| Hooks | Full | Full | Limited | Limited | Limited |
+| Session recovery | Automatic | Automatic | Via script | Via script | Via script |
+| File templates | All | All | All | All | All |
+| TDD workflow | Full | Full | Full | Full | Full |
+| Code review workflow | Full | Full | Full | Full | Full |
 
-### Claude Code Specific
+### Claude Code
 
 This skill uses hooks for persistent reminders:
 - **PreToolUse**: Reminds to update task_plan.md before major actions
 - **PostToolUse**: Prompts to update task status after file changes
 - **Stop**: Confirms task progress before ending session
+
+### OpenCode
+
+Full support via `.agents/skills` directory:
+1. Copy this skill folder to `.agents/skills/`
+2. Skills are automatically discovered
+3. Use `skill("integrated-dev-workflow")` to invoke
+
+Session recovery works automatically through file-based tracking.
+
+### Cursor
+
+Similar to Claude Code, hooks may work if Cursor supports extensions:
+1. Try copying to `.cursor/skills/`
+2. If hooks not supported, manual session recovery:
+   - Check for task_plan.md before starting
+   - Update progress.md after each action
+
+### Trae
+
+Trae is built on VS Code extension model:
+1. Copy to `.trae/skills/` or VS Code extensions folder
+2. May require manual workflow management:
+   - Check for existing tracking files
+   - Update task status manually
 
 ### Pi Agent Limitations
 
@@ -110,13 +151,6 @@ This skill uses hooks for persistent reminders:
   ```bash
   python3 scripts/session-recovery.py .
   ```
-
-### Generic Agents
-
-Works as a pure reference skill. The agent must manually:
-- Check for existing tracking files
-- Update progress after each action
-- Follow the workflow steps explicitly
 
 ---
 
@@ -132,6 +166,7 @@ your-project/
 ```
 
 ### task_plan.md
+
 ```markdown
 # Task Plan
 
@@ -154,6 +189,7 @@ Phase 1
 ```
 
 ### findings.md
+
 ```markdown
 # Findings
 
@@ -168,6 +204,7 @@ Phase 1
 ```
 
 ### progress.md
+
 ```markdown
 # Progress
 
@@ -195,17 +232,17 @@ This skill orchestrates these sub-skills:
 
 | Skill | Purpose |
 |-------|---------|
-| `planning-with-files` | File-based task tracking |
-| `brainstorming` | Requirement clarification |
-| `writing-plans` | Task refinement |
-| `using-git-worktrees` | Branch management |
-| `subagent-driven-development` | Task execution |
-| `test-driven-development` | TDD workflow |
-| `systematic-debugging` | Issue resolution |
-| `verification-before-completion` | Quality verification |
-| `requesting-code-review` | Code review |
-| `receiving-code-review` | Review handling |
-| `finishing-a-development-branch` | Completion |
+| planning-with-files | File-based task tracking |
+| brainstorming | Requirement clarification |
+| writing-plans | Task refinement |
+| using-git-worktrees | Branch management |
+| subagent-driven-development | Task execution |
+| test-driven-development | TDD workflow |
+| systematic-debugging | Issue resolution |
+| verification-before-completion | Quality verification |
+| requesting-code-review | Code review |
+| receiving-code-review | Review handling |
+| finishing-a-development-branch | Completion |
 
 ---
 
@@ -241,38 +278,35 @@ This skill orchestrates these sub-skills:
 ## Examples
 
 ### Example 1: New Feature
-```
+
 User: "Add user authentication"
 
-→ Creates task_plan.md
-→ Asks: "What should auth include?"
-→ Documents requirements
-→ Plans: login, register, password reset, token handling
-→ Implements each with TDD
-→ Verifies and creates PR
-```
+- Creates task_plan.md
+- Asks: "What should auth include?"
+- Documents requirements
+- Plans: login, register, password reset, token handling
+- Implements each with TDD
+- Verifies and creates PR
 
 ### Example 2: Bug Fix
-```
+
 User: "Fix the login timeout"
 
-→ Creates task_plan.md
-→ Asks: "When does it timeout?"
-→ Researches in findings.md
-→ Plans: fix timeout, add retry
-→ Implements and verifies
-```
+- Creates task_plan.md
+- Asks: "When does it timeout?"
+- Researches in findings.md
+- Plans: fix timeout, add retry
+- Implements and verifies
 
 ### Example 3: Refactoring
-```
+
 User: "Refactor data layer"
 
-→ Creates task_plan.md
-→ Documents current problems
-→ Plans: extract interface, create repo, migrate
-→ Executes with test coverage
-→ Full regression testing
-```
+- Creates task_plan.md
+- Documents current problems
+- Plans: extract interface, create repo, migrate
+- Executes with test coverage
+- Full regression testing
 
 ---
 
@@ -294,20 +328,20 @@ User: "Refactor data layer"
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+MIT License - See LICENSE for details.
 
 ---
 
 ## Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome! See CONTRIBUTING.md for guidelines.
 
 ---
 
 ## Documentation
 
-| Document | English | 中文 |
-|----------|---------|------|
-| Usage Guide | [README.md](README.md) | [README.zh-CN.md](README.zh-CN.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) | [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) |
-| Pressure Tests | [tests/scenarios/pressure-tests.md](tests/scenarios/pressure-tests.md) | [tests/scenarios/pressure-tests.zh-CN.md](tests/scenarios/pressure-tests.zh-CN.md) |
+| Document | English | Chinese |
+|----------|---------|---------|
+| Usage Guide | README.md | README.zh-CN.md |
+| Contributing | CONTRIBUTING.md | CONTRIBUTING.zh-CN.md |
+| Pressure Tests | tests/scenarios/pressure-tests.md | tests/scenarios/pressure-tests.zh-CN.md |
