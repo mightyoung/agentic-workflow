@@ -34,9 +34,11 @@ metadata:
     - spec-kit
     - superpowers
     - planning-with-files
-#BV|> **English** | [中文](README.zh-CN.md)
-#RQ|
-#SV|---
+---
+
+> **English** | [中文](README.zh-CN.md)
+
+---
 
 # Integrated Development Workflow
 
@@ -83,11 +85,9 @@ This skill requires these sub-skills to be installed:
 
 ### Step 1: Session Recovery
 
-```
 Check for previous session:
 - git status
 - ls task_plan.md findings.md progress.md 2>/dev/null
-```
 
 If files exist → Read them → Resume from last position
 
@@ -159,7 +159,7 @@ EOF
 ```
 
 ### Step 3: Requirements Phase
-```
+
 Say to user: "Let's define the requirements. What should [feature] do?"
 
 Then guide with spec-kit:
@@ -170,10 +170,9 @@ Then guide with spec-kit:
 After requirements are clear:
 → Update task_plan.md Phase 1 to complete
 → Mark Phase 2 as in_progress
-```
 
 ### Step 4: Technical Planning
-```
+
 1. /speckit.plan - Ask user for tech stack preferences
 2. /speckit.tasks - Generate task list
 
@@ -183,10 +182,9 @@ If tasks need refinement:
 After planning complete:
 → Update task_plan.md Phase 2 to complete
 → Mark Phase 3 as in_progress
-```
 
 ### Step 5: Implementation
-```
+
 1. skill("using-git-worktrees") - Create feature branch
 
 2. For each task:
@@ -206,10 +204,9 @@ After planning complete:
 After all tasks complete:
 → Update task_plan.md Phase 3 to complete
 → Mark Phase 4 as in_progress
-```
 
 ### Step 6: Testing & Review
-```
+
 1. skill("verification-before-completion")
    - Run all tests
    - Verify build passes
@@ -226,10 +223,9 @@ After all tasks complete:
 After review complete:
 → Update task_plan.md Phase 4 to complete
 → Mark Phase 5 as in_progress
-```
 
 ### Step 7: Completion
-```
+
 1. Final verification:
    - All tests passing?
    - Build successful?
@@ -239,7 +235,6 @@ After review complete:
    - Present options: merge / PR / keep / discard
 
 3. Update final status in progress.md
-```
 
 ---
 
