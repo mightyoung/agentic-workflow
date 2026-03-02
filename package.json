@@ -1,0 +1,42 @@
+{
+  "name": "integrated-dev-workflow",
+  "version": "1.0.0",
+  "description": "Complete development workflow orchestrator for AI coding agents - one command to start everything",
+  "main": "SKILL.md",
+  "scripts": {
+    "test": "node tests/validate.js",
+    "test:watch": "node tests/validate.js --watch"
+  },
+  "keywords": [
+    "ai-agent",
+    "workflow",
+    "development",
+    "claude-code",
+    "pi-agent",
+    "coding-agent",
+    "task-management",
+    "tdd",
+    "planning"
+  ],
+  "pi": {
+    "skills": [
+      "SKILL.md"
+    ]
+  },
+  "files": [
+    "README.md",
+    "README.zh-CN.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.zh-CN.md",
+    "SKILL.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/integrated-dev-workflow.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/your-username/integrated-dev-workflow/issues"
+  },
+  "homepage": "https://github.com/your-username/integrated-dev-workflow#readme"
+}
