@@ -1,36 +1,86 @@
 # Integrated Development Workflow
 
-> **One command to start everything.** A complete development workflow orchestrator for AI coding agents.
+> One command to start everything. A complete development workflow orchestrator for AI coding agents.
 
-[![npm version](https://img.shields.io/npm/v/integrated-dev-workflow.svg)](https://www.npmjs.com/package/integrated-dev-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/mightyoung/integrated-dev-workflow)](https://github.com/mightyoung/integrated-dev-workflow)
+[![GitHub forks](https://img.shields.io/github/forks/mightyoung/integrated-dev-workflow)](https://github.com/mightyoung/integrated-dev-workflow)
 
 > **English** | [中文](README.zh-CN.md)
 
 ---
 
-## The Problem
+## Table of Contents
 
-AI coding agents often struggle with:
-- **Scope creep** — Tasks grow without clear boundaries
-- **Lost context** — Long sessions lose track of progress
-- **Skipped verification** — "It works" without testing
-- **Inconsistent workflows** — Each task feels different
+- [What is Integrated Development Workflow?](#what-is-integrated-development-workflow)
+- [Get Started](#get-started)
+- [Supported AI Agents](#supported-ai-agents)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Agent Compatibility](#agent-compatibility)
+- [File Structure](#file-structure)
+- [Required Sub-Skills](#required-sub-skills)
+- [Workflow Phases](#workflow-phases)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+- [Contributing](#contributing)
 
-## The Solution
+---
 
-This skill provides a **complete, orchestrated workflow** that guides the agent through:
-1. **Requirements** → Clear, documented goals
-2. **Planning** → Task breakdown with dependencies
-3. **Implementation** → TDD with proper branch management
-4. **Testing & Review** → Verification before completion
-5. **Completion** → Clean merge/PR workflow
+## What is Integrated Development Workflow?
+
+Integrated Development Workflow **flips the script** on ad-hoc AI coding. Instead of vibe-coding every piece from scratch, this skill provides a **complete, orchestrated workflow** that guides the agent through:
+
+1. **Requirements** — Clear, documented goals
+2. **Planning** — Task breakdown with dependencies
+3. **Implementation** — TDD with proper branch management
+4. **Testing & Review** — Verification before completion
+5. **Completion** — Clean merge/PR workflow
+
+---
+
+## Get Started
+
+Simply tell the agent what you want to build:
+
+```
+I want to build a user login feature
+Implement a shopping cart
+Create an API for user management
+Fix the login timeout bug
+Refactor the data layer
+```
+
+The skill will automatically:
+
+1. Check for previous session
+2. Create tracking files (task_plan.md, findings.md, progress.md)
+3. Guide through requirements
+4. Plan the implementation
+5. Execute with best practices
+
+---
+
+## Supported AI Agents
+
+| Agent | Support | Notes |
+|-------|---------|-------|
+| Claude Code | Full | Hooks supported |
+| OpenCode | Full | Via .agents/skills |
+| Cursor | Full | Via .cursor/skills |
+| Trae | Full | Via .trae/skills |
+| Pi Agent | Full | Via npm |
+| Windsurf | Full | Via .windsurf/skills |
+| Roo Code | Full | Via .roo/skills |
+| Codex CLI | Full | Via .codex/skills |
+| Generic | Full | Reference skill |
 
 ---
 
 ## Installation
 
-### Claude Code / Claude Desktop
+### Claude Code
 
 ```bash
 mkdir -p .claude/skills
@@ -64,6 +114,13 @@ cp -r /path/to/integrated-dev-workflow .trae/skills/
 pi install npm:integrated-dev-workflow
 ```
 
+### Windsurf
+
+```bash
+mkdir -p .windsurf/skills
+cp -r /path/to/integrated-dev-workflow .windsurf/skills/
+```
+
 ### Manual Install
 
 ```bash
@@ -77,22 +134,7 @@ cp -r /path/to/integrated-dev-workflow .agents/skills/
 
 ### Quick Start
 
-Simply tell the agent what you want to build:
-
-```
-"I want to build a user login feature"
-"Implement a shopping cart"
-"Create an API for user management"
-"Fix the login timeout bug"
-"Refactor the data layer"
-```
-
-The skill will automatically:
-1. Check for previous session
-2. Create tracking files (task_plan.md, findings.md, progress.md)
-3. Guide through requirements
-4. Plan the implementation
-5. Execute with best practices
+Simply tell the agent what you want to build. The skill automatically orchestrates the entire development process.
 
 ### Manual Invocation
 
@@ -104,17 +146,20 @@ skill("integrated-dev-workflow")
 
 ## Agent Compatibility
 
-| Feature | Claude Code | OpenCode | Cursor | Trae | Pi Agent |
-|---------|-------------|----------|--------|------|----------|
-| Hooks | Full | Full | Limited | Limited | Limited |
-| Session recovery | Automatic | Automatic | Via script | Via script | Via script |
-| File templates | All | All | All | All | All |
-| TDD workflow | Full | Full | Full | Full | Full |
-| Code review workflow | Full | Full | Full | Full | Full |
+### Feature Comparison
+
+| Feature | Claude Code | OpenCode | Cursor | Trae | Pi Agent | Windsurf |
+|---------|-------------|----------|--------|------|----------|----------|
+| Hooks | Full | Full | Limited | Limited | Limited | Limited |
+| Session recovery | Automatic | Automatic | Via script | Via script | Via script | Via script |
+| File templates | All | All | All | All | All | All |
+| TDD workflow | Full | Full | Full | Full | Full | Full |
+| Code review workflow | Full | Full | Full | Full | Full | Full |
 
 ### Claude Code
 
 This skill uses hooks for persistent reminders:
+
 - **PreToolUse**: Reminds to update task_plan.md before major actions
 - **PostToolUse**: Prompts to update task status after file changes
 - **Stop**: Confirms task progress before ending session
@@ -122,27 +167,24 @@ This skill uses hooks for persistent reminders:
 ### OpenCode
 
 Full support via `.agents/skills` directory:
+
 1. Copy this skill folder to `.agents/skills/`
 2. Skills are automatically discovered
 3. Use `skill("integrated-dev-workflow")` to invoke
 
-Session recovery works automatically through file-based tracking.
-
 ### Cursor
 
 Similar to Claude Code, hooks may work if Cursor supports extensions:
+
 1. Try copying to `.cursor/skills/`
-2. If hooks not supported, manual session recovery:
-   - Check for task_plan.md before starting
-   - Update progress.md after each action
+2. If hooks not supported, manual session recovery
 
 ### Trae
 
 Trae is built on VS Code extension model:
+
 1. Copy to `.trae/skills/` or VS Code extensions folder
-2. May require manual workflow management:
-   - Check for existing tracking files
-   - Update task status manually
+2. May require manual workflow management
 
 ### Pi Agent Limitations
 
@@ -249,26 +291,31 @@ This skill orchestrates these sub-skills:
 ## Workflow Phases
 
 ### Phase 1: Requirements & Design
+
 - Define requirements with user
 - Create specification (via spec-kit)
 - Review and approve spec
 
 ### Phase 2: Technical Planning
+
 - Plan technical approach
 - Break into tasks
 - Identify dependencies
 
 ### Phase 3: Implementation
+
 - Create feature branch
 - TDD for each task
 - Update progress continuously
 
 ### Phase 4: Testing & Review
+
 - Run all tests
 - Verify build passes
 - Code review
 
 ### Phase 5: Completion
+
 - Final verification
 - Create PR / merge
 - Update final status
@@ -313,15 +360,19 @@ User: "Refactor data layer"
 ## Troubleshooting
 
 ### Session recovery fails
+
 **Solution:** Read existing files, ask user to resume or start fresh
 
 ### User doesn't want to define requirements
+
 **Solution:** Create minimal task_plan.md, note assumptions in findings.md
 
 ### Too many tasks
+
 **Solution:** Break into phases, use subtask files
 
 ### Workflow interrupted
+
 **Solution:** Update task_plan.md with exact next step before stopping
 
 ---
