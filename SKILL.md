@@ -64,53 +64,52 @@ This skill will AUTOMATICALLY:
 
 ---
 
-WH|- `finishing-a-development-branch` - Completion
-JQ|
-QV|---
-QV|
-QV|## 🎯 Hybrid Mode: Zero-Dependency with Fallback
-QV|
-QV|This skill works in **two modes**:
-QV|
-QV|### Mode 1: Advanced (with sub-skills)
-QV|If sub-skills are installed, this skill delegates to them for optimal experience:
-QV|
-QV|```bash
-QV|# Try external skill first
-QV|skill("brainstorming")
-QV|skill("test-driven-development")
-QV|skill("verification-before-completion")
-QV|...
-QV|```
-QV|
-QV|### Mode 2: Standalone (zero-dependency)
-QV|If sub-skills are NOT installed, this skill uses **built-in fallback** content:
-QV|
-QV|- All core workflows are documented inline
-QV|- Templates are embedded in this skill
-QV|- You follow the same process, but with guidance in this file
-QV|
-QV|### How It Works
-QV|
-QV|1. **First**: Try to invoke sub-skill `skill("xxx")`
-QV|2. **If not found**: Use the inline fallback guide for that step
-QV|3. **Result**: Works identically either way - just different experience levels
-QV|
-QV|### Recommended: Install Sub-Skills
-QV|For best experience, also install these sub-skills:
-QV|
-QV|- `planning-with-files` - Enhanced tracking hooks
-QV|- `test-driven-development` - Full TDD workflow
-QV|- `systematic-debugging` - Structured debugging
-QV|- `verification-before-completion` - Comprehensive verification
-QV|- `requesting-code-review` - Code review workflow
-QV|- `finishing-a-development-branch` - PR/merge options
-QV|
-QV|But the skill **works completely without them** - that's the design.
-QV|
-QV|---
-QV|
-QV|## 📖 Workflow: Zero-Dependency Fallback Guides
+## 🎯 Hybrid Mode: Zero-Dependency with Fallback
+
+This skill works in **two modes**:
+
+### Mode 1: Advanced (with sub-skills)
+
+If sub-skills are installed, this skill delegates to them for optimal experience:
+
+```bash
+# Try external skill first
+skill("brainstorming")
+skill("test-driven-development")
+skill("verification-before-completion")
+...
+```
+
+### Mode 2: Standalone (zero-dependency)
+
+If sub-skills are NOT installed, this skill uses **built-in fallback** content:
+
+- All core workflows are documented inline
+- Templates are embedded in this skill
+- You follow the same process, but with guidance in this file
+
+### How It Works
+
+1. **First**: Try to invoke sub-skill `skill("xxx")`
+2. **If not found**: Use the inline fallback guide for that step
+3. **Result**: Works identically either way - just different experience levels
+
+### Recommended: Install Sub-Skills
+
+For best experience, also install these sub-skills:
+
+- `planning-with-files` - Enhanced tracking hooks
+- `test-driven-development` - Full TDD workflow
+- `systematic-debugging` - Structured debugging
+- `verification-before-completion` - Comprehensive verification
+- `requesting-code-review` - Code review workflow
+- `finishing-a-development-branch` - PR/merge options
+
+But the skill **works completely without them** - that's the design.
+
+---
+
+## 📖 Workflow: Zero-Dependency Fallback Guides
 
 ---
 
@@ -196,16 +195,18 @@ EOF
 Say to user: "Let's define the requirements. What should [feature] do?"
 
 Then guide with spec-kit:
-BY|3. Try: skill("brainstorming") - If not found, use guide below
-BY|
-BY|#### Fallback: Requirements Guide
-BY|If brainstorming skill not available, follow this process:
-BY|
-BY|1. **Explore context** - Check project files, docs, recent commits
-BY|2. **Ask questions** - One at a time, understand purpose/success criteria
-BY|3. **Propose approaches** - 2-3 options with trade-offs
-BY|4. **Present design** - Get user approval
-BY|5. **Document** - Save to task_plan.md
+
+3. Try: skill("brainstorming") - If not found, use guide below
+
+#### Fallback: Requirements Guide
+
+If brainstorming skill not available, follow this process:
+
+1. **Explore context** - Check project files, docs, recent commits
+2. **Ask questions** - One at a time, understand purpose/success criteria
+3. **Propose approaches** - 2-3 options with trade-offs
+4. **Present design** - Get user approval
+5. **Document** - Save to task_plan.md
 
 After requirements are clear:
 → Update task_plan.md Phase 1 to complete
@@ -213,17 +214,19 @@ After requirements are clear:
 
 ### Step 4: Technical Planning
 
-HV|If tasks need refinement:
-HX|Try: skill("writing-plans") - If not found, use guide below
-HX|
-HX|#### Fallback: Task Refinement Guide
-HV|If writing-plans skill not available:
-HV|
-HV|1. **Break down** each feature into smallest testable units
-HV|2. **Identify dependencies** between tasks
-HV|3. **Estimate effort** - mark complex tasks
-HV|4. **Order tasks** - what can be done in parallel?
-HV|5. **Update task_plan.md** with refined task list
+If tasks need refinement:
+
+Try: skill("writing-plans") - If not found, use guide below
+
+#### Fallback: Task Refinement Guide
+
+If writing-plans skill not available:
+
+1. **Break down** each feature into smallest testable units
+2. **Identify dependencies** between tasks
+3. **Estimate effort** - mark complex tasks
+4. **Order tasks** - what can be done in parallel?
+5. **Update task_plan.md** with refined task list
 
 After planning complete:
 → Update task_plan.md Phase 2 to complete
@@ -231,33 +234,36 @@ After planning complete:
 
 ### Step 5: Implementation
 
-HM|      - Write failing test
-NS|      - Write minimal code
-RN|      - Refactor
-PR|      - Commit
-TK|
-TB|#### Fallback: TDD Process (if skill unavailable)
-TB|
-TB|1. **RED**: Write failing test first
-TB|2. **GREEN**: Write minimal code to pass
-TB|3. **REFACTOR**: Clean up code
-TB|
-TB|**Iron Law**: NO CODE WITHOUT FAILING TEST FIRST
-   
-   b. After each code change:
-      - Update progress.md with what was done
-      - Update task status in task_plan.md
+TDD Process:
+- Write failing test
+- Write minimal code
+- Refactor
+- Commit
 
-RY|   - skill("systematic-debugging")
-JY|
-JY|#### Fallback: Debugging (if skill unavailable)
-JY|1. Read errors carefully
-JY|2. Reproduce consistently
-JY|3. Form hypothesis
-JY|4. Test before fixing
-JY|5. Fix root cause
-JY|
-JY|**Rule**: NO FIXES WITHOUT ROOT CAUSE FIRST
+#### Fallback: TDD Process (if skill unavailable)
+
+1. **RED**: Write failing test first
+2. **GREEN**: Write minimal code to pass
+3. **REFACTOR**: Clean up code
+
+**Iron Law**: NO CODE WITHOUT FAILING TEST FIRST
+
+After each code change:
+- Update progress.md with what was done
+- Update task status in task_plan.md
+
+Debugging:
+- skill("systematic-debugging")
+
+#### Fallback: Debugging (if skill unavailable)
+
+1. Read errors carefully
+2. Reproduce consistently
+3. Form hypothesis
+4. Test before fixing
+5. Fix root cause
+
+**Rule**: NO FIXES WITHOUT ROOT CAUSE FIRST
 
 After all tasks complete:
 → Update task_plan.md Phase 3 to complete
@@ -265,26 +271,30 @@ After all tasks complete:
 
 ### Step 6: Testing & Review
 
-JQ|   - Check all requirements met
-RX|
-RX|#### Fallback: Verification Guide (if skill unavailable)
-RX|1. Run test suite - all tests pass?
-RX|2. Build project - compiles without errors?
-RX|3. Check spec - all requirements met?
-RX|4. Manual test - key flows work?
+Verification:
+- Check all requirements met
 
-2. skill("requesting-code-review")
-   - Review code against plan
-   - Report issues by severity
+#### Fallback: Verification Guide (if skill unavailable)
 
-BR|   - Fix and re-review
-WR|
-WR|#### Fallback: Review Handling (if skill unavailable)
-WR|1. Read review comments carefully
-WR|2. Don't take personally - it's about code
-WR|3. Ask clarifying questions if unclear
-WR|4. Make changes, re-request review
-WR|5. Thank reviewer for feedback
+1. Run test suite - all tests pass?
+2. Build project - compiles without errors?
+3. Check spec - all requirements met?
+4. Manual test - key flows work?
+
+Code Review:
+- skill("requesting-code-review")
+- Review code against plan
+- Report issues by severity
+
+- Fix and re-review
+
+#### Fallback: Review Handling (if skill unavailable)
+
+1. Read review comments carefully
+2. Don't take personally - it's about code
+3. Ask clarifying questions if unclear
+4. Make changes, re-request review
+5. Thank reviewer for feedback
 
 After review complete:
 → Update task_plan.md Phase 4 to complete
@@ -297,16 +307,18 @@ After review complete:
    - Build successful?
    - All tasks marked complete?
 
-VH|   - Present options: merge / PR / keep / discard
-YH|
-YH|#### Fallback: Completion Options (if skill unavailable)
-YH|1. **Merge** - Pull into main branch
-YH|2. **PR** - Create pull request for review
-YH|3. **Keep** - Leave branch for later
-YH|4. **Discard** - Delete branch if not needed
-YH|Choose based on team workflow and project state
+   - Present options: merge / PR / keep / discard
 
-3. Update final status in progress.md
+#### Fallback: Completion Options (if skill unavailable)
+
+1. **Merge** - Pull into main branch
+2. **PR** - Create pull request for review
+3. **Keep** - Leave branch for later
+4. **Discard** - Delete branch if not needed
+
+Choose based on team workflow and project state
+
+2. Update final status in progress.md
 
 ---
 
@@ -425,18 +437,23 @@ YH|Choose based on team workflow and project state
 ## ⚠️ Common Mistakes
 
 ### ❌ Skipping session recovery check
+
 Always check for existing tracking files first. Users may have partially completed work.
 
 ### ❌ Not updating progress.md
+
 Without progress.md, you lose context on what was tried and failed.
 
 ### ❌ Coding before specification
+
 Even for small changes, document what you're building first.
 
 ### ❌ Skipping verification
+
 Never claim "complete" without running tests and verifying the build.
 
 ### ❌ Ignoring errors in findings.md
+
 Every error should be logged to prevent repeating failed approaches.
 
 ---
