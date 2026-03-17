@@ -62,6 +62,10 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 根据用户输入自动路由到对应模块：
 
 ```python
+# 不触发 - 简单闲聊问题
+if 包含("天气", "笑话", "你好", "hi", "hello") and not 包含("开发", "代码", "实现"):
+    → 不触发，直接回答
+
 # RESEARCH 触发 - 复杂任务自动搜索
 if 包含("怎么做", "如何实现", "最佳实践", "有什么", "有哪些", "参考", "案例"):
     → 研究模块 (RESEARCH) → THINKING
