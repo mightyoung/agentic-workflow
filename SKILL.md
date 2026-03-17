@@ -67,6 +67,8 @@ else:
 
 ### 4. RESEARCH 前置搜索 (Tavily)
 - 思考前先搜索最佳实践
+- **必须使用 tavily skill 进行搜索**：`skill("tavily", "搜索内容")`
+- 禁止使用普通 websearch（除非 tavily 不可用）
 - 将搜索结果存入 findings.md
 
 ### 5. PUA 激励引擎 (失败时触发)
@@ -102,6 +104,9 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 
 ### RESEARCH 阶段（自动触发）
 - 触发条件：复杂任务（3+步骤）、新技术领域、需要外部参考
+- **搜索工具：必须使用 tavily skill 进行搜索**（禁止使用普通 websearch）
+  - 使用 `skill("tavily", "搜索内容")` 调用
+  - tavily 是 AI 优化的搜索，返回简洁相关内容
 - 搜索范围：网络最佳实践、GitHub 成熟项目，社区讨论、官方文档
 - 输出：结构化搜索结果存入 findings.md
 
@@ -178,7 +183,8 @@ elif 复杂度检测为("低"):
 # ============================================================================
 
 # 强制 RESEARCH - 用户明确要求搜索/调研
-if 包含("帮我搜索", "查找最佳实践", "调研一下", "调研", "搜索一下"):
+# 注意：当用户要求"网络上搜索"时，必须优先使用 tavily skill，禁止使用普通 websearch
+if 包含("帮我搜索", "查找最佳实践", "调研一下", "调研", "搜索一下", "网络上搜索", "在网上搜索"):
     → RESEARCH → THINKING
 
 # 强制 DEBUGGING - 用户明确要求调试/修复
