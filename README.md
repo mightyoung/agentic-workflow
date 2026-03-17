@@ -1,10 +1,10 @@
 # Agentic Workflow | 统一智能体工作流
 
-> 融合 7 大顶级 Skills 精髓的 AI 开发工作流 | Fusion of 7 Elite Skills for AI Development
+> 融合 8 大顶级 Skills 精髓的 AI 开发工作流 | Fusion of 8 Elite Skills for AI Development
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-2.0-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-2.1-blue.svg)](SKILL.md)
 
 > **English** | [中文](#中文)
 
@@ -28,9 +28,9 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 |--------|-------------|---------------|
 | **THINKING** | Expert simulation - identifies domain experts and simulates their thinking | 谁最懂, 顶级, 专家 |
 | **PLANNING** | File-based task planning with task_plan.md, findings.md, progress.md | 计划, 规划, 拆分任务 |
-| **EXECUTING** | TDD-driven development: test → fail → implement → pass | TDD, 测试驱动 |
+| **EXECUTING** | TDD-driven development with PUA iron laws: test → fail → implement → pass | TDD, 测试驱动, 尽力, 别放弃 |
 | **REVIEWING** | Code quality review with optional OpenSpec compliance | 审查, review |
-| **DEBUGGING** | Systematic debugging with root cause analysis | 调试, 修复bug |
+| **DEBUGGING** | Systematic debugging with PUA 5-step methodology and pressure escalation | 调试, 修复bug |
 
 ---
 
@@ -94,6 +94,37 @@ IDLE → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
 **Why**: Breaking tasks into 2-5 minute chunks ensures progress is measurable and reversible.
 
 **Reference**: Agile methodology (Scrum, Kanban task breakdown)
+
+### 8. pua (激励引擎 & 压力升级)
+**Industry Best Practice**: Corporate PUA rhetoric, structured debugging methodology.
+
+**Why**: PUA (Push Upgrade Anxiety) provides systematic failure handling - 3 iron laws, 5-step debugging methodology, 7-item checklist, and pressure escalation L1-L4. Ensures exhaustive problem-solving before admitting failure.
+
+**Reference**: [pua skill](https://github.com/tanweai/pua)
+
+---
+
+## PUA Integration | PUA 融合详情
+
+### 3 Iron Laws (三大铁律)
+1. **穷尽一切** - 没有穷尽所有方案之前，禁止说"无法解决"
+2. **先做后问** - 遇到问题先自行搜索、读源码、验证，再提问
+3. **主动出击** - 端到端交付，不只是"刚好够用"
+
+### Pressure Escalation (压力升级机制)
+| 失败次数 | 等级 | 动作 |
+|---------|------|-----|
+| 2次 | L1 | 停止当前思路，切换本质不同的方案 |
+| 3次 | L2 | 搜索完整错误+读源码+列出3个假设 |
+| 4次 | L3 | 执行7项检查清单，列出3个全新假设 |
+| 5次+ | L4 | 最小PoC+隔离环境+完全不同的技术栈 |
+
+### 5-Step Debugging Methodology (5步调试法)
+1. 闻味道 — 诊断卡壳模式
+2. 揪头发 — 拉高视角（搜索、读源码、验证假设、反转假设）
+3. 照镜子 — 自检
+4. 执行新方案
+5. 复盘 + 延伸
 
 ---
 
