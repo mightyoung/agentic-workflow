@@ -1,0 +1,168 @@
+{
+  "skill_name": "agentic-workflow",
+  "version": "2.3",
+  "test_dimensions": [
+    {
+      "name": "触发准确性",
+      "description": "测试skill能否在用户不显示调用时正确激活",
+      "weight": 0.3
+    },
+    {
+      "name": "阶段路由",
+      "description": "每个阶段的特性是否能够被正确触发",
+      "weight": 0.3
+    },
+    {
+      "name": "质量提升",
+      "description": "执行效果、执行速度、上下文长度优化",
+      "weight": 0.4
+    }
+  ],
+  "trigger_tests": [
+    {
+      "id": "trigger_01",
+      "prompt": "帮我开发一个用户认证系统",
+      "expected_module": "EXECUTING",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_02",
+      "prompt": "这个API报错了请调试",
+      "expected_module": "DEBUGGING",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_03",
+      "prompt": "请帮我规划一个电商网站",
+      "expected_module": "PLANNING",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_04",
+      "prompt": "谁最懂Python异步编程",
+      "expected_module": "THINKING",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_05",
+      "prompt": "这段代码有问题吗？审查一下",
+      "expected_module": "REVIEWING",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_06",
+      "prompt": "怎么做用户登录功能？最佳实践有哪些？",
+      "expected_module": "RESEARCH",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger_07",
+      "prompt": "今天天气怎么样",
+      "expected_module": null,
+      "should_trigger": false
+    },
+    {
+      "id": "trigger_08",
+      "prompt": "给我讲个笑话",
+      "expected_module": null,
+      "should_trigger": false
+    }
+  ],
+  "phase_tests": [
+    {
+      "id": "phase_01",
+      "prompt": "怎么做微服务架构？最佳实践有哪些？",
+      "module": "RESEARCH",
+      "checks": [
+        "调用Tavily搜索",
+        "创建findings.md"
+      ]
+    },
+    {
+      "id": "phase_02",
+      "prompt": "谁最懂大模型训练？",
+      "module": "THINKING",
+      "checks": [
+        "识别领域专家",
+        "链式推理",
+        "问题定义输出",
+        "要素拆解"
+      ]
+    },
+    {
+      "id": "phase_03",
+      "prompt": "规划一个聊天APP开发",
+      "module": "PLANNING",
+      "checks": [
+        "创建task_plan.md",
+        "任务拆分2-5分钟粒度"
+      ]
+    },
+    {
+      "id": "phase_04",
+      "prompt": "用TDD开发一个计算器",
+      "module": "EXECUTING",
+      "checks": [
+        "测试先行",
+        "测试失败验证",
+        "代码实现",
+        "测试通过验证"
+      ]
+    },
+    {
+      "id": "phase_05",
+      "prompt": "审查这段代码：def foo(x): return x*2",
+      "module": "REVIEWING",
+      "checks": [
+        "问题分级输出",
+        "致命问题标注",
+        "严重问题标注",
+        "建议输出"
+      ]
+    },
+    {
+      "id": "phase_06",
+      "prompt": "修复这个bug：NameError: name 'x' is not defined",
+      "module": "DEBUGGING",
+      "checks": [
+        "闻味道-诊断卡壳",
+        "揪头发-拉高视角",
+        "照镜子-自检"
+      ]
+    }
+  ],
+  "quality_tests": [
+    {
+      "id": "quality_01",
+      "name": "任务完成率",
+      "description": "对比有/无skill时的任务完成率",
+      "metrics": ["completion_rate"],
+      "baseline_target": "无skill时的基线",
+      "improvement_target": "提升>20%"
+    },
+    {
+      "id": "quality_02",
+      "name": "执行时间",
+      "description": "对比有/无skill时的执行时间",
+      "metrics": ["execution_time_seconds"],
+      "baseline_target": "无skill时的基线",
+      "improvement_target": "减少>15%"
+    },
+    {
+      "id": "quality_03",
+      "name": "Token消耗",
+      "description": "对比有/无skill时的token消耗",
+      "metrics": ["total_tokens"],
+      "baseline_target": "无skill时的基线",
+      "improvement_target": "减少>10%"
+    },
+    {
+      "id": "quality_04",
+      "name": "输出质量",
+      "description": "人工评估输出质量",
+      "metrics": ["quality_score_1_to_10"],
+      "baseline_target": "无skill时的基线",
+      "improvement_target": "提升>1分"
+    }
+  ]
+}
