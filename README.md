@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-2.1-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-2.3-blue.svg)](SKILL.md)
 
 > **English** | [中文](#中文)
 
@@ -26,10 +26,11 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 
 | Module | Description | Trigger Words |
 |--------|-------------|---------------|
-| **THINKING** | Expert simulation - identifies domain experts and simulates their thinking | 谁最懂, 顶级, 专家 |
+| **RESEARCH** | Pre-research with Tavily: search best practices, GitHub projects, community discussions | 怎么做, 如何实现, 最佳实践, 参考 |
+| **THINKING** | Expert simulation + Chain-of-Thought: structured reasoning with problem definition, element decomposition, chain inference, counterexample testing | 谁最懂, 顶级, 专家 |
 | **PLANNING** | File-based task planning with task_plan.md, findings.md, progress.md | 计划, 规划, 拆分任务 |
 | **EXECUTING** | TDD-driven development with PUA iron laws: test → fail → implement → pass | TDD, 测试驱动, 尽力, 别放弃 |
-| **REVIEWING** | Code quality review with optional OpenSpec compliance | 审查, review |
+| **REVIEWING** | Brutal code review with problem classification (🔴 Fatal / 🟡 Serious / 🟢 Suggestion) | 审查, review |
 | **DEBUGGING** | Systematic debugging with PUA 5-step methodology and pressure escalation | 调试, 修复bug |
 
 ---
@@ -37,10 +38,15 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 ## Architecture | 架构
 
 ```
-IDLE → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
-                    ↓           ↓           ↓
-                 DEBUGGING ←────────────→
+IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
+              ↓           ↓           ↓           ↓
+         DEBUGGING ←────────────────────────────────────→
 ```
+
+### RESEARCH 阶段（自动触发）
+- 触发条件：复杂任务（3+步骤）、新技术领域、需要外部参考
+- 搜索范围：网络最佳实践、GitHub 成熟项目、社区讨论、官方文档
+- 输出：结构化搜索结果存入 findings.md
 
 ---
 
@@ -101,6 +107,13 @@ IDLE → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
 **Why**: PUA (Push Upgrade Anxiety) provides systematic failure handling - 3 iron laws, 5-step debugging methodology, 7-item checklist, and pressure escalation L1-L4. Ensures exhaustive problem-solving before admitting failure.
 
 **Reference**: [pua skill](https://github.com/tanweai/pua)
+
+### 9. tavily (AI 搜索增强)
+**Industry Best Practice**: AI-optimized web search with semantic understanding.
+
+**Why**: Tavily provides AI-optimized search results, enabling RESEARCH phase to find best practices, GitHub projects, and community discussions before thinking and planning. Ensures decisions are based on real-world evidence.
+
+**Reference**: [tavily MCP](https://tavily.com)
 
 ---
 
