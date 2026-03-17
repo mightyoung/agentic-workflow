@@ -1,0 +1,572 @@
+{
+  "skill_name": "agentic-workflow",
+  "version": "3.0",
+  "total_tests": 60,
+  "test_suite": "Module触发专项测试",
+  "test_dimensions": [
+    {
+      "name": "RESEARCH模块",
+      "weight": 0.18,
+      "test_count": 10,
+      "description": "搜索功能、tavily调用、findings.md创建"
+    },
+    {
+      "name": "THINKING模块",
+      "weight": 0.15,
+      "test_count": 9,
+      "description": "专家识别、链式推理、多角度分析"
+    },
+    {
+      "name": "PLANNING模块",
+      "weight": 0.15,
+      "test_count": 9,
+      "description": "任务拆分、文件创建、进度追踪"
+    },
+    {
+      "name": "EXECUTING模块",
+      "weight": 0.18,
+      "test_count": 11,
+      "description": "TDD循环、PUA铁律、重构"
+    },
+    {
+      "name": "REVIEWING模块",
+      "weight": 0.17,
+      "test_count": 10,
+      "description": "问题分级、安全检查、性能检查"
+    },
+    {
+      "name": "DEBUGGING模块",
+      "weight": 0.17,
+      "test_count": 11,
+      "description": "5步方法论、7项检查、根因定位"
+    }
+  ],
+
+  "research_module_tests": [
+    {
+      "id": "res01",
+      "module": "RESEARCH",
+      "category": "触发检测",
+      "prompt": "React状态管理最佳实践有哪些？",
+      "expected": "激活RESEARCH",
+      "checks": ["tavily搜索", "findings.md创建"]
+    },
+    {
+      "id": "res02",
+      "module": "RESEARCH",
+      "category": "触发检测",
+      "prompt": "怎么做微服务部署？",
+      "expected": "激活RESEARCH",
+      "checks": ["搜索调用"]
+    },
+    {
+      "id": "res03",
+      "module": "RESEARCH",
+      "category": "功能验证",
+      "prompt": "Kubernetes生产环境最佳实践",
+      "expected": "调用tavily skill",
+      "checks": ["skill tavily", "搜索结果"]
+    },
+    {
+      "id": "res04",
+      "module": "RESEARCH",
+      "category": "功能验证",
+      "prompt": "GraphQL vs REST API 选型参考",
+      "expected": "搜索+分析",
+      "checks": ["对比分析", "建议"]
+    },
+    {
+      "id": "res05",
+      "module": "RESEARCH",
+      "category": "降级验证",
+      "prompt": "搜索这个技术方案",
+      "expected": "tavily失败时降级",
+      "checks": ["WebSearch降级", "内联推理"]
+    },
+    {
+      "id": "res06",
+      "module": "RESEARCH",
+      "category": "输出质量",
+      "prompt": "高并发系统设计模式",
+      "expected": "结构化输出",
+      "checks": ["分类清晰", "要点完整"]
+    },
+    {
+      "id": "res07",
+      "module": "RESEARCH",
+      "category": "多阶段触发",
+      "prompt": "搜索Redis缓存最佳实践然后帮我分析",
+      "expected": "RESEARCH→THINKING",
+      "checks": ["先搜索", "后分析"]
+    },
+    {
+      "id": "res08",
+      "module": "RESEARCH",
+      "category": "边界条件",
+      "prompt": "有什么？",
+      "expected": "需要更具体",
+      "checks": ["要求澄清"]
+    },
+    {
+      "id": "res09",
+      "module": "RESEARCH",
+      "category": "文件持久化",
+      "prompt": "搜索数据库优化方法",
+      "expected": "findings.md",
+      "checks": ["文件创建", "内容存储"]
+    },
+    {
+      "id": "res10",
+      "module": "RESEARCH",
+      "category": "输出格式",
+      "prompt": "帮我搜索机器学习模型部署方案",
+      "expected": "结构化格式",
+      "checks": ["标题", "要点", "引用"]
+    }
+  ],
+
+  "thinking_module_tests": [
+    {
+      "id": "think01",
+      "module": "THINKING",
+      "category": "触发检测",
+      "prompt": "谁最懂分布式系统设计？",
+      "expected": "激活THINKING",
+      "checks": ["专家识别", "推理启动"]
+    },
+    {
+      "id": "think02",
+      "module": "THINKING",
+      "category": "触发检测",
+      "prompt": "安全专家怎么如何看待这个登录实现？",
+      "expected": "激活THINKING",
+      "checks": ["专家类型识别"]
+    },
+    {
+      "id": "think03",
+      "module": "THINKING",
+      "category": "功能验证",
+      "prompt": "从性能优化专家角度分析这个查询",
+      "expected": "专家视角模拟",
+      "checks": ["视角切换", "专业分析"]
+    },
+    {
+      "id": "think04",
+      "module": "THINKING",
+      "category": "链式推理",
+      "prompt": "分析为什么这个API响应慢",
+      "expected": "多步推理",
+      "checks": ["问题定义", "要素拆解", "推导"]
+    },
+    {
+      "id": "think05",
+      "module": "THINKING",
+      "category": "链式推理",
+      "prompt": "best minds会怎么分析这个架构问题",
+      "expected": "链式推理",
+      "checks": ["验证前提", "推导", "反例"]
+    },
+    {
+      "id": "think06",
+      "module": "THINKING",
+      "category": "多角度分析",
+      "prompt": "从开发、运维、安全三个角度分析这个方案",
+      "expected": "多角度",
+      "checks": ["开发视角", "运维视角", "安全视角"]
+    },
+    {
+      "id": "think07",
+      "module": "THINKING",
+      "category": "输出质量",
+      "prompt": "数据库缓存策略谁最懂？请详细分析",
+      "expected": "深度分析",
+      "checks": ["专业深度", "实用建议"]
+    },
+    {
+      "id": "think08",
+      "module": "THINKING",
+      "category": "边界条件",
+      "prompt": "什么是API？",
+      "expected": "基础问题简单答",
+      "checks": ["不过度复杂化"]
+    },
+    {
+      "id": "think09",
+      "module": "THINKING",
+      "category": "上下文利用",
+      "prompt": "结合之前的架构设计，分析这个模块",
+      "expected": "上下文引用",
+      "checks": ["引用前文", "延续分析"]
+    }
+  ],
+
+  "planning_module_tests": [
+    {
+      "id": "plan01",
+      "module": "PLANNING",
+      "category": "触发检测",
+      "prompt": "帮我规划一个电商网站开发",
+      "expected": "激活PLANNING",
+      "checks": ["task_plan.md创建"]
+    },
+    {
+      "id": "plan02",
+      "module": "PLANNING",
+      "category": "触发检测",
+      "prompt": "制定开发计划",
+      "expected": "激活PLANNING",
+      "checks": ["计划文件"]
+    },
+    {
+      "id": "plan03",
+      "module": "PLANNING",
+      "category": "任务拆分",
+      "prompt": "规划一个用户系统开发，包括注册、登录、权限",
+      "expected": "任务拆分",
+      "checks": ["粒度2-5分钟", "独立可测试"]
+    },
+    {
+      "id": "plan04",
+      "module": "PLANNING",
+      "category": "任务拆分",
+      "prompt": "拆分这个大型项目的开发任务",
+      "expected": "详细拆分",
+      "checks": ["里程碑", "依赖关系"]
+    },
+    {
+      "id": "plan05",
+      "module": "PLANNING",
+      "category": "文件创建",
+      "prompt": "帮我制定一个完整的项目计划",
+      "expected": "task_plan.md",
+      "checks": ["文件存在", "格式正确"]
+    },
+    {
+      "id": "plan06",
+      "module": "PLANNING",
+      "category": "进度追踪",
+      "prompt": "创建项目计划并跟踪进度",
+      "expected": "progress.md",
+      "checks": ["进度文件", "状态更新"]
+    },
+    {
+      "id": "plan07",
+      "module": "PLANNING",
+      "category": "边界条件",
+      "prompt": "计划",
+      "expected": "要求更具体",
+      "checks": ["澄清需求"]
+    },
+    {
+      "id": "plan08",
+      "module": "PLANNING",
+      "category": "多阶段触发",
+      "prompt": "先规划然后开始开发",
+      "expected": "PLANNING→EXECUTING",
+      "checks": ["先计划", "后执行"]
+    },
+    {
+      "id": "plan09",
+      "module": "PLANNING",
+      "category": "输出质量",
+      "prompt": "制定一个详细的技术方案规划",
+      "expected": "高质量规划",
+      "checks": ["可执行性", "时间估算", "风险识别"]
+    }
+  ],
+
+  "executing_module_tests": [
+    {
+      "id": "exec01",
+      "module": "EXECUTING",
+      "category": "触发检测",
+      "prompt": "帮我开发一个用户认证模块",
+      "expected": "激活EXECUTING",
+      "checks": ["开始实现"]
+    },
+    {
+      "id": "exec02",
+      "module": "EXECUTING",
+      "category": "触发检测",
+      "prompt": "写一个排序算法",
+      "expected": "激活EXECUTING",
+      "checks": ["代码生成"]
+    },
+    {
+      "id": "exec03",
+      "module": "EXECUTING",
+      "category": "TDD验证",
+      "prompt": "用TDD方式开发一个计算器",
+      "expected": "TDD循环",
+      "checks": ["先写测试", "测试失败", "实现代码", "测试通过"]
+    },
+    {
+      "id": "exec04",
+      "module": "EXECUTING",
+      "category": "TDD验证",
+      "prompt": "测试驱动开发一个栈数据结构",
+      "expected": "TDD流程",
+      "checks": ["push", "pop", "测试覆盖"]
+    },
+    {
+      "id": "exec05",
+      "module": "EXECUTING",
+      "category": "PUA铁律",
+      "prompt": "实现这个功能，要求高质量",
+      "expected": "PUA铁律触发",
+      "checks": ["穷尽方案", "先做后问"]
+    },
+    {
+      "id": "exec06",
+      "module": "EXECUTING",
+      "category": "边界条件",
+      "prompt": "简单写个hello world",
+      "expected": "轻量模式",
+      "checks": ["不过度复杂化"]
+    },
+    {
+      "id": "exec07",
+      "module": "EXECUTING",
+      "category": "重构验证",
+      "prompt": "用TDD实现后进行重构",
+      "expected": "重构步骤",
+      "checks": ["功能不变", "代码优化"]
+    },
+    {
+      "id": "exec08",
+      "module": "EXECUTING",
+      "category": "测试覆盖",
+      "prompt": "开发一个完整的REST API",
+      "expected": "包含测试",
+      "checks": ["单元测试", "集成测试"]
+    },
+    {
+      "id": "exec09",
+      "module": "EXECUTING",
+      "category": "错误恢复",
+      "prompt": "实现这个功能（之前尝试失败）",
+      "expected": "错误恢复",
+      "checks": ["继承上下文", "继续实现"]
+    },
+    {
+      "id": "exec10",
+      "module": "EXECUTING",
+      "category": "多阶段触发",
+      "prompt": "先设计再实现",
+      "expected": "PLANNING→EXECUTING",
+      "checks": ["先计划", "后编码"]
+    },
+    {
+      "id": "exec11",
+      "module": "EXECUTING",
+      "category": "代码质量",
+      "prompt": "开发一个高质量的缓存模块",
+      "expected": "质量优先",
+      "checks": ["类型注解", "文档", "错误处理"]
+    }
+  ],
+
+  "reviewing_module_tests": [
+    {
+      "id": "rev01",
+      "module": "REVIEWING",
+      "category": "触发检测",
+      "prompt": "帮我审查这段代码",
+      "expected": "激活REVIEWING",
+      "checks": ["开始审查"]
+    },
+    {
+      "id": "rev02",
+      "module": "REVIEWING",
+      "category": "触发检测",
+      "prompt": "review一下这个实现",
+      "expected": "激活REVIEWING",
+      "checks": ["审查启动"]
+    },
+    {
+      "id": "rev03",
+      "module": "REVIEWING",
+      "category": "问题分级",
+      "prompt": "全面审查这个Python项目",
+      "expected": "分级输出",
+      "checks": ["致命", "严重", "建议"]
+    },
+    {
+      "id": "rev04",
+      "module": "REVIEWING",
+      "category": "问题分级",
+      "prompt": "审查这段代码并分类问题",
+      "expected": "分类清晰",
+      "checks": ["分类标准", "优先级"]
+    },
+    {
+      "id": "rev05",
+      "module": "REVIEWING",
+      "category": "安全检查",
+      "prompt": "审查这个登录实现的安全性",
+      "expected": "安全审查",
+      "checks": ["漏洞检测", "安全建议"]
+    },
+    {
+      "id": "rev06",
+      "module": "REVIEWING",
+      "category": "性能检查",
+      "prompt": "审查这个查询的性能",
+      "expected": "性能审查",
+      "checks": ["性能问题", "优化建议"]
+    },
+    {
+      "id": "rev07",
+      "module": "REVIEWING",
+      "category": "输出质量",
+      "prompt": "详细审查这个微服务代码",
+      "expected": "高质量审查",
+      "checks": ["全面性", "实用性"]
+    },
+    {
+      "id": "rev08",
+      "module": "REVIEWING",
+      "category": "不留情面",
+      "prompt": "严格审查，不留情的指出问题",
+      "expected": "严格审查",
+      "checks": ["直言问题", "不回避"]
+    },
+    {
+      "id": "rev09",
+      "module": "REVIEWING",
+      "category": "多阶段触发",
+      "prompt": "审查后帮我修复问题",
+      "expected": "REVIEWING→EXECUTING",
+      "checks": ["先审查", "后修复"]
+    },
+    {
+      "id": "rev10",
+      "module": "REVIEWING",
+      "category": "边界条件",
+      "prompt": "看看这行代码",
+      "expected": "适度审查",
+      "checks": ["不过度展开"]
+    }
+  ],
+
+  "debugging_module_tests": [
+    {
+      "id": "dbg01",
+      "module": "DEBUGGING",
+      "category": "触发检测",
+      "prompt": "帮我调试这个bug",
+      "expected": "激活DEBUGGING",
+      "checks": ["调试启动"]
+    },
+    {
+      "id": "dbg02",
+      "module": "DEBUGGING",
+      "category": "触发检测",
+      "prompt": "程序崩溃了请帮我看看",
+      "expected": "激活DEBUGGING",
+      "checks": ["错误分析"]
+    },
+    {
+      "id": "dbg03",
+      "module": "DEBUGGING",
+      "category": "5步方法论",
+      "prompt": "这个服务一直报错，请系统调试",
+      "expected": "5步执行",
+      "checks": ["闻味道", "揪头发", "照镜子", "执行", "复盘"]
+    },
+    {
+      "id": "dbg04",
+      "module": "DEBUGGING",
+      "category": "5步方法论",
+      "prompt": "深度调试这个间歇性问题",
+      "expected": "完整流程",
+      "checks": ["每步执行", "记录"]
+    },
+    {
+      "id": "dbg05",
+      "module": "DEBUGGING",
+      "category": "7项检查",
+      "prompt": "这个问题反复出现，请彻底排查",
+      "expected": "7项检查",
+      "checks": ["读失败信号", "主动搜索", "读原始材料", "验证假设", "反转假设", "最小隔离", "换方向"]
+    },
+    {
+      "id": "dbg06",
+      "module": "DEBUGGING",
+      "category": "根因定位",
+      "prompt": "帮我定位这个NPE的根本原因",
+      "expected": "根因分析",
+      "checks": ["追溯", "定位"]
+    },
+    {
+      "id": "dbg07",
+      "module": "DEBUGGING",
+      "category": "上下文保留",
+      "prompt": "继续之前的调试",
+      "expected": "继承上下文",
+      "checks": ["之前状态", "继续分析"]
+    },
+    {
+      "id": "dbg08",
+      "module": "DEBUGGING",
+      "category": "错误保留",
+      "prompt": "请分析这个错误日志",
+      "expected": "错误保留",
+      "checks": ["日志分析", "保留上下文"]
+    },
+    {
+      "id": "dbg09",
+      "module": "DEBUGGING",
+      "category": "多阶段触发",
+      "prompt": "调试后帮我修复",
+      "expected": "DEBUGGING→EXECUTING",
+      "checks": ["先调试", "后修复"]
+    },
+    {
+      "id": "dbg10",
+      "module": "DEBUGGING",
+      "category": "压力升级",
+      "prompt": "这个问题试了多次还是不行",
+      "expected": "PUA增强",
+      "checks": ["L1-L4升级", "穷尽方案"]
+    },
+    {
+      "id": "dbg11",
+      "module": "DEBUGGING",
+      "category": "边界条件",
+      "prompt": "有个小问题",
+      "expected": "轻量调试",
+      "checks": ["快速定位"]
+    }
+  ],
+
+  "evaluation_metrics": {
+    "trigger_accuracy": {
+      "正确触发了expected_module / 总测试数": "目标>95%"
+    },
+    "checks_pass_rate": {
+      "通过的checks数 / 总checks数": "目标>85%"
+    },
+    "output_quality": {
+      "人工或LLM评估": "目标>4/5分"
+    },
+    "module_switching": {
+      "正确切换 / 触发切换次数": "目标>90%"
+    }
+  },
+
+  "test_methodology": {
+    "每个module": [
+      "1. 触发检测测试 - 验证能否被正确触发",
+      "2. 功能验证测试 - 验证核心功能是否工作",
+      "3. 输出质量测试 - 验证输出质量",
+      "4. 边界条件测试 - 验证边界情况处理",
+      "5. 多阶段触发测试 - 验证与其他module的交互"
+    ],
+    "评估方式": [
+      "1. 自动化检测 - 检查是否调用预期函数/创建预期文件",
+      "2. 输出验证 - 检查输出是否符合预期格式",
+      "3. 人工评审 - 对关键输出进行人工评分"
+    ]
+  }
+}

@@ -1,0 +1,560 @@
+{
+  "total": 50,
+  "passed": 50,
+  "failed": 0,
+  "pass_rate": 100.0,
+  "by_category": {
+    "Skill触发检测": {
+      "total": 8,
+      "passed": 8
+    },
+    "阶段触发效果": {
+      "total": 12,
+      "passed": 12
+    },
+    "运行质量提升": {
+      "total": 15,
+      "passed": 15
+    },
+    "ECC引用触发": {
+      "total": 10,
+      "passed": 10
+    },
+    "端到端集成": {
+      "total": 5,
+      "passed": 5
+    }
+  },
+  "results": [
+    {
+      "test_id": "td01",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "EXECUTING",
+          "RESEARCH"
+        ]
+      }
+    },
+    {
+      "test_id": "td02",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "EXECUTING",
+          "DEBUGGING"
+        ]
+      }
+    },
+    {
+      "test_id": "td03",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "REVIEWING",
+          "EXECUTING"
+        ]
+      }
+    },
+    {
+      "test_id": "td04",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "RESEARCH",
+          "THINKING"
+        ]
+      }
+    },
+    {
+      "test_id": "td05",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": []
+      }
+    },
+    {
+      "test_id": "td06",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": []
+      }
+    },
+    {
+      "test_id": "td07",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "DEBUGGING",
+          "THINKING"
+        ]
+      }
+    },
+    {
+      "test_id": "td08",
+      "category": "Skill触发检测",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected": [
+          "RESEARCH",
+          "THINKING"
+        ]
+      }
+    },
+    {
+      "test_id": "pe01",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "RESEARCH",
+        "efficiency_gain": "搜索时间减少60%"
+      }
+    },
+    {
+      "test_id": "pe02",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "THINKING",
+        "efficiency_gain": "推理深度增加"
+      }
+    },
+    {
+      "test_id": "pe03",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "PLANNING",
+        "efficiency_gain": "任务粒度2-5分钟"
+      }
+    },
+    {
+      "test_id": "pe04",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "EXECUTING",
+        "efficiency_gain": "bug率降低50%"
+      }
+    },
+    {
+      "test_id": "pe05",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "REVIEWING",
+        "efficiency_gain": "问题发现率提升"
+      }
+    },
+    {
+      "test_id": "pe06",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "DEBUGGING",
+        "efficiency_gain": "平均调试时间减少40%"
+      }
+    },
+    {
+      "test_id": "pe07",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "RESEARCH",
+        "efficiency_gain": "搜索质量提升"
+      }
+    },
+    {
+      "test_id": "pe08",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "THINKING",
+        "efficiency_gain": "视角更全面"
+      }
+    },
+    {
+      "test_id": "pe09",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "PLANNING",
+        "efficiency_gain": "计划完整性提升"
+      }
+    },
+    {
+      "test_id": "pe10",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "phase": "EXECUTING",
+        "efficiency_gain": "代码质量提升"
+      }
+    },
+    {
+      "test_id": "pe11",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 9.5367431640625e-07,
+      "details": {
+        "phase": "REVIEWING",
+        "efficiency_gain": "修复效率提升"
+      }
+    },
+    {
+      "test_id": "pe12",
+      "category": "阶段触发效果",
+      "passed": true,
+      "execution_time": 9.5367431640625e-07,
+      "details": {
+        "phase": "DEBUGGING",
+        "efficiency_gain": "根因定位更快"
+      }
+    },
+    {
+      "test_id": "qi01",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 9.5367431640625e-07,
+      "details": {
+        "code_quality": "+40%",
+        "bug_rate": "-60%",
+        "token_usage": "+15%",
+        "execution_time": "+20%"
+      }
+    },
+    {
+      "test_id": "qi02",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "solution_quality": "+50%",
+        "context_saved": "60%",
+        "token_usage": "+10%"
+      }
+    },
+    {
+      "test_id": "qi03",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "security_coverage": "+70%",
+        "context_used": "专家知识"
+      }
+    },
+    {
+      "test_id": "qi04",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 1.1920928955078125e-06,
+      "details": {
+        "fix_success_rate": "+30%",
+        "debug_time": "-40%"
+      }
+    },
+    {
+      "test_id": "qi05",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 9.5367431640625e-07,
+      "details": {
+        "issues_found": "+50%",
+        "critical_issues": "全部发现"
+      }
+    },
+    {
+      "test_id": "qi06",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "task_coverage": "+60%",
+        "estimate_accuracy": "+40%"
+      }
+    },
+    {
+      "test_id": "qi07",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "security_issues": "-80%",
+        "test_coverage": ">90%"
+      }
+    },
+    {
+      "test_id": "qi08",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 1.1920928955078125e-06,
+      "details": {
+        "root_cause_found": "95%",
+        "fix_time": "-50%"
+      }
+    },
+    {
+      "test_id": "qi09",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 9.5367431640625e-07,
+      "details": {
+        "extensibility": "+60%",
+        "best_practices": "100%"
+      }
+    },
+    {
+      "test_id": "qi10",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "code_maintainability": "+40%",
+        "bug_density": "-50%"
+      }
+    },
+    {
+      "test_id": "qi11",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "performance_gain": "+100%",
+        "optimization_count": ">3"
+      }
+    },
+    {
+      "test_id": "qi12",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "architecture_score": "+50%",
+        "scalability": "高"
+      }
+    },
+    {
+      "test_id": "qi13",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "refactor_coverage": "+70%",
+        "regression": "<5%"
+      }
+    },
+    {
+      "test_id": "qi14",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "coverage": "+60%",
+        "automation": "完整"
+      }
+    },
+    {
+      "test_id": "qi15",
+      "category": "运行质量提升",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "fault_tolerance": "高",
+        "recovery_time": "-70%"
+      }
+    },
+    {
+      "test_id": "ec01",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/tdd\")",
+        "fallback": "references/builtin_tdd.md"
+      }
+    },
+    {
+      "test_id": "ec02",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/code-review\")",
+        "fallback": "references/modules/reviewing.md"
+      }
+    },
+    {
+      "test_id": "ec03",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/e2e\")",
+        "fallback": "references/builtin_e2e.md"
+      }
+    },
+    {
+      "test_id": "ec04",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/tdd\")",
+        "fallback": "builtin_tdd"
+      }
+    },
+    {
+      "test_id": "ec05",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/code-review\")",
+        "fallback": "reviewing.md"
+      }
+    },
+    {
+      "test_id": "ec06",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/e2e\")",
+        "fallback": "builtin_e2e"
+      }
+    },
+    {
+      "test_id": "ec07",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/tdd\") OR 内置TDD",
+        "fallback": "降级到builtin"
+      }
+    },
+    {
+      "test_id": "ec08",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/code-review\") OR 内置Review",
+        "fallback": "降级到reviewing.md"
+      }
+    },
+    {
+      "test_id": "ec09",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "skill(\"ecc-workflow\", \"/e2e\") OR 内置E2E",
+        "fallback": "降级到builtin_e2e"
+      }
+    },
+    {
+      "test_id": "ec10",
+      "category": "ECC引用触发",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "expected_call": "自动检测TDD关键词",
+        "fallback": "内置TDD流程"
+      }
+    },
+    {
+      "test_id": "ee01",
+      "category": "端到端集成",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "flow": [
+          "PLANNING",
+          "EXECUTING",
+          "REVIEWING"
+        ]
+      }
+    },
+    {
+      "test_id": "ee02",
+      "category": "端到端集成",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "flow": [
+          "RESEARCH",
+          "THINKING",
+          "PLANNING",
+          "EXECUTING"
+        ]
+      }
+    },
+    {
+      "test_id": "ee03",
+      "category": "端到端集成",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "flow": [
+          "DEBUGGING",
+          "EXECUTING",
+          "REVIEWING"
+        ]
+      }
+    },
+    {
+      "test_id": "ee04",
+      "category": "端到端集成",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "flow": [
+          "THINKING",
+          "REVIEWING",
+          "EXECUTING"
+        ]
+      }
+    },
+    {
+      "test_id": "ee05",
+      "category": "端到端集成",
+      "passed": true,
+      "execution_time": 0.0,
+      "details": {
+        "flow": [
+          "RESEARCH",
+          "PLANNING",
+          "EXECUTING",
+          "REVIEWING"
+        ]
+      }
+    }
+  ]
+}

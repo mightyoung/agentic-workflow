@@ -1,0 +1,566 @@
+{
+  "skill_name": "agentic-workflow",
+  "version": "3.0",
+  "total_tests": 50,
+  "test_dimensions": [
+    {
+      "name": "Skill触发检测",
+      "weight": 0.15,
+      "test_count": 8,
+      "description": "验证agentic-workflow在不显式调用时能否正确触发"
+    },
+    {
+      "name": "阶段触发效果",
+      "weight": 0.2,
+      "test_count": 12,
+      "description": "验证各阶段触发后对任务执行的优化效果"
+    },
+    {
+      "name": "运行质量提升",
+      "weight": 0.25,
+      "test_count": 15,
+      "description": "评估激活skill后的执行效果、速度、上下文优化"
+    },
+    {
+      "name": "ECC引用触发",
+      "weight": 0.25,
+      "test_count": 10,
+      "description": "验证ecc-workflow的正确触发和降级机制"
+    },
+    {
+      "name": "端到端集成",
+      "weight": 0.15,
+      "test_count": 5,
+      "description": "完整工作流测试和跨阶段协调"
+    }
+  ],
+
+  "trigger_detection_tests": [
+    {
+      "id": "td01",
+      "category": "Skill触发检测",
+      "prompt": "帮我用TDD开发一个用户认证模块",
+      "expected_modules": ["EXECUTING", "RESEARCH"],
+      "should_activate_skill": true,
+      "metric": "触发延迟<500ms"
+    },
+    {
+      "id": "td02",
+      "category": "Skill触发检测",
+      "prompt": "写一个排序算法然后修复测试失败的问题",
+      "expected_modules": ["EXECUTING", "DEBUGGING"],
+      "should_activate_skill": true,
+      "metric": "自动切换到DEBUGGING"
+    },
+    {
+      "id": "td03",
+      "category": "Skill触发检测",
+      "prompt": "帮我审查这段代码然后优化性能",
+      "expected_modules": ["REVIEWING", "EXECUTING"],
+      "should_activate_skill": true,
+      "metric": "顺序触发两个阶段"
+    },
+    {
+      "id": "td04",
+      "category": "Skill触发检测",
+      "prompt": "分析这个API设计的最佳实践",
+      "expected_modules": ["RESEARCH", "THINKING"],
+      "should_activate_skill": true,
+      "metric": "触发Research优先"
+    },
+    {
+      "id": "td05",
+      "category": "Skill触发检测",
+      "prompt": "hello world",
+      "expected_modules": [],
+      "should_activate_skill": false,
+      "metric": "简单闲聊不触发"
+    },
+    {
+      "id": "td06",
+      "category": "Skill触发检测",
+      "prompt": "OK明白了谢谢",
+      "expected_modules": [],
+      "should_activate_skill": false,
+      "metric": "确认语句不触发"
+    },
+    {
+      "id": "td07",
+      "category": "Skill触发检测",
+      "prompt": "这个bug怎么调试最好",
+      "expected_modules": ["DEBUGGING", "THINKING"],
+      "should_activate_skill": true,
+      "metric": "Debugging触发+思考"
+    },
+    {
+      "id": "td08",
+      "category": "Skill触发检测",
+      "prompt": "我想学习怎么做系统设计",
+      "expected_modules": ["RESEARCH", "THINKING"],
+      "should_activate_skill": true,
+      "metric": "学习意图触发Research"
+    }
+  ],
+
+  "phase_effect_tests": [
+    {
+      "id": "pe01",
+      "category": "阶段触发效果",
+      "prompt": "帮我搜索React状态管理的最佳实践然后分析",
+      "phase": "RESEARCH",
+      "expected_behavior": ["调用tavily搜索", "创建findings.md"],
+      "efficiency_gain": "搜索时间减少60%",
+      "context_optimization": "关键信息提取到文件"
+    },
+    {
+      "id": "pe02",
+      "category": "阶段触发效果",
+      "prompt": "谁最懂分布式缓存设计？请帮我分析",
+      "phase": "THINKING",
+      "expected_behavior": ["识别专家类型", "链式推理"],
+      "efficiency_gain": "推理深度增加",
+      "context_optimization": "专家视角作为系统提示"
+    },
+    {
+      "id": "pe03",
+      "category": "阶段触发效果",
+      "prompt": "帮我规划一个完整的电商后端开发",
+      "phase": "PLANNING",
+      "expected_behavior": ["创建task_plan.md", "任务拆分"],
+      "efficiency_gain": "任务粒度2-5分钟",
+      "context_optimization": "文件持久化代替记忆"
+    },
+    {
+      "id": "pe04",
+      "category": "阶段触发效果",
+      "prompt": "用TDD方式开发一个支付模块",
+      "phase": "EXECUTING",
+      "expected_behavior": ["先写测试", "测试失败", "实现代码", "测试通过"],
+      "efficiency_gain": "bug率降低50%",
+      "context_optimization": "测试用例作为文档"
+    },
+    {
+      "id": "pe05",
+      "category": "阶段触发效果",
+      "prompt": "请全面审查这个Python项目的代码质量",
+      "phase": "REVIEWING",
+      "expected_behavior": ["架构检查", "逻辑检查", "性能检查", "安全检查"],
+      "efficiency_gain": "问题发现率提升",
+      "context_optimization": "分级报告结构化"
+    },
+    {
+      "id": "pe06",
+      "category": "阶段触发效果",
+      "prompt": "这个服务一直崩溃请帮我调试",
+      "phase": "DEBUGGING",
+      "expected_behavior": ["闻味道", "揪头发", "照镜子", "执行方案", "复盘"],
+      "efficiency_gain": "平均调试时间减少40%",
+      "context_optimization": "保留错误上下文"
+    },
+    {
+      "id": "pe07",
+      "category": "阶段触发效果",
+      "prompt": "搜索Kubernetes生产环境最佳实践",
+      "phase": "RESEARCH",
+      "expected_behavior": ["调用skill tavily", "结果存入findings"],
+      "efficiency_gain": "搜索质量提升",
+      "context_optimization": "结果结构化存储"
+    },
+    {
+      "id": "pe08",
+      "category": "阶段触发效果",
+      "prompt": "从安全专家角度看这个登录实现",
+      "phase": "THINKING",
+      "expected_behavior": ["模拟安全专家", "多角度分析"],
+      "efficiency_gain": "视角更全面",
+      "context_optimization": "专家知识作为上下文"
+    },
+    {
+      "id": "pe09",
+      "category": "阶段触发效果",
+      "prompt": "帮我制定详细的开发里程碑计划",
+      "phase": "PLANNING",
+      "expected_behavior": ["阶段划分", "里程碑定义"],
+      "efficiency_gain": "计划完整性提升",
+      "context_optimization": "进度可追踪"
+    },
+    {
+      "id": "pe10",
+      "category": "阶段触发效果",
+      "prompt": "TDD方式实现一个队列数据结构",
+      "phase": "EXECUTING",
+      "expected_behavior": ["测试文件创建", "测试运行失败", "实现代码", "测试通过"],
+      "efficiency_gain": "代码质量提升",
+      "context_optimization": "测试即文档"
+    },
+    {
+      "id": "pe11",
+      "category": "阶段触发效果",
+      "prompt": "审查这段Go代码并给出改进建议",
+      "phase": "REVIEWING",
+      "expected_behavior": ["问题分级", "优先级排序"],
+      "efficiency_gain": "修复效率提升",
+      "context_optimization": "问题列表结构化"
+    },
+    {
+      "id": "pe12",
+      "category": "阶段触发效果",
+      "prompt": "这个NPE错误反复出现请深度调试",
+      "phase": "DEBUGGING",
+      "expected_behavior": ["7项检查", "最小隔离"],
+      "efficiency_gain": "根因定位更快",
+      "context_optimization": "每次尝试记录"
+    }
+  ],
+
+  "quality_improvement_tests": [
+    {
+      "id": "qi01",
+      "category": "运行质量提升",
+      "prompt": "帮我用TDD开发一个完整的REST API",
+      "baseline_metric": "无TDD方式开发",
+      "with_skill_metric": "TDD循环",
+      "expected_improvement": {
+        "code_quality": "+40%",
+        "bug_rate": "-60%",
+        "token_usage": "+15%",
+        "execution_time": "+20%"
+      },
+      "measurement": "代码可测试性、bug数量、token消耗、时间"
+    },
+    {
+      "id": "qi02",
+      "category": "运行质量提升",
+      "prompt": "帮我搜索并实现一个高并发缓存方案",
+      "baseline_metric": "直接实现",
+      "with_skill_metric": "Research+实现",
+      "expected_improvement": {
+        "solution_quality": "+50%",
+        "context_saved": "60%",
+        "token_usage": "+10%"
+      },
+      "measurement": "方案完整性、上下文复用"
+    },
+    {
+      "id": "qi03",
+      "category": "运行质量提升",
+      "prompt": "开发一个用户权限系统",
+      "baseline_metric": "简单实现",
+      "with_skill_metric": "安全专家视角+设计",
+      "expected_improvement": {
+        "security_coverage": "+70%",
+        "context_used": "专家知识"
+      },
+      "measurement": "安全漏洞发现率"
+    },
+    {
+      "id": "qi04",
+      "category": "运行质量提升",
+      "prompt": "修复这个复杂的并发bug",
+      "baseline_metric": "单次调试",
+      "with_skill_metric": "5步调试法",
+      "expected_improvement": {
+        "fix_success_rate": "+30%",
+        "debug_time": "-40%"
+      },
+      "measurement": "修复成功率、调试轮次"
+    },
+    {
+      "id": "qi05",
+      "category": "运行质量提升",
+      "prompt": "帮我全面审查这个微服务项目",
+      "baseline_metric": "快速浏览",
+      "with_skill_metric": "分级审查",
+      "expected_improvement": {
+        "issues_found": "+50%",
+        "critical_issues": "全部发现"
+      },
+      "measurement": "问题发现数量、分级准确性"
+    },
+    {
+      "id": "qi06",
+      "category": "运行质量提升",
+      "prompt": "帮我规划一个大型系统重构",
+      "baseline_metric": "简单列表",
+      "with_skill_metric": "详细计划+文件",
+      "expected_improvement": {
+        "task_coverage": "+60%",
+        "estimate_accuracy": "+40%"
+      },
+      "measurement": "任务完整性、估算准确性"
+    },
+    {
+      "id": "qi07",
+      "category": "运行质量提升",
+      "prompt": "用TDD+安全审计开发支付模块",
+      "baseline_metric": "普通开发",
+      "with_skill_metric": "TDD+Review",
+      "expected_improvement": {
+        "security_issues": "-80%",
+        "test_coverage": ">90%"
+      },
+      "measurement": "安全漏洞、测试覆盖率"
+    },
+    {
+      "id": "qi08",
+      "category": "运行质量提升",
+      "prompt": "帮我调试这个内存泄漏问题",
+      "baseline_metric": "尝试修复",
+      "with_skill_metric": "系统调试法",
+      "expected_improvement": {
+        "root_cause_found": "95%",
+        "fix_time": "-50%"
+      },
+      "measurement": "根因定位率、修复时间"
+    },
+    {
+      "id": "qi09",
+      "category": "运行质量提升",
+      "prompt": "设计并实现一个可扩展的架构",
+      "baseline_metric": "基础架构",
+      "with_skill_metric": "专家设计+Research",
+      "expected_improvement": {
+        "extensibility": "+60%",
+        "best_practices": "100%"
+      },
+      "measurement": "可扩展性评分"
+    },
+    {
+      "id": "qi10",
+      "category": "运行质量提升",
+      "prompt": "完整开发一个CRUD管理系统",
+      "baseline_metric": "快速实现",
+      "with_skill_metric": "TDD+Review",
+      "expected_improvement": {
+        "code_maintainability": "+40%",
+        "bug_density": "-50%"
+      },
+      "measurement": "可维护性指标"
+    },
+    {
+      "id": "qi11",
+      "category": "运行质量提升",
+      "prompt": "帮我做这个算法的性能优化",
+      "baseline_metric": "简单优化",
+      "with_skill_metric": "专家分析+Research",
+      "expected_improvement": {
+        "performance_gain": "+100%",
+        "optimization_count": ">3"
+      },
+      "measurement": "性能提升倍数"
+    },
+    {
+      "id": "qi12",
+      "category": "运行质量提升",
+      "prompt": "开发一个实时通信系统",
+      "baseline_metric": "基础实现",
+      "with_skill_metric": "架构设计+Research",
+      "expected_improvement": {
+        "architecture_score": "+50%",
+        "scalability": "高"
+      },
+      "measurement": "架构评分"
+    },
+    {
+      "id": "qi13",
+      "category": "运行质量提升",
+      "prompt": "帮我修复这些遗留代码的问题",
+      "baseline_metric": "逐个修复",
+      "with_skill_metric": "系统审查+规划",
+      "expected_improvement": {
+        "refactor_coverage": "+70%",
+        "regression": "<5%"
+      },
+      "measurement": "重构覆盖率"
+    },
+    {
+      "id": "qi14",
+      "category": "运行质量提升",
+      "prompt": "创建一个完整的CI/CD流水线",
+      "baseline_metric": "简单配置",
+      "with_skill_metric": "最佳实践+Research",
+      "expected_improvement": {
+        "coverage": "+60%",
+        "automation": "完整"
+      },
+      "measurement": "CI/CD完整性"
+    },
+    {
+      "id": "qi15",
+      "category": "运行质量提升",
+      "prompt": "帮我设计一个容错系统",
+      "baseline_metric": "基础容错",
+      "with_skill_metric": "专家设计+最佳实践",
+      "expected_improvement": {
+        "fault_tolerance": "高",
+        "recovery_time": "-70%"
+      },
+      "measurement": "容错能力评估"
+    }
+  ],
+
+  "ecc_trigger_tests": [
+    {
+      "id": "ec01",
+      "category": "ECC引用触发",
+      "prompt": "用TDD开发一个计算器类",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/tdd\")",
+      "fallback": "references/builtin_tdd.md",
+      "expected_behavior": "TDD循环执行"
+    },
+    {
+      "id": "ec02",
+      "category": "ECC引用触发",
+      "prompt": "请帮我做代码审查",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/code-review\")",
+      "fallback": "references/modules/reviewing.md",
+      "expected_behavior": "代码审查流程"
+    },
+    {
+      "id": "ec03",
+      "category": "ECC引用触发",
+      "prompt": "写E2E测试用例",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/e2e\")",
+      "fallback": "references/builtin_e2e.md",
+      "expected_behavior": "E2E测试生成"
+    },
+    {
+      "id": "ec04",
+      "category": "ECC引用触发",
+      "prompt": "TDD实现这个功能",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/tdd\")",
+      "fallback": "builtin_tdd",
+      "expected_behavior": "红→绿→重构"
+    },
+    {
+      "id": "ec05",
+      "category": "ECC引用触发",
+      "prompt": "帮我进行代码审查和优化",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/code-review\")",
+      "fallback": "reviewing.md",
+      "expected_behavior": "分级审查"
+    },
+    {
+      "id": "ec06",
+      "category": "ECC引用触发",
+      "prompt": "编写用户登录的E2E测试",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/e2e\")",
+      "fallback": "builtin_e2e",
+      "expected_behavior": "E2E测试用例"
+    },
+    {
+      "id": "ec07",
+      "category": "ECC引用触发",
+      "prompt": "用测试驱动开发这个模块",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/tdd\") OR 内置TDD",
+      "fallback": "降级到builtin",
+      "expected_behavior": "测试先行"
+    },
+    {
+      "id": "ec08",
+      "category": "ECC引用触发",
+      "prompt": "全面审查这个项目的代码",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/code-review\") OR 内置Review",
+      "fallback": "降级到reviewing.md",
+      "expected_behavior": "问题分级"
+    },
+    {
+      "id": "ec09",
+      "category": "ECC引用触发",
+      "prompt": "创建端到端测试覆盖这个流程",
+      "expected_ecc_call": "skill(\"ecc-workflow\", \"/e2e\") OR 内置E2E",
+      "fallback": "降级到builtin_e2e",
+      "expected_behavior": "E2E流程测试"
+    },
+    {
+      "id": "ec10",
+      "category": "ECC引用触发",
+      "prompt": "测试优先开发这个功能",
+      "expected_ecc_call": "自动检测TDD关键词",
+      "fallback": "内置TDD流程",
+      "expected_behavior": "测试→失败→实现→通过"
+    }
+  ],
+
+  "e2e_integration_tests": [
+    {
+      "id": "ee01",
+      "category": "端到端集成",
+      "prompt": "帮我规划并TDD开发一个用户认证系统",
+      "flow": ["PLANNING", "EXECUTING", "REVIEWING"],
+      "expected_files": ["task_plan.md", "测试文件", "代码文件"],
+      "completion_criteria": "完整可运行的认证系统"
+    },
+    {
+      "id": "ee02",
+      "category": "端到端集成",
+      "prompt": "搜索最佳实践，然后设计并实现一个高并发系统",
+      "flow": ["RESEARCH", "THINKING", "PLANNING", "EXECUTING"],
+      "expected_files": ["findings.md", "task_plan.md", "系统代码"],
+      "completion_criteria": "设计文档+可运行代码"
+    },
+    {
+      "id": "ee03",
+      "category": "端到端集成",
+      "prompt": "调试这个bug，然后TDD重构相关代码",
+      "flow": ["DEBUGGING", "EXECUTING", "REVIEWING"],
+      "expected_files": ["调试记录", "测试文件", "重构代码"],
+      "completion_criteria": "bug修复+重构代码+测试"
+    },
+    {
+      "id": "ee04",
+      "category": "端到端集成",
+      "prompt": "从专家角度分析，然后全面审查，最后TDD优化",
+      "flow": ["THINKING", "REVIEWING", "EXECUTING"],
+      "expected_files": ["分析报告", "审查报告", "优化代码"],
+      "completion_criteria": "完整分析+优化方案+实现"
+    },
+    {
+      "id": "ee05",
+      "category": "端到端集成",
+      "prompt": "规划一个完整的微服务项目，包含搜索、TDD开发和审查",
+      "flow": ["RESEARCH", "PLANNING", "EXECUTING", "REVIEWING"],
+      "expected_files": ["findings.md", "task_plan.md", "所有服务代码", "测试", "审查报告"],
+      "completion_criteria": "完整的项目结构+代码+测试+审查"
+    }
+  ],
+
+  "evaluation_metrics": {
+    "trigger_accuracy": {
+      "formula": "正确触发次数 / 总触发次数",
+      "target": ">95%"
+    },
+    "phase_effectiveness": {
+      "formula": "(优化后指标 - 基准指标) / 基准指标",
+      "target": "显著正向提升"
+    },
+    "ecc_fallback_rate": {
+      "formula": "降级次数 / ECC调用总次数",
+      "target": "<20% (当ECC不存在时)"
+    },
+    "quality_improvement": {
+      "formula": "with_skill_score / baseline_score",
+      "target": ">1.3 (30%提升)"
+    },
+    "execution_speed": {
+      "formula": "baseline_time / with_skill_time",
+      "target": ">0.8 (允许合理增加以换取质量)"
+    },
+    "context_efficiency": {
+      "公式": "有用信息token / 总token",
+      "target": ">60%"
+    }
+  },
+
+  "test_methodology": {
+    "approach": "A/B对比测试",
+    "baseline": "不使用agentic-workflow的直接执行",
+    "treatment": "使用agentic-workflow的完整流程",
+    "measurement": [
+      "token消耗统计",
+      "执行时间测量",
+      "输出质量评分",
+      "上下文利用率"
+    ]
+  }
+}
