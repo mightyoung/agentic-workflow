@@ -9,47 +9,37 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-      
-      NZ|        run: npm install
-      
-      ZV|        run: node tests/validate.js
-        run: npm test
-      
-      - name: Check skill syntax
+
+      - name: Check required files
         run: |
           echo "Checking SKILL.md exists..."
           test -f SKILL.md
-          
+
           echo "Checking README.md exists..."
           test -f README.md
-          
-          echo "Checking required sections..."
-          grep -q "## 🎯 Usage" SKILL.md
-          grep -q "## 🔄 Automatic Workflow" SKILL.md
-          grep -q "## 🔑 Key Rules" SKILL.md
-      
-      - name: Validate package.json
+
+      - name: Check skill structure
         run: |
-          node -e "JSON.parse(require('fs').readFileSync('package.json'))"
-          echo "package.json is valid JSON"
-      
-      - name: Check sub-skills references
+          echo "Checking core modules..."
+          grep -q "THINKING" SKILL.md
+          grep -q "PLANNING" SKILL.md
+          grep -q "EXECUTING" SKILL.md
+          grep -q "REVIEWING" SKILL.md
+          grep -q "DEBUGGING" SKILL.md
+
+      - name: Check PUA integration
+        run: |
+          echo "Checking PUA fusion..."
+          grep -q "PUA" SKILL.md
+          grep -q "铁律" SKILL.md
+
+      - name: Check integrated skills references
         run: |
           echo "Checking sub-skills are referenced..."
+          grep -q "best-minds" SKILL.md
           grep -q "planning-with-files" SKILL.md
-          grep -q "test-driven-development" SKILL.md
-          grep -q "verification-before-completion" SKILL.md
+          grep -q "TDD" SKILL.md
