@@ -62,25 +62,27 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 根据用户输入自动路由到对应模块：
 
 ```python
-# 不触发 - 简单闲聊问题
-if 包含("天气", "笑话", "你好", "hi", "hello") and not 包含("开发", "代码", "实现"):
+# 不触发 - 简单闲聊问题（使用单词边界匹配）
+# 注意：避免子串误匹配，如 "ok" 匹配 "hooks"、"yes" 匹配 "best practices"
+if 包含("天气", "笑话", "你好", "\\bhi\\b", "\\bhello\\b", "\\bbye\\b", "谢谢", "\\bok\\b", "\\byes\\b", "\\bno\\b", "\\bmaybe\\b") and not 包含("开发", "代码", "实现"):
     → 不触发，直接回答
 
 # RESEARCH 触发 - 复杂任务自动搜索
-if 包含("怎么做", "如何实现", "最佳实践", "有什么", "有哪些", "参考", "案例"):
+if 包含("怎么做", "如何实现", "最佳实践", "有什么", "有哪些", "参考", "案例", "Best Practices", "best practices"):
     → 研究模块 (RESEARCH) → THINKING
 
 # PUA 触发 - 失败时自动激活
 if 包含("尽力", "别放弃", "继续尝试", "为什么还不行", "你再试试"):
     → 激活 PUA 模式（增强执行/调试）
 
-elif 包含("谁最懂", "专家", "顶级", "best minds"):
+# THINKING 触发 - 专家/分析 (优先级高于RESEARCH)
+elif 包含("谁最懂", "专家", "顶级", "best minds", "优化", "分析", "怎么做"):
     → 专家模拟模块 (THINKING)
 
-elif 包含("计划", "规划", "拆分任务"):
+elif 包含("计划", "规划", "拆分", "设计", "安排"):
     → 规划模块 + task_plan.md (PLANNING)
 
-elif 包含("bug", "错误", "调试", "修复"):
+elif 包含("bug", "错误", "调试", "修复", "报错", "崩溃", "异常"):
     → 调试模块 + PUA 5步方法论 (DEBUGGING)
 
 elif 包含("审查", "review", "检查spec"):
