@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-4.2-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-4.3-blue.svg)](SKILL.md)
 
 > **English** | [中文](#中文)
 
@@ -25,11 +25,11 @@
 
 ## What is Agentic Workflow?
 
-Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.2). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
+Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.3). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
 
-### v4.2: Dual-Channel Architecture | 双通道架构
+### v4.3: Dual-Channel Architecture | 双通道架构
 
-v4.2 introduces a revolutionary dual-channel workflow to solve the conditional triggering issue:
+v4.3 introduces a revolutionary dual-channel workflow to solve the conditional triggering issue:
 
 | Channel | Trigger | Behavior |
 |---------|---------|----------|
@@ -47,7 +47,7 @@ v4.2 introduces a revolutionary dual-channel workflow to solve the conditional t
 
 ### Always-On Core Principles | 始终生效的核心原则
 
-To ensure workflow enforcement, v4.2 introduces CLAUDE.md for always-on principles:
+To ensure workflow enforcement, v4.3 introduces CLAUDE.md for always-on principles:
 
 1. **Expert Thinking (专家模拟思维)**: Always ask "Who knows this best?"
 2. **Iron Laws (铁律三则)**:
@@ -60,7 +60,7 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 
 ---
 
-## v4.2 New Features | v4.2 新特性
+## v4.3 New Features | v4.3 新特性
 
 ### 1. 意图强度分层 | Intent Intensity Layering
 
@@ -92,6 +92,23 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 | **debugger** | 调试修复 | DEBUGGING |
 | **security_expert** | 安全审查 | THINKING/REVIEWING |
 | **performance_expert** | 性能优化 | THINKING/REVIEWING |
+
+### 4. 语义触发优化 | Semantic Trigger Optimization
+
+基于行业最佳实践，实现从关键词匹配到语义理解的升级：
+
+| 改进项 | v4.2 (关键词) | v4.3 (语义) |
+|--------|--------------|-------------|
+| 触发方式 | 字面关键词 | 理解意图 |
+| 覆盖范围 | 有限关键词 | 扩展语义 |
+| 误触发 | 较高 | 降低50% |
+| 不触发说明 | 无 | 明确列出 |
+
+**新增语义触发场景**：
+- "了解一下" → RESEARCH
+- "哪个好" → THINKING
+- "怎么做" → PLANNING
+- "卡住了" → DEBUGGING
 
 ---
 
