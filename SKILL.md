@@ -10,14 +10,14 @@ description: >
 
 # Agentic Workflow - 统一智能体工作流
 
-> 融合 best-minds, brainstorming, writing-plans, planning-with-files, TDD, systematic-debugging, verification, pua 精髓
+> 融合 best-minds, brainstorming, writing-plans, planning-with-files, TDD, systematic-debugging, verification, pua, tavily 精髓
 
 ## 核心原则
 
 ### 1. 专家模拟思维 (Best-Minds)
 不要问"你怎么看"，而是问"这个问题谁最懂？TA会怎么说？"。
 
-### 2. 文件持久化 (Planning-with-Files)
+### 2. 文件持久化 (Planning-with-Files + RESEARCH)
 - task_plan.md - 任务计划
 - findings.md - 研究发现
 - progress.md - 进度追踪
@@ -25,7 +25,14 @@ description: >
 ### 3. TDD 驱动
 测试先行 → 失败 → 实现 → 通过
 
-### 4. PUA 激励引擎 (失败时触发)
+### 4. RESEARCH 前置搜索 (Tavily)
+- 思考前先搜索最佳实践
+- 规划前先调研成熟案例
+- 将搜索结果存入 findings.md
+
+### 5. PUA 激励引擎 (失败时触发)
+
+### 6. 注意力管理
 - **铁律一：穷尽一切** - 没有穷尽所有方案之前，禁止说"无法解决"
 - **铁律二：先做后问** - 遇到问题先自行搜索、读源码、验证，再提问
 - **铁律三：主动出击** - 端到端交付，不只是"刚好够用"
@@ -38,10 +45,15 @@ description: >
 ## 状态机
 
 ```
-IDLE → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
-                    ↓           ↓           ↓
-                 DEBUGGING ←────────────→
+IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
+              ↓           ↓           ↓           ↓
+         DEBUGGING ←────────────────────────────────────→
 ```
+
+### RESEARCH 阶段（自动触发）
+- 触发条件：复杂任务（3+步骤）、新技术领域、需要外部参考
+- 搜索范围：网络最佳实践、GitHub 成熟项目、社区讨论、官方文档
+- 输出：结构化搜索结果存入 findings.md
 
 ---
 
@@ -50,6 +62,10 @@ IDLE → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
 根据用户输入自动路由到对应模块：
 
 ```python
+# RESEARCH 触发 - 复杂任务自动搜索
+if 包含("怎么做", "如何实现", "最佳实践", "有什么", "有哪些", "参考", "案例"):
+    → 研究模块 (RESEARCH) → THINKING
+
 # PUA 触发 - 失败时自动激活
 if 包含("尽力", "别放弃", "继续尝试", "为什么还不行", "你再试试"):
     → 激活 PUA 模式（增强执行/调试）
@@ -74,7 +90,52 @@ else:
 
 ## 模块详解
 
-### 1. 专家模拟模块 (THINKING)
+### 1. 研究模块 (RESEARCH)
+
+**目的**：在思考和规划前，先搜索网络上、社区中、GitHub 中的最佳实践和成熟案例。
+
+**触发条件**：
+- 复杂任务（3+步骤）
+- 新技术领域
+- 需要外部参考
+- 触发词："怎么做"、"如何实现"、"最佳实践"、"有什么"、"参考"、"案例"
+
+**搜索策略**：
+1. **网络搜索**（Tavily MCP）：
+   - 官方文档和教程
+   - 行业最佳实践
+   - 技术博客和文章
+
+2. **GitHub 搜索**：
+   - 成熟开源项目
+   - 最佳实践模板
+   - 热门解决方案
+
+3. **社区搜索**：
+   - Reddit/Hacker News 讨论
+   - Stack Overflow 高票答案
+   - 开发者社区经验
+
+**输出到 findings.md**：
+```markdown
+# 研究发现
+
+## 网络最佳实践
+- [来源1]: 关键要点
+- [来源2]: 关键要点
+
+## GitHub 成熟项目
+- 项目A: 特点描述
+- 项目B: 特点描述
+
+## 社区经验总结
+- 经验1
+- 经验2
+```
+
+**自动进入下一阶段**：带着搜索结果进入 THINKING
+
+### 2. 专家模拟模块 (THINKING)
 
 当用户问"你怎么看"时：
 
@@ -90,7 +151,7 @@ else:
 (模拟Andrej的观点)
 ```
 
-### 2. 规划模块 (PLANNING)
+### 3. 规划模块 (PLANNING)
 
 1. **创建文件**
    - task_plan.md
@@ -124,7 +185,7 @@ else:
 > 每3步重读此文件
 ```
 
-### 3. 执行模块 (EXECUTING)
+### 4. 执行模块 (EXECUTING)
 
 **TDD 循环 + PUA铁律：**
 1. 写失败测试
@@ -175,7 +236,7 @@ else:
 - 传递精确上下文
 - 两阶段审查
 
-### 4. 审查模块 (REVIEWING)
+### 5. 审查模块 (REVIEWING)
 
 **规范检查 (OpenSpec 可选)：**
 
@@ -195,7 +256,7 @@ else:
 - 性能问题
 - 测试覆盖
 
-### 5. 调试模块 (DEBUGGING)
+### 6. 调试模块 (DEBUGGING)
 
 **根因分析 + PUA 5步方法论：**
 
@@ -299,6 +360,7 @@ memory_store(
 | systematic-debugging | 调试模块 (DEBUGGING) + 5步方法论 |
 | verification | 审查模块 (REVIEWING) |
 | openspec | 审查模块可选引用 |
+| tavily | 研究模块 (RESEARCH) |
 
 ---
 
