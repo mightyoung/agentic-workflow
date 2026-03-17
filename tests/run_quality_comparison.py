@@ -70,9 +70,17 @@ async def call_claude(prompt: str, system_prompt: str = "") -> Dict:
         )
         duration = time.time() - start_time
 
+        # 处理不同的响应块类型
+        content_text = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                content_text += block.text
+            elif hasattr(block, 'type') and block.type == 'text':
+                content_text += block.text
+
         return {
             "success": True,
-            "content": response.content[0].text,
+            "content": content_text,
             "duration": duration,
             "input_tokens": response.usage.input_tokens,
             "output_tokens": response.usage.output_tokens,

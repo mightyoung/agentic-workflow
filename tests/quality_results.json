@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "task_id": "task_01",
+    "module": "EXECUTING",
+    "with_skill": {
+      "duration": 38.304763078689575,
+      "tokens": 1419
+    },
+    "without_skill": {
+      "duration": 56.41539144515991,
+      "tokens": 2876
+    }
+  },
+  {
+    "task_id": "task_02",
+    "module": "PLANNING",
+    "with_skill": {
+      "duration": 5.91832423210144,
+      "tokens": 202
+    },
+    "without_skill": {
+      "duration": 52.54952812194824,
+      "tokens": 2642
+    }
+  },
+  {
+    "task_id": "task_03",
+    "module": "THINKING",
+    "with_skill": {
+      "duration": 16.89768099784851,
+      "tokens": 626
+    },
+    "without_skill": {
+      "duration": 56.482120990753174,
+      "tokens": 2380
+    }
+  },
+  {
+    "task_id": "task_04",
+    "module": "RESEARCH",
+    "with_skill": {
+      "duration": 8.177605152130127,
+      "tokens": 303
+    },
+    "without_skill": {
+      "duration": 156.05351996421814,
+      "tokens": 4146
+    }
+  },
+  {
+    "task_id": "task_05",
+    "module": "REVIEWING",
+    "with_skill": {
+      "duration": 13.244073867797852,
+      "tokens": 4195
+    },
+    "without_skill": {
+      "duration": 26.202732801437378,
+      "tokens": 1029
+    }
+  },
+  {
+    "task_id": "task_06",
+    "module": "DEBUGGING",
+    "with_skill": {
+      "duration": 15.89880108833313,
+      "tokens": 684
+    },
+    "without_skill": {
+      "duration": 35.775381088256836,
+      "tokens": 1428
+    }
+  }
+]
