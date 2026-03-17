@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-4.1-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-4.2-blue.svg)](SKILL.md)
 
 > **English** | [中文](#中文)
 
@@ -25,17 +25,42 @@
 
 ## What is Agentic Workflow?
 
-Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.1). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
+Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.2). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
+
+### v4.2: Dual-Channel Architecture | 双通道架构
+
+v4.2 introduces a revolutionary dual-channel workflow to solve the conditional triggering issue:
+
+| Channel | Trigger | Behavior |
+|---------|---------|----------|
+| **Explicit Command** | `/workflow` command | Forces full workflow execution |
+| **Smart Auto-Detection** | Complexity analysis | Auto-triggers based on task complexity |
+
+**Complexity Detection:**
+- **High**: Multi-module, system architecture → Full workflow
+- **Medium**: Multi-step features → THINKING → PLANNING → EXECUTING
+- **Low**: Simple single-file changes → Direct execution
 
 ### Core Philosophy
 
 **Don't ask "What do you think?" — ask "Who knows this best? What would they say?"**
 
+### Always-On Core Principles | 始终生效的核心原则
+
+To ensure workflow enforcement, v4.2 introduces CLAUDE.md for always-on principles:
+
+1. **Expert Thinking (专家模拟思维)**: Always ask "Who knows this best?"
+2. **Iron Laws (铁律三则)**:
+   - 穷尽一切 (Exhaust All Options) - Never say "can't solve" before trying 3+ approaches
+   - 先做后问 (Try First, Ask Later) - Research and verify before asking questions
+   - 主动出击 (Take Initiative) - End-to-end delivery, not just "good enough"
+3. **PUA Motivation (PUA激励)**: Triggers on failure for enhanced problem-solving
+
 This principle, inspired by the best-minds approach, ensures we always leverage expert-level thinking rather than generic responses.
 
 ---
 
-## v4.1 New Features | v4.1 新特性
+## v4.2 New Features | v4.2 新特性
 
 ### 1. 意图强度分层 | Intent Intensity Layering
 
