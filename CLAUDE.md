@@ -39,7 +39,7 @@
 对于中等及以上复杂度的任务，应使用 agentic-workflow 技能：
 
 ```bash
-/workflow 帮我开发一个电商系统
+/agentic-workflow 帮我开发一个电商系统
 ```
 
 **自动检测**：以下情况自动走完整工作流

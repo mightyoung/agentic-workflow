@@ -33,7 +33,7 @@ v4.2 introduces a revolutionary dual-channel workflow to solve the conditional t
 
 | Channel | Trigger | Behavior |
 |---------|---------|----------|
-| **Explicit Command** | `/workflow` command | Forces full workflow execution |
+| **Explicit Command** | `/agentic-workflow` command | Forces full workflow execution |
 | **Smart Auto-Detection** | Complexity analysis | Auto-triggers based on task complexity |
 
 **Complexity Detection:**

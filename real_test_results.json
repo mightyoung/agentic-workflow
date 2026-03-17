@@ -1,0 +1,204 @@
+{
+  "total": 15,
+  "passed": 10,
+  "failed": 5,
+  "pass_rate": 66.66666666666666,
+  "total_time": 675.4362900257111,
+  "results": [
+    {
+      "test_id": "st01",
+      "dimension": "阶段触发",
+      "category": "基础触发",
+      "scenario": "搜索React状态管理最佳实践",
+      "expected": "RESEARCH",
+      "passed": true,
+      "execution_time": 53.32530164718628,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 41187, 'duration_api_ms': 10817, 'num_turns': 1, 'result': 'RESEARCH', 'stop_reason': 'end_turn', 'session_id': '06ea20b7-c93"
+      }
+    },
+    {
+      "test_id": "st02",
+      "dimension": "阶段触发",
+      "category": "基础触发",
+      "scenario": "谁最懂分布式缓存设计",
+      "expected": "THINKING",
+      "passed": true,
+      "execution_time": 48.3906512260437,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 39880, 'duration_api_ms': 9547, 'num_turns': 1, 'result': '应该触发 **Research（研究）阶段**，因为这是一个知识性询问，需要搜索和分析相关专业知识。', 'stop_reason'"
+      }
+    },
+    {
+      "test_id": "st03",
+      "dimension": "阶段触发",
+      "category": "基础触发",
+      "scenario": "帮我规划这个项目开发",
+      "expected": "PLANNING",
+      "passed": true,
+      "execution_time": 45.01178979873657,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 40459, 'duration_api_ms': 10152, 'num_turns': 1, 'result': '应该触发 **Plan First**（计划优先）阶段。', 'stop_reason': 'end_turn', 'sessio"
+      }
+    },
+    {
+      "test_id": "st04",
+      "dimension": "阶段触发",
+      "category": "基础触发",
+      "scenario": "这个bug一直解决不了",
+      "expected": "DEBUGGING",
+      "passed": true,
+      "execution_time": 30.89253306388855,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 22573, 'duration_api_ms': 21118, 'num_turns': 4, 'result': '**DEBUGGING 阶段** — 应该触发调试阶段，使用5步调试方法论（闻味道 → 揪头发 → 照镜子 → 执行 → 复盘）来"
+      }
+    },
+    {
+      "test_id": "st05",
+      "dimension": "阶段触发",
+      "category": "边界测试",
+      "scenario": "hello world",
+      "expected": "不触发",
+      "passed": true,
+      "execution_time": 22.992130756378174,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 17765, 'duration_api_ms': 16326, 'num_turns': 4, 'result': '**不触发**\\n\\n根据 SKILL.md 第79-81行的路由逻辑，闲聊类输入（包含\"天气\"、\"笑话\"、\"你好\"、\"谢谢\"）且"
+      }
+    },
+    {
+      "test_id": "sa01",
+      "dimension": "Subagent派生",
+      "category": "基础派生",
+      "scenario": "搜索分布式事务最佳实践",
+      "expected": "researcher",
+      "passed": true,
+      "execution_time": 20.051578760147095,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 13448, 'duration_api_ms': 7410, 'num_turns': 1, 'result': '应该使用 **researcher** 子智能体。\\n\\n\"搜索分布式事务最佳实践\"是一个研究型任务，需要查找、收集和分析信息，符合"
+      }
+    },
+    {
+      "test_id": "sa02",
+      "dimension": "Subagent派生",
+      "category": "基础派生",
+      "scenario": "规划这个项目开发",
+      "expected": "planner",
+      "passed": true,
+      "execution_time": 25.27462077140808,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 21616, 'duration_api_ms': 20486, 'num_turns': 3, 'result': '根据 `SKILL.md` 的内容，**规划这个项目开发**任务应该派生 **planner** 子智能体。\\n\\n从文档中可以明"
+      }
+    },
+    {
+      "test_id": "sa03",
+      "dimension": "Subagent派生",
+      "category": "基础派生",
+      "scenario": "用TDD实现计算器",
+      "expected": "coder",
+      "passed": true,
+      "execution_time": 29.897788047790527,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 21445, 'duration_api_ms': 20587, 'num_turns': 2, 'result': '根据agentic-workflow的设计，对于\"用TDD实现计算器\"这类任务：\\n\\n## 答案：coder 子智能体\\n\\n#"
+      }
+    },
+    {
+      "test_id": "sa04",
+      "dimension": "Subagent派生",
+      "category": "基础派生",
+      "scenario": "审查这段代码",
+      "expected": "reviewer",
+      "passed": true,
+      "execution_time": 50.15091395378113,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 44292, 'duration_api_ms': 13514, 'num_turns': 2, 'result': '根据 agentic-workflow skill 的配置，执行\"审查这段代码\"任务时：\\n\\n1. **首先触发 REVIEWI"
+      }
+    },
+    {
+      "test_id": "sa05",
+      "dimension": "Subagent派生",
+      "category": "基础派生",
+      "scenario": "调试这个bug",
+      "expected": "debugger",
+      "passed": true,
+      "execution_time": 49.44898200035095,
+      "error": "",
+      "details": {
+        "response": "{'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 43593, 'duration_api_ms': 12832, 'num_turns': 2, 'result': '根据 SKILL.md 的路由规则，当用户说\"调试这个bug\"时：\\n\\n1. **触发阶段**: DEBUGGING（系统化调试"
+      }
+    },
+    {
+      "test_id": "qa01",
+      "dimension": "运行质量",
+      "category": "执行效果",
+      "scenario": "开发认证模块",
+      "expected": "直接实现",
+      "passed": false,
+      "execution_time": 60,
+      "error": "Timeout",
+      "details": {
+        "response": "{}"
+      }
+    },
+    {
+      "test_id": "qa02",
+      "dimension": "运行质量",
+      "category": "执行效果",
+      "scenario": "技术选型",
+      "expected": "凭经验",
+      "passed": false,
+      "execution_time": 60,
+      "error": "Timeout",
+      "details": {
+        "response": "{}"
+      }
+    },
+    {
+      "test_id": "qa03",
+      "dimension": "运行质量",
+      "category": "执行效果",
+      "scenario": "Bug修复",
+      "expected": "单次调试",
+      "passed": false,
+      "execution_time": 60,
+      "error": "Timeout",
+      "details": {
+        "response": "{}"
+      }
+    },
+    {
+      "test_id": "qa04",
+      "dimension": "运行质量",
+      "category": "执行速度",
+      "scenario": "搜索+实现",
+      "expected": "",
+      "passed": false,
+      "execution_time": 60,
+      "error": "Timeout",
+      "details": {
+        "response": "{}"
+      }
+    },
+    {
+      "test_id": "qa05",
+      "dimension": "运行质量",
+      "category": "上下文优化",
+      "scenario": "多轮对话",
+      "expected": "",
+      "passed": false,
+      "execution_time": 60,
+      "error": "Timeout",
+      "details": {
+        "response": "{}"
+      }
+    }
+  ]
+}

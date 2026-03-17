@@ -3,7 +3,7 @@ name: agentic-workflow
 description: >
   统一智能体工作流 - 用于任何复杂任务开发。
   触发条件：
-    1. 显式命令：/workflow 强制走完整流程
+    1. 显式命令：/agentic-workflow 强制走完整流程
     2. 自动检测：复杂任务自动触发完整流程
     3. 简单任务：直接执行不触发工作流
   核心方法：TDD驱动、专家模拟思维、文件持久化、PUA激励。
@@ -20,12 +20,12 @@ description: >
 
 ### 通道1：显式命令（强制完整流程）
 
-用户可以使用 `/workflow` 命令显式调用完整工作流：
+用户可以使用 `/agentic-workflow` 命令显式调用完整工作流：
 
 ```
-/workflow 帮我开发一个电商系统
-/workflow 修复这个复杂的分布式事务bug
-/workflow 规划这个大型项目
+/agentic-workflow 帮我开发一个电商系统
+/agentic-workflow 修复这个复杂的分布式事务bug
+/agentic-workflow 规划这个大型项目
 ```
 
 **效果**：强制执行完整流程 THINKING → PLANNING → EXECUTING → REVIEWING
@@ -83,7 +83,7 @@ else:
 
 | 场景 | 执行 |
 |------|------|
-| 强制完整流程 | /workflow + 任务描述 |
+| 强制完整流程 | /agentic-workflow + 任务描述 |
 | Bug修复 | DEBUGGING |
 | 项目规划 | PLANNING |
 | 技术调研 | RESEARCH + THINKING |
@@ -151,10 +151,10 @@ def 复杂度检测为(任务描述) -> str:
 # ============================================================================
 
 # ============================================================================
-# 通道1：显式命令 /workflow（强制完整流程）
+# 通道1：显式命令 /agentic-workflow（强制完整流程）
 # ============================================================================
 
-if 包含("/workflow"):
+if 包含("/agentic-workflow"):
     → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
 
 # ============================================================================
