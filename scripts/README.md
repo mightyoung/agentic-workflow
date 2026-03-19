@@ -1,0 +1,142 @@
+# Scripts 目录 (v4.6新增)
+
+> 可执行的脚本，用于自动化任务执行和环境操作。支持跨平台运行。
+
+## 目录内容
+
+### Python 脚本（跨平台）
+
+| 脚本 | 功能 | 用途 |
+|------|------|------|
+| `wal_scanner.py` | WAL 触发扫描 | 检测用户消息中的修正/偏好/决策信息 |
+| `memory_ops.py` | 记忆操作 | 更新 SESSION-STATE.md |
+| `task_tracker.py` | 任务追踪 | 追踪任务进度和状态 |
+| `router.py` | 路由决策 | 辅助判断用户意图和触发阶段 |
+
+### Bash 脚本（Unix/Linux/macOS）
+
+| 脚本 | 功能 | 用途 |
+|------|------|------|
+| `init_session.sh` | 初始化会话 | 创建 SESSION-STATE.md |
+| `check_template.sh` | 检查模板 | 验证任务计划模板是否存在 |
+| `quick_tdd.sh` | 快速 TDD | 执行 TDD 循环 (红-绿-重构) |
+| `check_env.sh` | 环境检查 | 检查必需工具和环境变量 |
+| `auto_commit.sh` | 自动提交 | 快捷 git 提交 |
+| `create_plan.sh` | 创建计划 | 生成任务计划文件 |
+| `quick_review.sh` | 快速审查 | 代码审查 (TODO/密码/空文件) |
+| `watch_progress.sh` | 监控进度 | 监控 progress.md 变化 |
+
+### Windows 批处理脚本（Windows）
+
+位于 `win/` 子目录：
+
+| 脚本 | 功能 | 用途 |
+|------|------|------|
+| `init_session.bat` | 初始化会话 | 创建 SESSION-STATE.md |
+| `check_template.bat` | 检查模板 | 验证任务计划模板是否存在 |
+| `check_env.bat` | 环境检查 | 检查必需工具和环境变量 |
+| `create_plan.bat` | 创建计划 | 生成任务计划文件 |
+| `quick_review.bat` | 快速审查 | 代码审查 (TODO/密码/空文件) |
+
+### 跨平台脚本调用
+
+Agent 应该自动检测操作系统并选择正确的脚本版本：
+
+```python
+import platform
+import os
+
+def get_script_path(script_name):
+    """获取跨平台脚本路径"""
+    system = platform.system().lower()
+
+    if system == "windows" or os.name == "nt":
+        # Windows: 使用 .bat 脚本
+        base = "scripts/win"
+        if script_name.endswith(".py"):
+            return f"{base}/../{script_name}"  # Python 跨平台
+        return f"{base}/{script_name}.bat"
+    else:
+        # Unix/Linux/macOS: 使用 .sh 或 .py 脚本
+        base = "scripts"
+        if script_name.endswith(".py"):
+            return f"{base}/{script_name}"
+        return f"{base}/{script_name}.sh"
+```
+
+## 使用方式
+
+Agent 在需要时通过 Bash 工具调用这些脚本：
+
+```bash
+# Python 脚本
+python scripts/wal_scanner.py "用户消息文本"
+python scripts/memory_ops.py --op=update --key=task --value="任务描述"
+python scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
+python scripts/router.py "帮我搜索最佳实践"
+
+# Bash 脚本
+bash scripts/init_session.sh                    # 初始化会话
+bash scripts/check_template.sh                 # 检查模板
+bash scripts/check_env.sh                      # 检查环境
+bash scripts/quick_tdd.sh "npm test" "npm run build"  # TDD循环
+bash scripts/create_plan.sh "新功能开发"        # 创建计划
+bash scripts/quick_review.sh src/              # 快速审查
+bash scripts/auto_commit.sh . "完成功能X"     # 提交代码
+bash scripts/watch_progress.sh progress.md 5   # 监控进度
+```
+
+## 依赖
+
+- Python 3.6+
+- 无外部依赖（使用标准库）
+
+## 与 SKILL.md 的关系
+
+这些脚本是 SKILL.md 中描述的"可执行机制"的实际实现。
+
+SKILL.md 定义了：
+- 工作流程和阶段
+- 触发条件和路由逻辑
+- 核心原则和铁律
+
+脚本负责：
+- 实际的文件操作
+- 状态追踪和更新
+- 辅助决策计算
+
+## 设计原则
+
+### Python 脚本
+1. **无外部依赖** - 只使用 Python 标准库
+2. **复杂逻辑** - 处理数据结构和模式匹配
+3. **结构化输出** - JSON 格式便于解析
+
+### Bash 脚本
+1. **快速执行** - 文件操作、管道组合
+2. **确定性** - 相同输入产生相同输出
+3. **Unix 哲学** - 单一职责，可组合
+
+### 选择指南
+
+| 场景 | 推荐 |
+|------|------|
+| 文件存在检查 | Bash/Windows (`test -f` / `if exist`) |
+| 正则表达式匹配 | Python (`re`) |
+| Git 操作 | Bash (`git add/commit`) |
+| 复杂数据处理 | Python (`json`, `dict`) |
+| 模板创建 | Bash/Windows (`cat <<EOF` / `echo`) |
+| 进度追踪 | Python（跨平台） |
+| 跨平台兼容 | Python（始终优先） |
+
+### 跨平台支持
+
+| 脚本类型 | Windows | macOS | Linux | 优先级 |
+|-----------|---------|--------|-------|--------|
+| Python (.py) | ✅ | ✅ | ✅ | 高 |
+| Bash (.sh) | ❌* | ✅ | ✅ | 中 |
+| Batch (.bat) | ✅ | ❌ | ❌ | 低 |
+
+*在 Git Bash 或 WSL 环境下可运行
+
+详见：`win/README.md`

@@ -1,6 +1,24 @@
-# 任务计划模板
+#!/bin/bash
+# create_plan.sh - 创建任务计划文件
+# 用法: bash scripts/create_plan.sh [任务名称] [项目路径]
 
-> 每3步重读此文件
+TASK_NAME="${1:-新任务}"
+PROJECT_DIR="${2:-.}"
+
+TIMESTAMP=$(date '+%Y-%m-%d')
+FILENAME="$PROJECT_DIR/task_plan_${TIMESTAMP}.md"
+
+# 检查是否已存在
+if [ -f "$FILENAME" ]; then
+    echo "文件已存在: $FILENAME"
+    exit 1
+fi
+
+# 创建任务计划文件
+cat > "$FILENAME" << EOF
+# 任务计划: $TASK_NAME
+
+> 创建时间: $(date '+%Y-%m-%d %H:%M:%S')
 
 ## 目标
 > 一句话描述要完成的任务
@@ -31,7 +49,7 @@
 
 | 阶段 | 状态 | 完成度 |
 |------|------|--------|
-| Phase 1 | 进行中 | 50% |
+| Phase 1 | 待开始 | 0% |
 | Phase 2 | 待开始 | 0% |
 
 ## 决策记录
@@ -48,7 +66,8 @@
 
 ## 自动追踪
 
-> 任务状态变更时自动更新此部分
-
 | 任务ID | 状态变更 | 时间 | 备注 |
 |--------|----------|------|------|
+EOF
+
+echo "已创建: $FILENAME"

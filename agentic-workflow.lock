@@ -1,0 +1,65 @@
+{
+  "version": "4.6.0",
+  "updated_at": "2026-03-20T00:00:00Z",
+  "description": "Agentic Workflow v4.6 版本锁定文件",
+  "dependencies": {
+    "tavily": {
+      "version": "1.0.0",
+      "type": "skill",
+      "description": "AI优化的网络搜索"
+    }
+  },
+  "modules": {
+    "research": {
+      "path": "references/modules/executing.md",
+      "version": "1.0"
+    },
+    "thinking": {
+      "path": "references/modules/thinking.md",
+      "version": "1.0"
+    },
+    "planning": {
+      "path": "references/templates/",
+      "version": "1.0"
+    },
+    "executing": {
+      "path": "references/modules/executing.md",
+      "version": "1.0"
+    },
+    "reviewing": {
+      "path": "references/modules/reviewing.md",
+      "version": "1.0"
+    },
+    "debugging": {
+      "path": "references/modules/debugging.md",
+      "version": "1.0"
+    }
+  },
+  "scripts": {
+    "wal_scanner": {
+      "path": "scripts/wal_scanner.py",
+      "version": "1.0"
+    },
+    "memory_ops": {
+      "path": "scripts/memory_ops.py",
+      "version": "1.0"
+    },
+    "task_tracker": {
+      "path": "scripts/task_tracker.py",
+      "version": "1.0"
+    },
+    "router": {
+      "path": "scripts/router.py",
+      "version": "1.0"
+    }
+  },
+  "triggers": {
+    "should_trigger": [
+      "开发", "修复", "规划", "分析", "审查", "调研", "实施", "实现", "创建"
+    ],
+    "do_not_trigger": [
+      "天气", "笑话", "你好", "谢谢", " hi", "hello"
+    ]
+  },
+  "fingerprint": "v4.6.0-initial"
+}
