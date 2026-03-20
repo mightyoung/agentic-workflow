@@ -1,12 +1,14 @@
 {
-  "version": "4.9.0",
-  "updated_at": "2026-03-20T03:00:00Z",
-  "description": "Agentic Workflow v4.9 版本锁定文件",
+  "version": "4.12.0",
+  "updated_at": "2026-03-20T10:50:00Z",
+  "description": "Agentic Workflow v4.12 版本锁定文件",
   "changes": [
-    "新增自反思日志 - COMPLETE 阶段结构化反思模板",
-    "新增 3x 确认规则 - WAL 模式晋升机制",
-    "扩展 wal_scanner.py - 支持模式计数和晋升检查",
-    "新增模式存储 - .wal_patterns.json"
+    "v4.12: HARD-GATE 设计门禁 - 强制设计确认后才可实现",
+    "v4.12: Red Flags - 防止自我合理化确保技能检查",
+    "v4.12: 分段设计确认 - 复杂设计分段呈现逐步批准",
+    "v4.11: 空闲检测机制 - check_idle_status",
+    "v4.11: 结果追踪 - JSONL格式 .task_history.jsonl",
+    "v4.11: 周报/月报 - generate_weekly_report"
   ],
   "dependencies": {
     "tavily": {
@@ -98,6 +100,40 @@
       "天气", "笑话", "你好", "谢谢", " hi", "hello"
     ]
   },
+  "modules": {
+    "research": {
+      "path": "references/modules/executing.md",
+      "version": "1.0"
+    },
+    "thinking": {
+      "path": "references/modules/thinking.md",
+      "version": "1.2"
+    },
+    "planning": {
+      "path": "references/templates/",
+      "version": "1.0"
+    },
+    "executing": {
+      "path": "references/modules/executing.md",
+      "version": "1.0"
+    },
+    "reviewing": {
+      "path": "references/modules/reviewing.md",
+      "version": "1.0"
+    },
+    "debugging": {
+      "path": "references/modules/debugging.md",
+      "version": "1.0"
+    },
+    "memory": {
+      "path": "references/memory_architecture.md",
+      "version": "2.1"
+    },
+    "decision_point": {
+      "path": "SKILL.md (内置)",
+      "version": "1.1"
+    }
+  },
   "test_results": {
     "trigger_routing": "100% (40/40)",
     "bash_scripts": "100% (8/8)",
@@ -109,7 +145,10 @@
     "budget_control": "P1 已实现 - start/budget/quality-gate",
     "self_correction": "P2 已实现 - 决策点模式",
     "self_reflection": "v4.9 新增 - COMPLETE阶段结构化反思",
-    "3x_confirmation": "v4.9 新增 - WAL模式晋升机制"
+    "3x_confirmation": "v4.9 新增 - WAL模式晋升机制",
+    "hard_gate": "v4.12 新增 - 设计门禁强制设计确认",
+    "red_flags": "v4.12 新增 - 技能触发自我检查",
+    "segmented_design": "v4.12 新增 - 分段设计确认机制"
   },
-  "fingerprint": "v4.9.0-self-evolution"
+  "fingerprint": "v4.12.0-brainstorm-hierarchy"
 }
