@@ -19,8 +19,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List
 
 # 默认任务状态文件
 DEFAULT_TRACKER_FILE = ".task_tracker.json"
@@ -55,7 +54,7 @@ def save_tracker(path: str, data: Dict) -> None:
 
 
 def create_task(task_id: str, description: str, priority: str = "P2",
-                dependencies: List[str] = None, path: str = DEFAULT_TRACKER_FILE,
+                dependencies: Optional[List[str]] = None, path: str = DEFAULT_TRACKER_FILE,
                 budget_seconds: int = 300) -> bool:
     """创建新任务（带预算控制）"""
     tracker = load_tracker(path)
@@ -162,7 +161,7 @@ def update_quality_gate(task_id: str, passed: bool, path: str = DEFAULT_TRACKER_
     return False
 
 
-def update_status(task_id: str, status: str, progress: int = None,
+def update_status(task_id: str, status: str, progress: Optional[int] = None,
                   path: str = DEFAULT_TRACKER_FILE) -> bool:
     """更新任务状态"""
     tracker = load_tracker(path)
@@ -215,7 +214,7 @@ def get_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> Optional[Dict]:
     return None
 
 
-def list_tasks(status: str = None, path: str = DEFAULT_TRACKER_FILE) -> List[Dict]:
+def list_tasks(status: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> List[Dict]:
     """列出任务"""
     tracker = load_tracker(path)
 

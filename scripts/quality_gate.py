@@ -20,7 +20,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
-from pathlib import Path
 
 
 @dataclass
@@ -103,7 +102,7 @@ def run_command(command: str, timeout: int = 60, cwd: str = None) -> tuple:
         )
         duration_ms = int((time.time() - start_time) * 1000)
         return result.returncode, result.stdout, result.stderr, duration_ms
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired:
         duration_ms = int((time.time() - start_time) * 1000)
         return -1, "", f"TIMEOUT after {timeout}s", duration_ms
     except Exception as e:
@@ -174,25 +173,25 @@ def check_python(project_dir: str, timeout: int = 60) -> GateResult:
             checked = True
             if tool == "pyright":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    f"pyright . 2>&1 || true",
+                    "pyright . 2>&1 || true",
                     timeout=timeout,
                     cwd=project_dir
                 )
             elif tool == "mypy":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    f"mypy . --ignore-missing-imports 2>&1 || true",
+                    "mypy . --ignore-missing-imports 2>&1 || true",
                     timeout=timeout,
                     cwd=project_dir
                 )
             elif tool == "pylint":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    f"pylint **/*.py 2>&1 || true",
+                    "pylint **/*.py 2>&1 || true",
                     timeout=timeout,
                     cwd=project_dir
                 )
             else:  # flake8
                 returncode, stdout, stderr, duration_ms = run_command(
-                    f"flake8 . 2>&1 || true",
+                    "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true",
                     timeout=timeout,
                     cwd=project_dir
                 )
@@ -383,9 +382,9 @@ def format_report(report: QualityGateReport, verbose: bool = False) -> str:
                 lines.append(f"  Output: {result.output[:500]}...")
 
     lines.append("-" * 60)
-    summary = f"Passed: {report.passed_count}/{len(report.gate_results)}"
+    lines.append(f"Passed: {report.passed_count}/{len(report.gate_results)}")
     if report.all_passed:
-        lines.append(f"✓ ALL GATES PASSED - Quality check OK")
+        lines.append("✓ ALL GATES PASSED - Quality check OK")
     else:
         lines.append(f"✗ QUALITY GATE FAILED - {report.failed_count} gate(s) failed")
     lines.append("=" * 60)

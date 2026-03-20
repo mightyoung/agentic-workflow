@@ -24,8 +24,7 @@ import sys
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
-from pathlib import Path
+from typing import List, Dict, Tuple, Any
 
 # 默认模式存储文件
 DEFAULT_PATTERNS_FILE = ".wal_patterns.json"
@@ -46,7 +45,7 @@ WAL_PATTERNS = [
 
 # 具体数值模式
 VALUE_PATTERNS = [
-    (r'\b\d{4}-\d{2}-\d{2}\b', 'date'),  # 日期
+    (r'\d{4}-\d{2}-\d{2}', 'date'),  # 日期（去掉\b避免中文边界问题）
     (r'\b\d+\.\d+\.\d+\.\d+\b', 'ip'),  # IP地址
     (r'https?://[^\s]+', 'url'),  # URL
     (r'\b[A-Z0-9]{8,}\b', 'id'),  # 大写字母数字ID
@@ -175,7 +174,7 @@ def extract_correction_context(text: str) -> List[Tuple[str, str]]:
     return results
 
 
-def scan_wal_triggers(text: str) -> Dict[str, List[str]]:
+def scan_wal_triggers(text: str) -> Dict[str, Any]:
     """
     扫描文本中的WAL触发条件
 
@@ -183,10 +182,9 @@ def scan_wal_triggers(text: str) -> Dict[str, List[str]]:
         text: 用户消息文本
 
     Returns:
-        触发结果字典 {trigger_type: [matches]}
+        触发结果字典 {trigger_type: [matches] 或 {values_dict}}
     """
-    triggers = {}
-    text_lower = text.lower()
+    triggers: Dict[str, Any] = {}
 
     # 检查WAL模式
     for pattern, trigger_type in WAL_PATTERNS:

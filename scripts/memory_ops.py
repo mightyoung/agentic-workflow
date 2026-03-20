@@ -17,12 +17,10 @@ Memory Operations - 记忆操作工具
 
 import argparse
 import os
-import json
 import re
 import sys
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict
 
 # 默认 SESSION-STATE 路径
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
@@ -159,8 +157,6 @@ def add_preference(path: str, preference_type: str, value: str) -> bool:
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
-
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     if preference_type == 'style':
         new_pref = f"- **{preference_type}偏好**: {value}"
