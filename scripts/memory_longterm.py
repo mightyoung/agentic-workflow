@@ -18,6 +18,7 @@ Long-term Memory Operations - 长期记忆操作工具
 """
 
 import argparse
+import json
 import os
 import re
 from datetime import datetime, timedelta
@@ -196,17 +197,173 @@ def refine_from_daily_logs(days: int = 7, memory_dir: str = "memory",
     return True
 
 
+def read_task_history(limit: int = 100) -> list:
+    """
+    读取.task_history.jsonl任务历史
+
+    Returns:
+        list of task records
+    """
+    history_file = ".task_history.jsonl"
+
+    if not os.path.exists(history_file):
+        return []
+
+    records = []
+    try:
+        with open(history_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f):
+                if line_num >= limit:
+                    break
+                line = line.strip()
+                if line:
+                    try:
+                        records.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    except (IOError, OSError):
+        return []
+
+    return records
+
+
+def generate_weekly_report(days: int = 7, output_format: str = "text") -> str:
+    """
+    从.task_history.jsonl生成周报
+
+    统计:
+    - 任务总数
+    - 成功率
+    - 平均耗时
+    - 常见教训
+
+    Returns:
+        周报文本或JSON
+    """
+    records = read_task_history(limit=1000)
+
+    if not records:
+        if output_format == "json":
+            return json.dumps({"error": "没有任务历史记录"}, ensure_ascii=False, indent=2)
+        return "没有任务历史记录"
+
+    # 过滤最近N天的记录
+    cutoff_date = datetime.now() - timedelta(days=days)
+    recent_records = []
+
+    for record in records:
+        # 尝试解析时间戳
+        timestamp = record.get("timestamp") or record.get("created_at") or record.get("date")
+        if timestamp:
+            try:
+                if isinstance(timestamp, str):
+                    record_date = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                else:
+                    record_date = datetime.fromtimestamp(timestamp)
+                if record_date >= cutoff_date:
+                    recent_records.append(record)
+            except (ValueError, TypeError):
+                # 如果无法解析，仍然包含该记录
+                recent_records.append(record)
+        else:
+            # 没有时间戳的记录也包含
+            recent_records.append(record)
+
+    if not recent_records:
+        if output_format == "json":
+            return json.dumps({
+                "period_days": days,
+                "total_tasks": 0,
+                "message": f"最近 {days} 天没有任务记录"
+            }, ensure_ascii=False, indent=2)
+        return f"最近 {days} 天没有任务记录"
+
+    # 统计
+    total_tasks = len(recent_records)
+    completed = sum(1 for r in recent_records if r.get("status") in ("completed", "success", "done"))
+    failed = sum(1 for r in recent_records if r.get("status") in ("failed", "error", "failure"))
+
+    success_rate = (completed / total_tasks * 100) if total_tasks > 0 else 0
+
+    # 计算平均耗时
+    durations = []
+    for r in recent_records:
+        duration = r.get("duration") or r.get("elapsed") or r.get("time_elapsed")
+        if duration:
+            try:
+                durations.append(float(duration))
+            except (ValueError, TypeError):
+                pass
+
+    avg_duration = sum(durations) / len(durations) if durations else 0
+
+    # 提取教训
+    lessons = []
+    for r in recent_records:
+        lesson = r.get("lesson") or r.get("lessons") or r.get("insight") or r.get("reflection")
+        if lesson:
+            if isinstance(lesson, list):
+                lessons.extend(lesson)
+            else:
+                lessons.append(lesson)
+
+    # 统计常见模式
+    status_counts = {}
+    for r in recent_records:
+        status = r.get("status", "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    if output_format == "json":
+        return json.dumps({
+            "period_days": days,
+            "total_tasks": total_tasks,
+            "completed": completed,
+            "failed": failed,
+            "success_rate": round(success_rate, 1),
+            "avg_duration_seconds": round(avg_duration, 2),
+            "lessons": list(set(lessons)),
+            "status_breakdown": status_counts
+        }, ensure_ascii=False, indent=2)
+
+    # 文本格式输出
+    report_lines = [
+        f"=== {'周' if days == 7 else '月' if days == 30 else f'{days}天'}报 ({datetime.now().strftime('%Y-%m-%d')}) ===",
+        "",
+        f"任务总数: {total_tasks}",
+        f"完成数: {completed}",
+        f"失败数: {failed}",
+        f"成功率: {success_rate:.1f}%",
+        f"平均耗时: {avg_duration:.1f} 秒" if durations else "平均耗时: N/A",
+        "",
+        "状态分布:",
+    ]
+
+    for status, count in sorted(status_counts.items(), key=lambda x: -x[1]):
+        report_lines.append(f"  - {status}: {count}")
+
+    if lessons:
+        report_lines.append("")
+        report_lines.append("常见教训:")
+        for lesson in list(set(lessons))[:5]:
+            report_lines.append(f"  - {lesson}")
+
+    return "\n".join(report_lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Long-term Memory Operations - 长期记忆操作工具')
     parser.add_argument('--file', default=DEFAULT_MEMORY_FILE, help='长期记忆文件路径')
     parser.add_argument('--dir', default='memory', help='每日日志目录')
-    parser.add_argument('--op', choices=['init', 'add-experience', 'add-pattern', 'search', 'show', 'refine'],
+    parser.add_argument('--op', choices=['init', 'add-experience', 'add-pattern', 'search', 'show', 'refine',
+                                          'weekly-report', 'monthly-report', 'history'],
                        required=True, help='操作类型')
     parser.add_argument('--exp', help='核心经验内容')
     parser.add_argument('--pattern', help='模式名称')
     parser.add_argument('--desc', help='模式描述')
     parser.add_argument('--query', help='搜索关键词')
     parser.add_argument('--days', type=int, default=7, help='提炼最近N天的日志')
+    parser.add_argument('--limit', type=int, default=100, help='历史记录条数限制')
+    parser.add_argument('--format', default='text', choices=['text', 'json'], help='输出格式')
 
     args = parser.parse_args()
 
@@ -239,6 +396,23 @@ def main():
         show_memory(args.file)
     elif args.op == 'refine':
         refine_from_daily_logs(args.days, args.dir, args.file)
+    elif args.op == 'history':
+        records = read_task_history(args.limit)
+        if records:
+            print(f"共 {len(records)} 条历史记录:")
+            for i, record in enumerate(records, 1):
+                timestamp = record.get("timestamp") or record.get("created_at") or record.get("date", "N/A")
+                status = record.get("status", "unknown")
+                task_desc = record.get("task") or record.get("description") or record.get("prompt", "")[:50]
+                print(f"{i}. [{timestamp}] {status}: {task_desc}...")
+        else:
+            print("没有任务历史记录")
+    elif args.op == 'weekly-report':
+        report = generate_weekly_report(args.days, args.format)
+        print(report)
+    elif args.op == 'monthly-report':
+        report = generate_weekly_report(30, args.format)
+        print(report)
 
     return 0
 

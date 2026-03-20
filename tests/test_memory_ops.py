@@ -29,6 +29,8 @@ from memory_ops import (
     add_value,
     get_info,
     show_session_state,
+    check_idle_status,
+    add_task_result,
     DEFAULT_SESSION_STATE
 )
 
@@ -244,3 +246,139 @@ def run_tests():
 
 if __name__ == '__main__':
     run_tests()
+
+
+class TestIdleDetection(unittest.TestCase):
+    """测试 check_idle_status 函数"""
+
+    def setUp(self):
+        """每个测试前创建临时目录"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_session = os.path.join(self.temp_dir, 'SESSION-STATE.md')
+
+    def tearDown(self):
+        """测试后清理"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_check_idle_status_recent_activity(self):
+        """Active session should not be idle"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = check_idle_status(self.temp_session, idle_threshold_minutes=30)
+
+        self.assertFalse(result["is_idle"])
+        self.assertEqual(result["idle_minutes"], 0)
+        self.assertIsNotNone(result["last_active"])
+
+    def test_check_idle_status_old_activity(self):
+        """Session with old timestamp should be idle"""
+        ensure_session_state_exists(self.temp_session)
+
+        # 修改开始时间为2小时前
+        from datetime import datetime, timedelta
+        old_time = (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+        with open(self.temp_session, 'r', encoding='utf-8') as f:
+            content = f.read()
+        content = content.replace(
+            f"**开始时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**开始时间**: {old_time}"
+        )
+        with open(self.temp_session, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        result = check_idle_status(self.temp_session, idle_threshold_minutes=30)
+
+        self.assertTrue(result["is_idle"])
+        self.assertGreaterEqual(result["idle_minutes"], 60)
+
+    def test_check_idle_status_no_file(self):
+        """Graceful handling when file doesn't exist"""
+        result = check_idle_status('/nonexistent/SESSION-STATE.md', idle_threshold_minutes=30)
+
+        self.assertFalse(result["is_idle"])
+        self.assertEqual(result["idle_minutes"], 0)
+        self.assertIsNone(result["last_active"])
+
+
+class TestResultTracking(unittest.TestCase):
+    """测试 add_task_result 函数"""
+
+    def setUp(self):
+        """每个测试前创建临时目录"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_session = os.path.join(self.temp_dir, 'SESSION-STATE.md')
+        ensure_session_state_exists(self.temp_session)
+
+    def tearDown(self):
+        """测试后清理"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_add_task_result_success(self):
+        """Record successful task result"""
+        result = add_task_result(
+            self.temp_session,
+            'task-001',
+            'success',
+            120,
+            ['Lesson 1', 'Lesson 2'],
+            ['Next action 1']
+        )
+        self.assertTrue(result)
+
+    def test_add_task_result_failure(self):
+        """Record failed task result"""
+        result = add_task_result(
+            self.temp_session,
+            'task-002',
+            'failed',
+            60,
+            ['Failed lesson'],
+            ['Recovery action']
+        )
+        self.assertTrue(result)
+
+    def test_add_task_result_partial(self):
+        """Record partial success result"""
+        result = add_task_result(
+            self.temp_session,
+            'task-003',
+            'partial',
+            90,
+            ['Partial lesson'],
+            []
+        )
+        self.assertTrue(result)
+
+    def test_add_task_result_reads_back(self):
+        """Verify result was written to history"""
+        add_task_result(
+            self.temp_session,
+            'task-004',
+            'success',
+            45,
+            ['Test lesson'],
+            []
+        )
+
+        # 验证历史文件存在并可读取
+        history_file = os.path.join(self.temp_dir, '.task_history.jsonl')
+        self.assertTrue(os.path.exists(history_file))
+
+        with open(history_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('task-004', content)
+        self.assertIn('success', content)
+
+    def test_add_task_result_invalid_path(self):
+        """Test with invalid path returns False"""
+        result = add_task_result(
+            '/invalid/path/SESSION-STATE.md',
+            'task-005',
+            'success',
+            30,
+            [],
+            []
+        )
+        self.assertFalse(result)

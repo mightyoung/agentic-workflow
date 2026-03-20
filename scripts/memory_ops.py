@@ -16,6 +16,7 @@ Memory Operations - 记忆操作工具
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -289,6 +290,114 @@ def get_info(path: str, key: str) -> Optional[str]:
     return None
 
 
+def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> dict:
+    """
+    检查会话空闲状态
+
+    Args:
+        path: SESSION-STATE.md 路径
+        idle_threshold_minutes: 空闲阈值（分钟）
+
+    Returns:
+        {
+            "is_idle": True/False,
+            "idle_minutes": N,
+            "last_active": "ISO timestamp",
+            "task_info": {"phase": "...", "progress": N}
+        }
+    """
+    result = {
+        "is_idle": False,
+        "idle_minutes": 0,
+        "last_active": None,
+        "task_info": {"phase": "UNKNOWN", "progress": 0}
+    }
+
+    if not os.path.exists(path):
+        return result
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 解析最后活跃时间（从"开始时间"字段）
+        start_time_pattern = r'\*\*开始时间\*\*: (.+)'
+        match = re.search(start_time_pattern, content)
+        if match:
+            start_time_str = match.group(1).strip()
+            try:
+                last_active = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
+                result["last_active"] = last_active.isoformat()
+
+                # 计算空闲时间
+                now = datetime.now()
+                idle_delta = now - last_active
+                idle_minutes = int(idle_delta.total_seconds() / 60)
+                result["idle_minutes"] = idle_minutes
+                result["is_idle"] = idle_minutes >= idle_threshold_minutes
+            except ValueError:
+                pass
+
+        # 解析任务阶段
+        phase_pattern = r'\*\*阶段\*\*: (.+)'
+        match = re.search(phase_pattern, content)
+        if match:
+            result["task_info"]["phase"] = match.group(1).strip()
+
+        # 解析进度
+        progress_pattern = r'\*\*进度\*\*: (\d+)'
+        match = re.search(progress_pattern, content)
+        if match:
+            result["task_info"]["progress"] = int(match.group(1))
+
+    except Exception:
+        pass
+
+    return result
+
+
+def add_task_result(path: str, task_id: str, status: str,
+                    duration_seconds: int, lessons: list,
+                    next_actions: list) -> bool:
+    """
+    追加任务结果到历史记录
+
+    Args:
+        path: SESSION-STATE.md 路径（用于验证）
+        task_id: 任务ID
+        status: 任务状态 (success/partial/failed)
+        duration_seconds: 任务耗时（秒）
+        lessons: 经验教训列表
+        next_actions: 下一步行动列表
+
+    Returns:
+        是否成功
+    """
+    if not _validate_path(path):
+        return False
+
+    # 获取项目根目录（session state 所在目录的父目录或同级）
+    project_root = os.path.dirname(os.path.abspath(path))
+    history_file = os.path.join(project_root, '.task_history.jsonl')
+
+    # 构建记录
+    record = {
+        "timestamp": datetime.now().isoformat(),
+        "task_id": task_id,
+        "status": status,
+        "duration_seconds": duration_seconds,
+        "lessons": lessons,
+        "next_actions": next_actions
+    }
+
+    try:
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        return True
+    except Exception:
+        return False
+
+
 def show_session_state(path: str = DEFAULT_SESSION_STATE) -> None:
     """显示当前 SESSION-STATE 内容"""
     if not os.path.exists(path):
@@ -303,7 +412,7 @@ def show_session_state(path: str = DEFAULT_SESSION_STATE) -> None:
 def main():
     parser = argparse.ArgumentParser(description='Memory Operations - 记忆操作工具')
     parser.add_argument('--path', default=DEFAULT_SESSION_STATE, help='SESSION-STATE 路径')
-    parser.add_argument('--op', choices=['update', 'add', 'get', 'show', 'init', 'resume-point'], required=True, help='操作类型')
+    parser.add_argument('--op', choices=['update', 'add', 'get', 'show', 'init', 'resume-point', 'idle-check', 'add-result'], required=True, help='操作类型')
     parser.add_argument('--key', help='更新的键 (task, phase, preferences, decisions)')
     parser.add_argument('--value', help='更新值')
     parser.add_argument('--type', help='添加类型 (correction, preference, decision, value)')
@@ -312,6 +421,12 @@ def main():
     parser.add_argument('--reason', default='', help='决策理由')
     parser.add_argument('--phase', help='中断点阶段 (用于 resume-point)')
     parser.add_argument('--progress', type=int, help='进度百分比 0-100 (用于 resume-point)')
+    parser.add_argument('--task-id', help='任务ID (用于 add-result)')
+    parser.add_argument('--status', help='任务状态 (用于 add-result): success/partial/failed')
+    parser.add_argument('--duration', type=int, help='任务耗时秒 (用于 add-result)')
+    parser.add_argument('--lessons', help='经验教训，逗号分隔 (用于 add-result)')
+    parser.add_argument('--next-actions', help='下一步行动，逗号分隔 (用于 add-result)')
+    parser.add_argument('--idle-threshold', type=int, default=30, help='空闲阈值分钟 (用于 idle-check)')
 
     args = parser.parse_args()
 
@@ -388,6 +503,25 @@ def main():
             print(f"已更新中断点: {args.phase}, 进度: {args.progress}%")
         else:
             print("更新中断点失败")
+            return 1
+    elif args.op == 'idle-check':
+        result = check_idle_status(args.path, args.idle_threshold)
+        import json
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif args.op == 'add-result':
+        if not args.task_id or not args.status or args.duration is None:
+            print("错误: --task-id, --status, --duration 必须指定")
+            return 1
+        lessons = []
+        if args.lessons:
+            lessons = [l.strip() for l in args.lessons.split(',') if l.strip()]
+        next_actions = []
+        if args.next_actions:
+            next_actions = [a.strip() for a in args.next_actions.split(',') if a.strip()]
+        if add_task_result(args.path, args.task_id, args.status, args.duration, lessons, next_actions):
+            print(f"已记录任务结果: {args.task_id}")
+        else:
+            print("记录任务结果失败")
             return 1
 
     return 0
