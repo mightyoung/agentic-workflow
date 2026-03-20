@@ -60,6 +60,8 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 ## 当前任务
 - **任务描述**: (未设置)
 - **阶段**: IDLE
+- **中断点**: (无)
+- **进度**: 0
 - **开始时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - **优先级**: P2
 
@@ -225,6 +227,40 @@ def add_value(path: str, value_type: str, value: str) -> bool:
     return True
 
 
+def update_resume_point(path: str, phase: str, progress: int) -> bool:
+    """更新任务中断点信息"""
+    if not os.path.exists(path):
+        return False
+
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # 更新中断点
+    pattern = r'(\*\*中断点\*\*: )(.*)(\n)'
+    if re.search(pattern, content):
+        content = re.sub(pattern, f'\\1{phase}\\3', content)
+    else:
+        # 如果字段不存在，先确保有阶段字段
+        phase_pattern = r'(\*\*阶段\*\*: )([^\n]+)(\n)'
+        if re.search(phase_pattern, content):
+            content = re.sub(phase_pattern, f'\\1\\2\\3- **中断点**: {phase}\n', content)
+
+    # 更新进度
+    pattern = r'(\*\*进度\*\*: )(\d+)'
+    if re.search(pattern, content):
+        content = re.sub(pattern, f'\\g<1>{progress}', content)
+    else:
+        # 如果字段不存在，在中断点后添加
+        pattern = r'(\*\*中断点\*\*: [^\n]+\n)'
+        if re.search(pattern, content):
+            content = re.sub(pattern, f'\\1- **进度**: {progress}%\n', content)
+
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    return True
+
+
 def get_info(path: str, key: str) -> Optional[str]:
     """获取特定信息"""
     if not os.path.exists(path):
@@ -267,13 +303,15 @@ def show_session_state(path: str = DEFAULT_SESSION_STATE) -> None:
 def main():
     parser = argparse.ArgumentParser(description='Memory Operations - 记忆操作工具')
     parser.add_argument('--path', default=DEFAULT_SESSION_STATE, help='SESSION-STATE 路径')
-    parser.add_argument('--op', choices=['update', 'add', 'get', 'show', 'init'], required=True, help='操作类型')
+    parser.add_argument('--op', choices=['update', 'add', 'get', 'show', 'init', 'resume-point'], required=True, help='操作类型')
     parser.add_argument('--key', help='更新的键 (task, phase, preferences, decisions)')
     parser.add_argument('--value', help='更新值')
     parser.add_argument('--type', help='添加类型 (correction, preference, decision, value)')
     parser.add_argument('--from', dest='from_val', help='原始值 (用于 correction)')
     parser.add_argument('--to', dest='to_val', help='目标值 (用于 correction)')
     parser.add_argument('--reason', default='', help='决策理由')
+    parser.add_argument('--phase', help='中断点阶段 (用于 resume-point)')
+    parser.add_argument('--progress', type=int, help='进度百分比 0-100 (用于 resume-point)')
 
     args = parser.parse_args()
 
@@ -338,6 +376,19 @@ def main():
             print(result)
         else:
             print(f"未找到: {args.key}")
+    elif args.op == 'resume-point':
+        if not args.phase or args.progress is None:
+            print("错误: --phase 和 --progress 必须指定")
+            return 1
+        if not (0 <= args.progress <= 100):
+            print("错误: --progress 必须在 0-100 范围内")
+            return 1
+        ensure_session_state_exists(args.path)
+        if update_resume_point(args.path, args.phase, args.progress):
+            print(f"已更新中断点: {args.phase}, 进度: {args.progress}%")
+        else:
+            print("更新中断点失败")
+            return 1
 
     return 0
 

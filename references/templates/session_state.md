@@ -11,6 +11,8 @@
 
 - **任务描述**:
 - **阶段**: IDLE / RESEARCH / THINKING / PLANNING / EXECUTING / REVIEWING / DEBUGGING
+- **中断点**: (无 / EXECUTING / REVIEWING 等)
+- **进度**: (0-100%)
 - **开始时间**:
 - **优先级**: P0 / P1 / P2 / P3
 

@@ -25,8 +25,24 @@ from typing import Optional, Dict, List
 DEFAULT_TRACKER_FILE = ".task_tracker.json"
 
 
+def _validate_path(path: str) -> bool:
+    """验证路径安全（防止路径遍历攻击）"""
+    try:
+        abs_path = os.path.abspath(path)
+        cwd = os.getcwd()
+        temp_dirs = ['/tmp', '/var/folders', '/tmp/']
+        for temp in temp_dirs:
+            if abs_path.startswith(temp):
+                return True
+        return abs_path.startswith(cwd)
+    except Exception:
+        return False
+
+
 def load_tracker(path: str) -> Dict:
     """加载任务追踪数据（带旧数据迁移）"""
+    if not _validate_path(path):
+        return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -43,12 +59,16 @@ def load_tracker(path: str) -> Dict:
             task["started_at"] = None
         if "quality_gates_passed" not in task:
             task["quality_gates_passed"] = None
+        if "step_failures" not in task:
+            task["step_failures"] = {}  # {"step_name": count}
 
     return data
 
 
 def save_tracker(path: str, data: Dict) -> None:
     """保存任务追踪数据"""
+    if not _validate_path(path):
+        return
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -80,6 +100,7 @@ def create_task(task_id: str, description: str, priority: str = "P2",
         "time_spent_seconds": 0,                # 已消耗时间
         "started_at": None,                      # 开始时间
         "quality_gates_passed": None,           # 质量门禁状态
+        "step_failures": {},                    # 断路器：步骤失败计数 {"step_name": count}
     }
 
     tracker["tasks"].append(task)
@@ -156,6 +177,104 @@ def update_quality_gate(task_id: str, passed: bool, path: str = DEFAULT_TRACKER_
             status = "通过" if passed else "未通过"
             print(f"质量门禁更新: {task_id} -> {status}")
             return True
+
+    print(f"任务未找到: {task_id}")
+    return False
+
+
+def record_step_failure(task_id: str, step_name: str, threshold: int = 3,
+                        path: str = DEFAULT_TRACKER_FILE) -> dict:
+    """
+    记录步骤失败并检查是否应触发断路器
+
+    Returns:
+        {"tripped": True/False, "count": N, "step": step_name}
+    """
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            if "step_failures" not in task:
+                task["step_failures"] = {}
+
+            current_count = task["step_failures"].get(step_name, 0)
+            new_count = current_count + 1
+            task["step_failures"][step_name] = new_count
+            task["updated_at"] = datetime.now().isoformat()
+            save_tracker(path, tracker)
+
+            tripped = new_count >= threshold
+
+            if tripped:
+                print(f"╔══════════════════════════════════════╗")
+                print(f"║ ⚠️  断路器触发                        ║")
+                print(f"╠══════════════════════════════════════╣")
+                print(f"║ 任务: {task_id:<32} ║")
+                print(f"║ 步骤: {step_name:<32} ║")
+                print(f"║ 失败次数: {new_count:<27} ║")
+                print(f"╠══════════════════════════════════════╣")
+                print(f"║ [1] 换方案继续                       ║")
+                print(f"║ [2] 寻求帮助                         ║")
+                print(f"║ [3] 中止任务                         ║")
+                print(f"╚══════════════════════════════════════╝")
+            else:
+                print(f"记录失败: {task_id}/{step_name} (当前: {new_count}/{threshold})")
+
+            return {"tripped": tripped, "count": new_count, "step": step_name}
+
+    return {"tripped": False, "count": 0, "step": step_name, "error": f"任务未找到: {task_id}"}
+
+
+def check_circuit_state(task_id: str, step_name: str = None,
+                        path: str = DEFAULT_TRACKER_FILE) -> dict:
+    """检查指定步骤的断路器状态"""
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            step_failures = task.get("step_failures", {})
+
+            if step_name is None:
+                # 返回所有步骤的状态
+                return {
+                    "task_id": task_id,
+                    "steps": step_failures
+                }
+
+            count = step_failures.get(step_name, 0)
+            return {
+                "task_id": task_id,
+                "step": step_name,
+                "failure_count": count,
+                "circuit_open": count >= 3
+            }
+
+    return {"error": f"任务未找到: {task_id}"}
+
+
+def reset_circuit(task_id: str, step_name: str = None,
+                  path: str = DEFAULT_TRACKER_FILE) -> bool:
+    """重置断路器。可指定步骤或全部重置"""
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            if step_name is None:
+                # 重置所有步骤
+                task["step_failures"] = {}
+                save_tracker(path, tracker)
+                print(f"已重置任务 {task_id} 的所有断路器")
+                return True
+            else:
+                # 重置指定步骤
+                if step_name in task.get("step_failures", {}):
+                    del task["step_failures"][step_name]
+                    save_tracker(path, tracker)
+                    print(f"已重置断路器: {task_id}/{step_name}")
+                    return True
+                else:
+                    print(f"断路器未激活: {task_id}/{step_name}")
+                    return False
 
     print(f"任务未找到: {task_id}")
     return False
@@ -280,7 +399,7 @@ def generate_report(path: str = DEFAULT_TRACKER_FILE) -> str:
 def main():
     parser = argparse.ArgumentParser(description='Task Tracker - 任务状态追踪工具')
     parser.add_argument('--path', default=DEFAULT_TRACKER_FILE, help='追踪文件路径')
-    parser.add_argument('--op', choices=['create', 'status', 'issue', 'get', 'list', 'report', 'start', 'budget', 'quality-gate'],
+    parser.add_argument('--op', choices=['create', 'status', 'issue', 'get', 'list', 'report', 'start', 'budget', 'quality-gate', 'step-failure', 'circuit-check', 'circuit-reset'],
                        required=True, help='操作类型')
     parser.add_argument('--task-id', help='任务ID')
     parser.add_argument('--desc', help='任务描述')
@@ -292,6 +411,8 @@ def main():
     parser.add_argument('--solution', help='解决方案')
     parser.add_argument('--budget-seconds', type=int, default=300, help='预算时间（秒，默认300）')
     parser.add_argument('--passed', type=lambda x: x.lower() == 'true', default=True, help='质量门禁是否通过')
+    parser.add_argument('--step', help='步骤名称（用于断路器操作）')
+    parser.add_argument('--threshold', type=int, default=3, help='断路器阈值（默认3）')
 
     args = parser.parse_args()
 
@@ -362,6 +483,41 @@ def main():
 
     elif args.op == 'report':
         print(generate_report(args.path))
+
+    elif args.op == 'step-failure':
+        if not args.task_id or not args.step:
+            print("错误: --task-id 和 --step 必须指定")
+            return 1
+        record_step_failure(args.task_id, args.step, args.threshold, args.path)
+
+    elif args.op == 'circuit-check':
+        if not args.task_id:
+            print("错误: --task-id 必须指定")
+            return 1
+        result = check_circuit_state(args.task_id, args.step, args.path)
+        if "error" in result:
+            print(result["error"])
+        else:
+            if args.step:
+                print(f"任务: {result['task_id']}")
+                print(f"  步骤: {result['step']}")
+                print(f"  失败次数: {result['failure_count']}")
+                print(f"  断路器状态: {'开启' if result['circuit_open'] else '关闭'}")
+            else:
+                print(f"任务: {result['task_id']}")
+                if result['steps']:
+                    print("  步骤失败情况:")
+                    for step, count in result['steps'].items():
+                        status = "开启" if count >= 3 else "关闭"
+                        print(f"    {step}: {count}次 ({status})")
+                else:
+                    print("  无失败记录")
+
+    elif args.op == 'circuit-reset':
+        if not args.task_id:
+            print("错误: --task-id 必须指定")
+            return 1
+        reset_circuit(args.task_id, args.step, args.path)
 
     return 0
 

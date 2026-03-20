@@ -56,6 +56,20 @@ VALUE_PATTERNS = [
 PROMOTION_THRESHOLD = 3
 
 
+def _validate_path(path: str) -> bool:
+    """验证路径安全（防止路径遍历攻击）"""
+    try:
+        abs_path = os.path.abspath(path)
+        cwd = os.getcwd()
+        temp_dirs = ['/tmp', '/var/folders', '/tmp/']
+        for temp in temp_dirs:
+            if abs_path.startswith(temp):
+                return True
+        return abs_path.startswith(cwd)
+    except Exception:
+        return False
+
+
 def get_pattern_key(trigger_type: str, match: str) -> str:
     """生成稳定的模式键"""
     # 简化并标准化匹配文本作为键的一部分
@@ -68,6 +82,11 @@ def get_pattern_key(trigger_type: str, match: str) -> str:
 
 def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
     """加载已存储的模式数据"""
+    if not _validate_path(path):
+        return {
+            "patterns": {},
+            "version": "1.0"
+        }
     default = {
         "patterns": {},
         "version": "1.0"
@@ -89,6 +108,8 @@ def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
 
 def save_patterns(patterns: Dict, path: str = DEFAULT_PATTERNS_FILE) -> None:
     """保存模式数据"""
+    if not _validate_path(path):
+        return
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(patterns, f, ensure_ascii=False, indent=2)
 

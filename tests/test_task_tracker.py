@@ -30,6 +30,9 @@ from task_tracker import (
     update_quality_gate,
     get_task,
     list_tasks,
+    record_step_failure,
+    check_circuit_state,
+    reset_circuit,
     DEFAULT_TRACKER_FILE
 )
 
@@ -240,6 +243,146 @@ class TestTaskTrackerEdgeCases(unittest.TestCase):
         create_task('T001', '紧急任务', priority='P0', path=self.temp_file)
         task = get_task('T001', self.temp_file)
         self.assertEqual(task['priority'], 'P0')
+
+
+class TestCircuitBreaker(unittest.TestCase):
+    """Tests for circuit breaker functionality"""
+
+    def setUp(self):
+        """每个测试前创建临时文件和任务"""
+        self.temp_file = tempfile.mktemp(suffix='.json')
+        if os.path.exists(self.temp_file):
+            os.remove(self.temp_file)
+        # 创建测试任务
+        create_task('T001', '测试任务', path=self.temp_file)
+
+    def tearDown(self):
+        """测试后清理"""
+        if os.path.exists(self.temp_file):
+            os.remove(self.temp_file)
+
+    def test_record_step_failure_first(self):
+        """First failure should not trip circuit"""
+        result = record_step_failure('T001', 'step1', path=self.temp_file)
+        self.assertFalse(result['tripped'])
+        self.assertEqual(result['count'], 1)
+        self.assertEqual(result['step'], 'step1')
+
+    def test_record_step_failure_second(self):
+        """Second failure should not trip circuit"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        result = record_step_failure('T001', 'step1', path=self.temp_file)
+        self.assertFalse(result['tripped'])
+        self.assertEqual(result['count'], 2)
+
+    def test_record_step_failure_third_trips(self):
+        """Third failure should trip circuit"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        result = record_step_failure('T001', 'step1', path=self.temp_file)
+        self.assertTrue(result['tripped'])
+        self.assertEqual(result['count'], 3)
+
+    def test_record_step_failure_custom_threshold(self):
+        """Custom threshold should work"""
+        record_step_failure('T001', 'step1', threshold=5, path=self.temp_file)
+        record_step_failure('T001', 'step1', threshold=5, path=self.temp_file)
+        result = record_step_failure('T001', 'step1', threshold=5, path=self.temp_file)
+        self.assertFalse(result['tripped'])
+        self.assertEqual(result['count'], 3)
+
+        # Fourth failure still doesn't trip with threshold=5
+        result = record_step_failure('T001', 'step1', threshold=5, path=self.temp_file)
+        self.assertFalse(result['tripped'])
+        self.assertEqual(result['count'], 4)
+
+        # Fifth failure trips with threshold=5
+        result = record_step_failure('T001', 'step1', threshold=5, path=self.temp_file)
+        self.assertTrue(result['tripped'])
+        self.assertEqual(result['count'], 5)
+
+    def test_check_circuit_state_specific_step(self):
+        """Check circuit state for specific step"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+
+        result = check_circuit_state('T001', 'step1', path=self.temp_file)
+        self.assertEqual(result['task_id'], 'T001')
+        self.assertEqual(result['step'], 'step1')
+        self.assertEqual(result['failure_count'], 2)
+        self.assertFalse(result['circuit_open'])
+
+    def test_check_circuit_state_all_steps(self):
+        """Check circuit state for all steps"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step2', path=self.temp_file)
+        record_step_failure('T001', 'step2', path=self.temp_file)
+
+        result = check_circuit_state('T001', path=self.temp_file)
+        self.assertEqual(result['task_id'], 'T001')
+        self.assertEqual(result['steps']['step1'], 1)
+        self.assertEqual(result['steps']['step2'], 2)
+
+    def test_check_circuit_state_no_failures(self):
+        """Check circuit when no failures recorded"""
+        result = check_circuit_state('T001', 'step1', path=self.temp_file)
+        self.assertEqual(result['task_id'], 'T001')
+        self.assertEqual(result['step'], 'step1')
+        self.assertEqual(result['failure_count'], 0)
+        self.assertFalse(result['circuit_open'])
+
+    def test_reset_circuit_specific_step(self):
+        """Reset circuit for specific step"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step2', path=self.temp_file)
+
+        result = reset_circuit('T001', 'step1', path=self.temp_file)
+        self.assertTrue(result)
+
+        # step1 should be reset
+        state = check_circuit_state('T001', 'step1', path=self.temp_file)
+        self.assertEqual(state['failure_count'], 0)
+
+        # step2 should still have failures
+        state = check_circuit_state('T001', 'step2', path=self.temp_file)
+        self.assertEqual(state['failure_count'], 1)
+
+    def test_reset_circuit_all_steps(self):
+        """Reset all circuits for task"""
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step2', path=self.temp_file)
+        record_step_failure('T001', 'step3', path=self.temp_file)
+
+        result = reset_circuit('T001', path=self.temp_file)
+        self.assertTrue(result)
+
+        state = check_circuit_state('T001', path=self.temp_file)
+        self.assertEqual(state['steps'], {})
+
+    def test_circuit_resets_after_success(self):
+        """Circuit should reset after successful step"""
+        # Record some failures
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+
+        # Reset the circuit
+        result = reset_circuit('T001', 'step1', path=self.temp_file)
+        self.assertTrue(result)
+
+        # Verify it's reset
+        state = check_circuit_state('T001', 'step1', path=self.temp_file)
+        self.assertEqual(state['failure_count'], 0)
+        self.assertFalse(state['circuit_open'])
+
+        # Record failures again - should start fresh
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+        record_step_failure('T001', 'step1', path=self.temp_file)
+
+        state = check_circuit_state('T001', 'step1', path=self.temp_file)
+        self.assertEqual(state['failure_count'], 3)
+        self.assertTrue(state['circuit_open'])
 
 
 def run_tests():

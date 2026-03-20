@@ -422,6 +422,18 @@ else:
 python scripts/memory_longterm.py --op=refine --days=7
 ```
 
+### VBR 验证清单 (v4.10新增)
+在报告完成前，必须确认以下各项：
+
+- [ ] **测试通过** - 所有测试用例通过
+- [ ] **质量门禁通过** - typecheck/lint/test 全部绿灯
+- [ ] **无硬编码 secrets** - 代码中无 API keys、passwords、tokens
+- [ ] **验证输出已生成** - 功能从用户视角验证可用
+- [ ] **SESSION-STATE 已更新** - 任务结果、决策、偏好已记录
+- [ ] **自反思已完成** - 结构化反思日志已写入
+
+如果任何项未通过，报告 [2] 手动审查后再试 或 [3] 跳过 质量门禁继续。
+
 ---
 
 ## 与其他 Skills 的关系
