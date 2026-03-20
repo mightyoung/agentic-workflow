@@ -1,11 +1,10 @@
 {
-  "version": "4.12.0",
-  "updated_at": "2026-03-20T10:50:00Z",
-  "description": "Agentic Workflow v4.12 版本锁定文件",
+  "version": "4.13.0",
+  "updated_at": "2026-03-20T12:50:00Z",
+  "description": "Agentic Workflow v4.13 版本锁定文件",
   "changes": [
-    "v4.12: HARD-GATE 设计门禁 - 强制设计确认后才可实现",
-    "v4.12: Red Flags - 防止自我合理化确保技能检查",
-    "v4.12: 分段设计确认 - 复杂设计分段呈现逐步批准",
+    "v4.13: YAGNI 检查规则 - 防止过度设计和提前实现",
+    "v4.13: 频繁提交规则 - 每完成独立单元立即提交",
     "v4.11: 空闲检测机制 - check_idle_status",
     "v4.11: 结果追踪 - JSONL格式 .task_history.jsonl",
     "v4.11: 周报/月报 - generate_weekly_report"
@@ -148,7 +147,9 @@
     "3x_confirmation": "v4.9 新增 - WAL模式晋升机制",
     "hard_gate": "v4.12 新增 - 设计门禁强制设计确认",
     "red_flags": "v4.12 新增 - 技能触发自我检查",
-    "segmented_design": "v4.12 新增 - 分段设计确认机制"
+    "segmented_design": "v4.12 新增 - 分段设计确认机制",
+    "yagni_check": "v4.13 新增 - YAGNI检查防止过度设计",
+    "frequent_commit": "v4.13 新增 - 频繁提交规则"
   },
-  "fingerprint": "v4.12.0-brainstorm-hierarchy"
+  "fingerprint": "v4.13.0-yagni-commit"
 }
