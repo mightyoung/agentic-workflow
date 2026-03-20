@@ -31,6 +31,10 @@ DEFAULT_SESSION_STATE = "SESSION-STATE.md"
 def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
     """确保 SESSION-STATE.md 存在"""
     if not os.path.exists(path):
+        # 确保父目录存在
+        parent_dir = os.path.dirname(path)
+        if parent_dir and not os.path.exists(parent_dir):
+            return False
         # 创建默认模板
         default_content = f"""# SESSION-STATE.md
 
@@ -80,7 +84,8 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 
 def update_task_info(path: str, task: str, phase: str = "PLANNING") -> bool:
     """更新任务信息"""
-    ensure_session_state_exists(path)
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -104,7 +109,8 @@ def update_task_info(path: str, task: str, phase: str = "PLANNING") -> bool:
 
 def add_correction(path: str, original: str, corrected: str) -> bool:
     """添加修正记录"""
-    ensure_session_state_exists(path)
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -129,7 +135,8 @@ def add_correction(path: str, original: str, corrected: str) -> bool:
 
 def add_preference(path: str, preference_type: str, value: str) -> bool:
     """添加用户偏好"""
-    ensure_session_state_exists(path)
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -142,9 +149,10 @@ def add_preference(path: str, preference_type: str, value: str) -> bool:
         new_pref = f"- **{preference_type}偏好**: {value}"
 
     # 查找对应偏好的行并更新
-    pattern = rf'(\*\*\{preference_type}偏好\*\*: )(.*)(\n)'
+    escaped_type = re.escape(preference_type)
+    pattern = f'(\\*\\*{escaped_type}偏好\\*\\*: )(.*)(\n)'
     if re.search(pattern, content):
-        content = re.sub(pattern, f'\\1{value}\\3', content)
+        content = re.sub(pattern, f'\\g<1>{value}\\3', content)
     else:
         # 如果找不到，追加
         content += f"\n{new_pref}\n"
@@ -157,7 +165,8 @@ def add_preference(path: str, preference_type: str, value: str) -> bool:
 
 def add_decision(path: str, decision: str, reason: str = "") -> bool:
     """添加决策记录"""
-    ensure_session_state_exists(path)
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -180,7 +189,8 @@ def add_decision(path: str, decision: str, reason: str = "") -> bool:
 
 def add_value(path: str, value_type: str, value: str) -> bool:
     """添加具体数值"""
-    ensure_session_state_exists(path)
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
 
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()

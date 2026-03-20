@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""
+Memory Ops 测试 - 测试 memory_ops.py 的功能
+
+覆盖:
+- SESSION-STATE 创建
+- 修正记录添加
+- 偏好记录添加
+- 决策记录添加
+- 数值记录添加
+"""
+
+import os
+import sys
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+# 添加项目路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
+
+from memory_ops import (
+    ensure_session_state_exists,
+    update_task_info,
+    add_correction,
+    add_preference,
+    add_decision,
+    add_value,
+    get_info,
+    show_session_state,
+    DEFAULT_SESSION_STATE
+)
+
+
+class TestMemoryOps(unittest.TestCase):
+    """Memory Ops 核心功能测试"""
+
+    def setUp(self):
+        """每个测试前创建临时目录"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_session = os.path.join(self.temp_dir, 'SESSION-STATE.md')
+
+    def tearDown(self):
+        """测试后清理"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    # ==================== SESSION-STATE 基本操作测试 ====================
+
+    def test_ensure_session_state_exists_creates_file(self):
+        """测试确保 SESSION-STATE 存在"""
+        result = ensure_session_state_exists(self.temp_session)
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(self.temp_session))
+
+    def test_ensure_session_state_exists_reads_existing(self):
+        """测试读取已存在的 SESSION-STATE"""
+        # 先创建
+        ensure_session_state_exists(self.temp_session)
+        # 再读取 - 返回False表示文件已存在，无需创建
+        result = ensure_session_state_exists(self.temp_session)
+        self.assertFalse(result)
+
+    def test_session_state_not_exists_read(self):
+        """测试读取不存在的 SESSION-STATE"""
+        # 应该返回 False 但不抛异常
+        result = ensure_session_state_exists('/nonexistent/SESSION-STATE.md')
+        self.assertFalse(result)
+
+    # ==================== 任务更新测试 ====================
+
+    def test_update_task_info(self):
+        """测试更新任务信息"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = update_task_info(
+            self.temp_session,
+            '测试任务',
+            'EXECUTING'
+        )
+        self.assertTrue(result)
+
+    def test_update_task_info_invalid_path(self):
+        """测试更新无效路径的任务信息"""
+        result = update_task_info(
+            '/invalid/path/SESSION-STATE.md',
+            '测试任务',
+            'EXECUTING'
+        )
+        self.assertFalse(result)
+
+    # ==================== 修正记录测试 ====================
+
+    def test_add_correction(self):
+        """测试添加修正记录"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_correction(
+            self.temp_session,
+            '错误理解',
+            '正确理解'
+        )
+        self.assertTrue(result)
+
+    def test_add_correction_invalid_path(self):
+        """测试添加修正到无效路径"""
+        result = add_correction(
+            '/invalid/path/SESSION-STATE.md',
+            '错误',
+            '正确'
+        )
+        self.assertFalse(result)
+
+    # ==================== 偏好记录测试 ====================
+
+    def test_add_preference(self):
+        """测试添加偏好记录"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_preference(
+            self.temp_session,
+            'Python',
+            'JavaScript'
+        )
+        self.assertTrue(result)
+
+    def test_add_preference_partial(self):
+        """测试部分偏好（只喜欢）"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_preference(
+            self.temp_session,
+            'Python',
+            None
+        )
+        self.assertTrue(result)
+
+    # ==================== 决策记录测试 ====================
+
+    def test_add_decision(self):
+        """测试添加决策记录"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_decision(
+            self.temp_session,
+            '选择微服务架构',
+            '因为需要高可用'
+        )
+        self.assertTrue(result)
+
+    def test_add_decision_without_reason(self):
+        """测试添加决策（无原因）"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_decision(
+            self.temp_session,
+            '选择单体架构'
+        )
+        self.assertTrue(result)
+
+    # ==================== 数值记录测试 ====================
+
+    def test_add_value(self):
+        """测试添加数值记录"""
+        ensure_session_state_exists(self.temp_session)
+
+        result = add_value(
+            self.temp_session,
+            'API_KEY',
+            'sk-12345678'
+        )
+        self.assertTrue(result)
+
+    # ==================== 信息获取测试 ====================
+
+    def test_get_info(self):
+        """测试获取信息"""
+        ensure_session_state_exists(self.temp_session)
+        update_task_info(self.temp_session, '新任务', 'PLANNING')
+
+        info = get_info(self.temp_session, 'task')
+        self.assertIsNotNone(info)
+        self.assertIn('新任务', info)
+
+    def test_get_info_invalid_path(self):
+        """测试获取无效路径的信息"""
+        info = get_info('/invalid/path/SESSION-STATE.md', 'task')
+        self.assertIsNone(info)
+
+    def test_get_info_nonexistent_key(self):
+        """测试获取不存在的键"""
+        ensure_session_state_exists(self.temp_session)
+        info = get_info(self.temp_session, 'nonexistent_key')
+        self.assertIsNone(info)
+
+
+class TestMemoryOpsEdgeCases(unittest.TestCase):
+    """边界条件测试"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_session = os.path.join(self.temp_dir, 'SESSION-STATE.md')
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_multiple_operations(self):
+        """测试多次操作"""
+        ensure_session_state_exists(self.temp_session)
+
+        # 添加多个修正
+        add_correction(self.temp_session, '错1', '对1')
+        add_correction(self.temp_session, '错2', '对2')
+
+        # 添加偏好
+        add_preference(self.temp_session, 'A', 'B')
+
+        # 添加决策
+        add_decision(self.temp_session, '决策1', '原因1')
+        add_decision(self.temp_session, '决策2')
+
+        # 验证都能添加
+        state = show_session_state(self.temp_session)
+
+    def test_special_characters_in_values(self):
+        """测试特殊字符的数值"""
+        ensure_session_state_exists(self.temp_session)
+
+        # URL
+        result = add_value(self.temp_session, 'URL', 'https://example.com?a=1&b=2')
+        self.assertTrue(result)
+
+        # 中文
+        result = add_value(self.temp_session, '名称', '微服务架构')
+        self.assertTrue(result)
+
+
+def run_tests():
+    """运行所有测试"""
+    unittest.main(module=__name__, exit=False, verbosity=2)
+
+
+if __name__ == '__main__':
+    run_tests()
