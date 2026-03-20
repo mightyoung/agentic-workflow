@@ -1,6 +1,19 @@
-# 记忆系统架构 (v2.0)
+# 记忆系统架构 (v4.11)
 
-> 借鉴 proactive-agent 的 WAL 协议，设计三层记忆系统
+> 借鉴 proactive-agent 的 WAL 协议 + 三层记忆架构
+> 本地文件实现，无需外部插件依赖
+
+---
+
+## v4.11 新增功能
+
+| 功能 | 描述 | 脚本 |
+|------|------|------|
+| **断路器** | 检测循环停滞，3次失败后触发决策点 | `task_tracker.py` |
+| **空闲检测** | 识别会话空闲状态，支持自动恢复 | `memory_ops.py` |
+| **结果追踪** | JSONL格式记录任务执行历史 | `memory_ops.py` |
+| **中断点恢复** | 支持从断点继续任务执行 | `memory_ops.py` |
+| **周报/月报** | 生成任务统计和分析报告 | `memory_longterm.py` |
 
 ---
 
@@ -203,3 +216,205 @@ agentic-workflow/
 3. **上下文保护**：进入危险区时，先保存再截断
 4. **双向同步**：关键决策同步到MCP外部记忆
 5. **定期清理**：每周清理过时的daily memory，保留精华到MEMORY.md
+
+---
+
+## 断路器机制 (v4.10新增)
+
+### 核心思想
+
+循环停滞检测：当同一步骤失败3次时，触发断路器暂停并等待人类决策。
+
+### 脚本支持
+
+```bash
+# 记录步骤失败
+python scripts/task_tracker.py --op=step-failure --task-id=T001 --step=implement_auth
+
+# 检查断路器状态
+python scripts/task_tracker.py --op=circuit-check --task-id=T001 --step=implement_auth
+
+# 重置断路器
+python scripts/task_tracker.py --op=circuit-reset --task-id=T001 --step=implement_auth
+```
+
+### 断路器触发流程
+
+```
+EXECUTING 阶段:
+    if step_failed:
+        record_step_failure(task_id, step_name)
+        if failure_count >= 3:
+            → 触发断路器
+            → 输出决策卡片:
+                ┌─────────────────────────────────────┐
+                │ ⚠️ 断路器触发                        │
+                │ 任务: T001                          │
+                │ 步骤: implement_auth                 │
+                │ 失败次数: 3                          │
+                │                                     │
+                │ [1] 换方案继续                       │
+                │ [2] 寻求帮助                         │
+                │ [3] 中止任务                         │
+                └─────────────────────────────────────┘
+```
+
+---
+
+## 空闲检测机制 (v4.11新增)
+
+### 核心思想
+
+检测会话空闲状态，当用户长时间无活动时自动识别并提示恢复方案。
+
+### 脚本支持
+
+```bash
+# 检查空闲状态
+python scripts/memory_ops.py --op=idle-check --path=SESSION-STATE.md --idle-threshold=30
+```
+
+### 返回格式
+
+```json
+{
+  "is_idle": false,
+  "idle_minutes": 0,
+  "last_active": "2026-03-20T10:30:00",
+  "task_info": {"phase": "EXECUTING", "progress": 70}
+}
+```
+
+### 空闲恢复流程
+
+```
+检测空闲 >= 30分钟:
+    → 输出恢复卡片:
+        ┌─────────────────────────────────────┐
+        │ 💤 会话空闲检测                      │
+        │                                     │
+        │ 距离最后活动: 45分钟                  │
+        │ 最后任务: 用户认证模块开发            │
+        │ 进度: 70%                           │
+        │                                     │
+        │ [1] 继续任务                         │
+        │ [2] 查看当前状态                     │
+        │ [3] 新建会话                         │
+        └─────────────────────────────────────┘
+```
+
+---
+
+## 结果追踪 (v4.11新增)
+
+### 核心思想
+
+JSONL格式记录任务执行历史，支持后续分析和报告生成。
+
+### 数据文件
+
+```
+.task_history.jsonl   # 任务历史记录（项目根目录）
+```
+
+### 记录格式
+
+```json
+{"timestamp": "2026-03-20T10:45:00", "task_id": "T001", "status": "success", "duration_seconds": 300, "lessons": ["使用tavily搜索更高效"], "next_actions": ["继续权限模块"]}
+```
+
+### 脚本支持
+
+```bash
+# 添加任务结果
+python scripts/memory_ops.py --op=add-result \
+    --task-id=T001 --status=success \
+    --duration=300 --lessons="使用tavily搜索更高效" \
+    --next-actions="继续权限模块"
+
+# 查看周报
+python scripts/memory_longterm.py --op=weekly-report --days=7
+
+# 查看月报
+python scripts/memory_longterm.py --op=monthly-report --days=30
+```
+
+---
+
+## 中断点恢复 (v4.11新增)
+
+### 核心思想
+
+任务中断时保存断点信息，下次继续时快速恢复上下文。
+
+### SESSION-STATE.md 断点字段
+
+```markdown
+## 当前任务
+- **任务描述**: 用户认证模块开发
+- **阶段**: EXECUTING
+- **中断点**: implement_auth
+- **进度**: 70
+- **开始时间**: 2026-03-20 09:30:00
+```
+
+### 脚本支持
+
+```bash
+# 更新断点
+python scripts/memory_ops.py --op=resume-point --phase=implement_auth --progress=70
+
+# 查看当前状态
+python scripts/memory_ops.py --op=show
+```
+
+---
+
+## 周报/月报 (v4.11新增)
+
+### 周报内容
+
+```bash
+python scripts/memory_longterm.py --op=weekly-report
+```
+
+输出:
+```
+============================================================
+任务统计报告 (近7天)
+============================================================
+生成时间: 2026-03-20 10:50:00
+
+## 总体统计
+- 总任务数: 12
+- 已完成: 8 (67%)
+- 进行中: 3
+- 失败: 1
+
+## 任务类型分布
+- 功能开发: 6
+- Bug修复: 4
+- 代码审查: 2
+
+## 平均任务时长
+- 平均完成时间: 245秒
+- 最快: 45秒
+- 最慢: 890秒
+
+## 教训总结
+- 搜索应优先使用tavily (出现3次)
+- 决策点模式优于自动循环 (出现2次)
+```
+
+### 月报内容
+
+```bash
+python scripts/memory_longterm.py --op=monthly-report
+```
+
+输出包含:
+- 趋势分析（与上周/上月对比）
+- 模式识别（重复出现的任务类型）
+- 效率指标（任务完成率、平均时长）
+- 改进建议（基于历史数据）
+
