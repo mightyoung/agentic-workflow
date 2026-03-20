@@ -1,0 +1,53 @@
+# Environment and local state
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+*.log
+logs/
+tmp/
+temp/
+
+# Session and state files
+SESSION-STATE.md
+.task_tracker.json
+.wal_patterns.json
+memory/
+*.md.backup
+
+# Task plans and findings
+task_plan*.md
+findings*.md
+progress*.md
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+._*
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig

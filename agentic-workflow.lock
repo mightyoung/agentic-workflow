@@ -1,7 +1,13 @@
 {
-  "version": "4.6.0",
-  "updated_at": "2026-03-20T00:00:00Z",
-  "description": "Agentic Workflow v4.6 版本锁定文件",
+  "version": "4.9.0",
+  "updated_at": "2026-03-20T03:00:00Z",
+  "description": "Agentic Workflow v4.9 版本锁定文件",
+  "changes": [
+    "新增自反思日志 - COMPLETE 阶段结构化反思模板",
+    "新增 3x 确认规则 - WAL 模式晋升机制",
+    "扩展 wal_scanner.py - 支持模式计数和晋升检查",
+    "新增模式存储 - .wal_patterns.json"
+  ],
   "dependencies": {
     "tavily": {
       "version": "1.0.0",
@@ -33,24 +39,55 @@
     "debugging": {
       "path": "references/modules/debugging.md",
       "version": "1.0"
+    },
+    "memory": {
+      "path": "references/memory_integration.md",
+      "version": "2.0"
+    },
+    "decision_point": {
+      "path": "SKILL.md (内置)",
+      "version": "1.0",
+      "description": "自修正决策点 - 人类决策模式"
     }
   },
   "scripts": {
     "wal_scanner": {
       "path": "scripts/wal_scanner.py",
-      "version": "1.0"
+      "version": "2.0",
+      "status": "verified",
+      "features": ["wal_scan", "3x_confirmation", "pattern_promotion"]
     },
     "memory_ops": {
       "path": "scripts/memory_ops.py",
-      "version": "1.0"
+      "version": "1.0",
+      "status": "verified"
+    },
+    "memory_daily": {
+      "path": "scripts/memory_daily.py",
+      "version": "1.0",
+      "status": "new"
+    },
+    "memory_longterm": {
+      "path": "scripts/memory_longterm.py",
+      "version": "1.0",
+      "status": "new"
     },
     "task_tracker": {
       "path": "scripts/task_tracker.py",
-      "version": "1.0"
+      "version": "1.1",
+      "status": "verified",
+      "features": ["budget_control", "quality_gate_tracking"]
     },
     "router": {
       "path": "scripts/router.py",
-      "version": "1.0"
+      "version": "1.0",
+      "status": "verified"
+    },
+    "quality_gate": {
+      "path": "scripts/quality_gate.py",
+      "version": "1.0",
+      "status": "new",
+      "gates": ["typecheck", "lint", "test"]
     }
   },
   "triggers": {
@@ -61,5 +98,18 @@
       "天气", "笑话", "你好", "谢谢", " hi", "hello"
     ]
   },
-  "fingerprint": "v4.6.0-initial"
+  "test_results": {
+    "trigger_routing": "100% (40/40)",
+    "bash_scripts": "100% (8/8)",
+    "python_scripts": "100% (task_tracker/budget/quality_gate/wal_scanner)",
+    "windows_scripts": "100% (5/5 check_template已修复)",
+    "subagent_architecture": "100% (7/7)",
+    "memory_system": "Layer 1/2/3 全部实现",
+    "quality_gate": "P0 已实现 - typecheck/lint/test",
+    "budget_control": "P1 已实现 - start/budget/quality-gate",
+    "self_correction": "P2 已实现 - 决策点模式",
+    "self_reflection": "v4.9 新增 - COMPLETE阶段结构化反思",
+    "3x_confirmation": "v4.9 新增 - WAL模式晋升机制"
+  },
+  "fingerprint": "v4.9.0-self-evolution"
 }

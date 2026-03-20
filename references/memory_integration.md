@@ -1,7 +1,18 @@
-# 记忆系统 (v4.5)
+# 记忆系统 (v4.6)
 
 > 借鉴 proactive-agent-3.1.0 的 WAL 协议 + 三层记忆架构
 > 本地文件实现，无需外部插件依赖
+
+---
+
+## 实现状态 (v4.6更新)
+
+| 层级 | 组件 | 状态 | 脚本 |
+|------|------|------|------|
+| **Layer 1** | SESSION-STATE.md | ✅ 完整实现 | `memory_ops.py` |
+| **Layer 2** | memory/YYYY-MM-DD.md | ✅ 完整实现 | `memory_daily.py` |
+| **Layer 3** | MEMORY.md | ✅ 完整实现 | `memory_longterm.py` |
+| **WAL扫描** | 自动触发检测 | ✅ 完整实现 | `wal_scanner.py` |
 
 ---
 
@@ -82,15 +93,17 @@ WAL_TRIGGERS = [
 
 ---
 
-## 记忆操作命令
+## 记忆操作命令 (v4.6实现)
 
-| 命令 | 功能 |
-|------|------|
-| `/check-memory` | 检查当前 SESSION-STATE 状态 |
-| `/save-memory` | 将会话提炼到 MEMORY.md |
-| `/search-memory [关键词]` | 搜索历史记忆 |
-| `/clear-session` | 清除 SESSION-STATE，开始新会话 |
-| `/show-daily [日期]` | 查看指定日期的每日日志 |
+| 命令 | 脚本 | 功能 |
+|------|------|------|
+| `/check-memory` | `memory_ops.py` | 检查当前 SESSION-STATE 状态 |
+| `/save-memory` | `memory_longterm.py --op=refine` | 将会话提炼到 MEMORY.md |
+| `/search-memory [关键词]` | `memory_longterm.py --op=search` | 搜索历史记忆 |
+| `/clear-session` | 手动删除 SESSION-STATE.md | 清除 SESSION-STATE，开始新会话 |
+| `/show-daily [日期]` | `memory_daily.py --op=show` | 查看指定日期的每日日志 |
+| `/log-task` | `memory_daily.py --op=add-task` | 添加任务记录到每日日志 |
+| `/log-lesson` | `memory_daily.py --op=add-lesson` | 添加教训到每日日志 |
 
 ---
 

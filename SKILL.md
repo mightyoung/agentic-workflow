@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 用户提到开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单问答闲聊（天气、问候、谢谢）、日常对话无开发意图
-version: 4.6.0
+version: 4.9.0
 tags: [core, workflow, tdd, debugging, planning]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -125,6 +125,88 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
   - tavily 是 AI 优化的搜索，返回简洁相关内容
 - 搜索范围：网络最佳实践、GitHub 成熟项目，社区讨论、官方文档
 - 输出：结构化搜索结果存入 findings.md
+
+---
+
+## 自修正决策点 (v4.8)
+
+### 核心设计原则
+
+> Claude Code 是单会话同步模型，**无法实现自动循环修正**。正确的模式是**决策点模式**：机器检测问题 → 提示人类决策。
+
+### 决策点类型
+
+| 决策点 | 触发条件 | 检测机制 | 人类选项 |
+|--------|----------|----------|----------|
+| **预算超限** | 任务执行时间 > 预算 | `check_task_budget` | 延长时间/跳过/中止 |
+| **质量门禁失败** | typecheck/lint/test 任一失败 | `quality_gate.py` | 重试/跳过/中止 |
+| **循环停滞** | 3次尝试同一步骤无进展 | 人工判断 | 换方案/寻求帮助/中止 |
+| **上下文耗尽** | 剩余 context < 20% | 感知 | 总结继续/请求用户帮助 |
+
+### 决策点触发流程
+
+```
+EXECUTING 阶段内:
+    if check_task_budget(task_id)["over_budget"]:
+        → 暂停执行
+        → 输出决策卡片:
+            ┌─────────────────────────────────────┐
+            │ ⚠️ 任务 T001 已超出预算 (60s/300s) │
+            │                                     │
+            │ 已完成: 用户认证模块 70%            │
+            │ 剩余: 权限管理、API集成、测试        │
+            │                                     │
+            │ [1] 延长时间 +60s                   │
+            │ [2] 跳过剩余任务                   │
+            │ [3] 中止并报告                     │
+            └─────────────────────────────────────┘
+        → 等待用户输入 (1/2/3)
+        → 根据用户选择继续执行
+
+REVIEWING 阶段:
+    if not quality_gate.all_passed:
+        → 输出决策卡片:
+            ┌─────────────────────────────────────┐
+            │ ✗ 质量门禁失败                      │
+            │                                     │
+            │ 失败项: lint (3个错误)              │
+            │                                     │
+            │ [1] 自动修复 lint 问题              │
+            │ [2] 手动审查后再试                 │
+            │ [3] 跳过 lint 继续                 │
+            └─────────────────────────────────────┘
+        → 等待用户输入
+```
+
+### 决策点集成到状态机
+
+```
+IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE
+              ↓           ↓           ↓           ↓           ↓
+         DEBUGGING ←──────┼───────────┼───────────┼───────────┼──→ DECISION_POINT
+                                          ↓                       ↓
+                                    (预算/质量/停滞)        (人类决策)
+```
+
+### 脚本支持
+
+```bash
+# 预算检查 - 返回决策建议
+python scripts/task_tracker.py --op=budget --task-id=T001
+
+# 质量门禁 - 返回通过/失败状态
+python scripts/quality_gate.py --dir=src --gate=all --json
+
+# 决策点提示模板
+python scripts/task_tracker.py --op=get --task-id=T001 --path=.task_tracker.json
+```
+
+### 决策原则
+
+1. **不自动猜测** - 所有修正决策由人类做出
+2. **提供上下文** - 决策前输出完整的任务状态和选项
+3. **记录决策** - 将决策结果写入 SESSION-STATE.md
+4. **学习历史** - 相同的决策模式存入 MEMORY.md
 
 ---
 
@@ -261,14 +343,17 @@ else:
 - **PUA铁律**: 穷尽3方案 → 先做后问 → 主动出击
 - **调试5步**: 闻味道 → 揪头发 → 照镜子 → 执行 → 复盘
 
-### 记忆操作命令
+### 记忆操作命令 (v4.6)
 
-| 命令 | 功能 |
-|------|------|
-| `/check-memory` | 检查当前 SESSION-STATE 状态 |
-| `/save-memory` | 将会话提炼到 MEMORY.md |
-| `/search-memory [关键词]` | 搜索历史记忆 |
-| `/clear-session` | 清除 SESSION-STATE，开始新会话 |
+| 命令 | 脚本 | 功能 |
+|------|------|------|
+| `/check-memory` | `memory_ops.py` | 检查当前 SESSION-STATE 状态 |
+| `/save-memory` | `memory_longterm.py --op=refine` | 从日志提炼到 MEMORY.md |
+| `/search-memory [关键词]` | `memory_longterm.py --op=search` | 搜索长期记忆 |
+| `/clear-session` | 手动删除 | 清除 SESSION-STATE，开始新会话 |
+| `/show-daily [日期]` | `memory_daily.py --op=show` | 查看每日日志 |
+| `/log-task` | `memory_daily.py --op=add-task` | 记录任务到每日日志 |
+| `/log-lesson` | `memory_daily.py --op=add-lesson` | 记录教训到每日日志 |
 
 ---
 
@@ -282,6 +367,59 @@ else:
 3. EXECUTING: TDD循环 → 测试→失败→实现→通过
 4. REVIEWING: 规范检查 → 代码质量审查
 5. COMPLETE: 更新 SESSION-STATE.md + 可选提炼到 MEMORY.md
+```
+
+---
+
+## COMPLETE 阶段 (v4.9新增)
+
+任务完成后必须执行以下动作:
+
+### 1. 更新 SESSION-STATE.md
+将任务结果、关键决策、用户偏好更新到当前会话状态文件。
+
+### 2. 自反思日志 (v4.9新增)
+完成任何任务后，进行结构化自反思:
+
+```markdown
+## 自反思日志
+
+### 任务
+[任务描述]
+
+### 执行结果
+- 状态: 成功/部分成功/失败
+- 关键决策: [做了哪些决定]
+- 用户反馈: [用户的纠正或确认]
+
+### 观察
+- 发现了什么: [执行中的观察]
+- 意外情况: [未曾预料的问题]
+
+### 教训
+- 下次如何改进: [具体的改进建议]
+- 模式识别: [是否是重复出现的模式]
+
+### WAL 模式晋升检查
+- 相似纠正次数: N
+- 是否需要晋升: [是/否]
+```
+
+### 3. WAL 模式晋升 (v4.9新增)
+如果检测到同一模式被纠正3次或以上，触发晋升确认:
+
+```
+检测到3次相似纠正: "用户偏好使用 X 而非 Y"
+是否确认该模式为永久规则?
+  [1] 确认并添加到 PATTERNS.md
+  [2] 暂时忽略
+  [3] 查看历史记录
+```
+
+### 4. 可选: 提炼到 MEMORY.md
+如果任务包含重要经验且可跨会话复用:
+```bash
+python scripts/memory_longterm.py --op=refine --days=7
 ```
 
 ---

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WAL Scanner - WAL (Write-Ahead Logging) 触发扫描器
+WAL Scanner - WAL (Write-Ahead Logging) 触发扫描器 (v4.9)
 
 检测用户消息中是否包含需要记忆的信息：
 - 修正信息: "是X，不是Y" / "其实..." / "错了"
@@ -8,14 +8,27 @@ WAL Scanner - WAL (Write-Ahead Logging) 触发扫描器
 - 决策: "用X方案" / "选择Y"
 - 具体数值: 数字、日期、ID、URL
 
+v4.9 新增: 3x 确认规则
+- 同一模式被纠正3次时触发晋升确认
+- 自动追踪模式出现次数
+- 支持模式晋升到 PATTERNS.md
+
 用法:
     python wal_scanner.py "用户消息文本"
+    python wal_scanner.py --check-patterns    # 检查待晋升模式
+    python wal_scanner.py --promote PATTERN_KEY  # 晋升指定模式
 """
 
 import re
 import sys
 import json
-from typing import List, Dict, Optional
+import os
+from datetime import datetime
+from typing import List, Dict, Optional, Tuple
+from pathlib import Path
+
+# 默认模式存储文件
+DEFAULT_PATTERNS_FILE = ".wal_patterns.json"
 
 # WAL 触发模式
 WAL_PATTERNS = [
@@ -39,6 +52,127 @@ VALUE_PATTERNS = [
     (r'\b[A-Z0-9]{8,}\b', 'id'),  # 大写字母数字ID
     (r'\$\d+', 'money'),  # 金钱
 ]
+
+# 晋升阈值
+PROMOTION_THRESHOLD = 3
+
+
+def get_pattern_key(trigger_type: str, match: str) -> str:
+    """生成稳定的模式键"""
+    # 简化并标准化匹配文本作为键的一部分
+    normalized = match.lower().strip()[:20]
+    # 替换空格和特殊字符
+    normalized = re.sub(r'[\s\-]+', '_', normalized)
+    normalized = re.sub(r'[^a-z0-9_]', '', normalized)
+    return f"{trigger_type}_{normalized}"
+
+
+def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
+    """加载已存储的模式数据"""
+    default = {
+        "patterns": {},
+        "version": "1.0"
+    }
+
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # Validate structure
+            if "patterns" not in data:
+                data["patterns"] = {}
+            return data
+        except (json.JSONDecodeError, IOError):
+            # Invalid file - return default
+            return default
+    return default
+
+
+def save_patterns(patterns: Dict, path: str = DEFAULT_PATTERNS_FILE) -> None:
+    """保存模式数据"""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(patterns, f, ensure_ascii=False, indent=2)
+
+
+def increment_pattern_count(trigger_type: str, match: str, path: str = DEFAULT_PATTERNS_FILE) -> Tuple[int, bool]:
+    """
+    增加模式计数
+
+    Returns:
+        (count, should_promote): 当前计数和是否应该晋升
+    """
+    patterns = load_patterns(path)
+    pattern_key = get_pattern_key(trigger_type, match)
+    now = datetime.now().isoformat()
+
+    if pattern_key not in patterns["patterns"]:
+        patterns["patterns"][pattern_key] = {
+            "count": 0,
+            "first_seen": now,
+            "last_seen": now,
+            "type": trigger_type,
+            "sample": match,
+            "promoted": False
+        }
+
+    patterns["patterns"][pattern_key]["count"] += 1
+    patterns["patterns"][pattern_key]["last_seen"] = now
+
+    should_promote = patterns["patterns"][pattern_key]["count"] >= PROMOTION_THRESHOLD
+    patterns["patterns"][pattern_key]["should_promote"] = should_promote
+
+    save_patterns(patterns, path)
+
+    return patterns["patterns"][pattern_key]["count"], should_promote
+
+
+def get_pending_promotions(path: str = DEFAULT_PATTERNS_FILE) -> List[Dict]:
+    """获取待晋升的模式列表"""
+    patterns = load_patterns(path)
+    pending = []
+
+    for key, data in patterns["patterns"].items():
+        if data.get("should_promote") and not data.get("promoted"):
+            pending.append({
+                "key": key,
+                "count": data["count"],
+                "type": data["type"],
+                "sample": data["sample"],
+                "first_seen": data["first_seen"],
+                "last_seen": data["last_seen"]
+            })
+
+    return pending
+
+
+def promote_pattern(pattern_key: str, path: str = DEFAULT_PATTERNS_FILE) -> bool:
+    """标记模式为已晋升"""
+    patterns = load_patterns(path)
+
+    if pattern_key in patterns["patterns"]:
+        patterns["patterns"][pattern_key]["promoted"] = True
+        patterns["patterns"][pattern_key]["promoted_at"] = datetime.now().isoformat()
+        save_patterns(patterns, path)
+        return True
+
+    return False
+
+
+def extract_correction_context(text: str) -> List[Tuple[str, str]]:
+    """
+    提取修正上下文
+
+    Returns:
+        [(trigger_type, match)] 列表
+    """
+    results = []
+
+    for pattern, trigger_type in WAL_PATTERNS:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for match in matches:
+            results.append((trigger_type, match))
+
+    return results
 
 
 def scan_wal_triggers(text: str) -> Dict[str, List[str]]:
@@ -123,46 +257,89 @@ def format_output(triggers: Dict, format: str = 'json') -> str:
 
 
 def main():
-    # 从命令行读取文本
-    if len(sys.argv) > 1:
-        text = sys.argv[1]
-    else:
-        # 交互式模式
-        print("WAL Scanner - 输入消息进行扫描 (Ctrl+C 退出)")
-        print("-" * 50)
-        while True:
-            try:
-                text = input("\n> ")
-                if not text.strip():
-                    continue
+    import argparse
 
-                triggers = scan_wal_triggers(text)
-                print(format_output(triggers, 'text'))
+    parser = argparse.ArgumentParser(description='WAL Scanner - WAL 触发扫描器 (v4.9)')
+    parser.add_argument('text', nargs='?', help='要扫描的文本')
+    parser.add_argument('--check-patterns', action='store_true', help='检查待晋升模式')
+    parser.add_argument('--promote', metavar='PATTERN_KEY', help='晋升指定模式')
+    parser.add_argument('--patterns-file', default=DEFAULT_PATTERNS_FILE, help='模式存储文件路径')
 
-                if should_update_session_state(triggers):
-                    print("\n>>> 建议更新 SESSION-STATE.md")
-            except KeyboardInterrupt:
-                print("\n退出")
-                break
-    return 0
+    args = parser.parse_args()
 
+    # 检查待晋升模式
+    if args.check_patterns:
+        pending = get_pending_promotions(args.patterns_file)
+        if not pending:
+            print("没有待晋升的模式")
+            return 0
 
-if __name__ == '__main__':
-    # 非交互式模式：直接扫描
-    if len(sys.argv) > 1:
-        text = sys.argv[1]
-        triggers = scan_wal_triggers(text)
+        print(f"发现 {len(pending)} 个待晋升模式:")
+        print("-" * 60)
+        for p in pending:
+            print(f"  [{p['key']}]")
+            print(f"    类型: {p['type']}")
+            print(f"    次数: {p['count']}x")
+            print(f"    示例: {p['sample']}")
+            print(f"    首次: {p['first_seen']}")
+            print(f"    最近: {p['last_seen']}")
+            print()
+        print("使用 --promote PATTERN_KEY 来晋升模式")
+        return 0
+
+    # 晋升模式
+    if args.promote:
+        if promote_pattern(args.promote, args.patterns_file):
+            print(f"模式已晋升: {args.promote}")
+        else:
+            print(f"模式未找到: {args.promote}")
+        return 0
+
+    # 扫描文本
+    if args.text:
+        triggers = scan_wal_triggers(args.text)
         needs_update = should_update_session_state(triggers)
 
         # 输出结果
         print(format_output(triggers, 'simple'))
 
-        # 如果需要更新，输出标记
+        # 如果检测到触发，增加模式计数并检查晋升
         if needs_update:
             print("WAL_UPDATE_NEEDED=true")
+
+            # 更新模式计数
+            corrections = extract_correction_context(args.text)
+            for trigger_type, match in corrections:
+                count, should_promote = increment_pattern_count(trigger_type, match, args.patterns_file)
+                if should_promote:
+                    pattern_key = get_pattern_key(trigger_type, match)
+                    print(f"\n⚠️  模式 '{pattern_key}' 已达到 {PROMOTION_THRESHOLD} 次纠正")
+                    print("    使用 --check-patterns 查看详情")
+                    print("    使用 --promote {pattern_key} 晋升该模式")
         else:
             print("WAL_UPDATE_NEEDED=false")
 
-        sys.exit(0)
-    else:
-        sys.exit(main())
+        return 0
+
+    # 交互式模式
+    print("WAL Scanner - 输入消息进行扫描 (Ctrl+C 退出)")
+    print("-" * 50)
+    while True:
+        try:
+            text = input("\n> ")
+            if not text.strip():
+                continue
+
+            triggers = scan_wal_triggers(text)
+            print(format_output(triggers, 'text'))
+
+            if should_update_session_state(triggers):
+                print("\n>>> 建议更新 SESSION-STATE.md")
+        except KeyboardInterrupt:
+            print("\n退出")
+            break
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

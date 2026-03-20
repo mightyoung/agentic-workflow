@@ -1,4 +1,4 @@
-# Scripts 目录 (v4.6新增)
+# Scripts 目录 (v4.7更新)
 
 > 可执行的脚本，用于自动化任务执行和环境操作。支持跨平台运行。
 
@@ -10,6 +10,8 @@
 |------|------|------|
 | `wal_scanner.py` | WAL 触发扫描 | 检测用户消息中的修正/偏好/决策信息 |
 | `memory_ops.py` | 记忆操作 | 更新 SESSION-STATE.md |
+| `memory_daily.py` | 每日日志 | 管理 memory/YYYY-MM-DD.md |
+| `memory_longterm.py` | 长期记忆 | 管理 MEMORY.md |
 | `task_tracker.py` | 任务追踪 | 追踪任务进度和状态 |
 | `router.py` | 路由决策 | 辅助判断用户意图和触发阶段 |
 
@@ -72,6 +74,13 @@ Agent 在需要时通过 Bash 工具调用这些脚本：
 # Python 脚本
 python scripts/wal_scanner.py "用户消息文本"
 python scripts/memory_ops.py --op=update --key=task --value="任务描述"
+python scripts/memory_daily.py --op=create --date=2026-03-20
+python scripts/memory_daily.py --op=add-task --task-id=T001 --desc="完成任务" --result=success
+python scripts/memory_daily.py --op=distill  # 从SESSION-STATE蒸馏到每日日志
+python scripts/memory_longterm.py --op=init
+python scripts/memory_longterm.py --op=add-experience --exp="学到X"
+python scripts/memory_longterm.py --op=refine --days=7  # 从7天日志提炼
+python scripts/memory_longterm.py --op=search --query="关键词"
 python scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
 python scripts/router.py "帮我搜索最佳实践"
 

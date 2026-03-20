@@ -27,11 +27,25 @@ DEFAULT_TRACKER_FILE = ".task_tracker.json"
 
 
 def load_tracker(path: str) -> Dict:
-    """加载任务追踪数据"""
+    """加载任务追踪数据（带旧数据迁移）"""
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
+            data = json.load(f)
+    else:
+        return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
+
+    # 迁移旧任务数据（v4.8新增字段）
+    for task in data.get("tasks", []):
+        if "budget_seconds" not in task:
+            task["budget_seconds"] = 300
+        if "time_spent_seconds" not in task:
+            task["time_spent_seconds"] = 0
+        if "started_at" not in task:
+            task["started_at"] = None
+        if "quality_gates_passed" not in task:
+            task["quality_gates_passed"] = None
+
+    return data
 
 
 def save_tracker(path: str, data: Dict) -> None:
@@ -41,8 +55,9 @@ def save_tracker(path: str, data: Dict) -> None:
 
 
 def create_task(task_id: str, description: str, priority: str = "P2",
-                dependencies: List[str] = None, path: str = DEFAULT_TRACKER_FILE) -> bool:
-    """创建新任务"""
+                dependencies: List[str] = None, path: str = DEFAULT_TRACKER_FILE,
+                budget_seconds: int = 300) -> bool:
+    """创建新任务（带预算控制）"""
     tracker = load_tracker(path)
 
     # 检查是否已存在
@@ -60,14 +75,91 @@ def create_task(task_id: str, description: str, priority: str = "P2",
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
         "progress": 0,
-        "issues": []
+        "issues": [],
+        # 预算控制字段 (v4.8新增)
+        "budget_seconds": budget_seconds,      # 预算时间（秒）
+        "time_spent_seconds": 0,                # 已消耗时间
+        "started_at": None,                      # 开始时间
+        "quality_gates_passed": None,           # 质量门禁状态
     }
 
     tracker["tasks"].append(task)
     save_tracker(path, tracker)
 
-    print(f"已创建任务: {task_id} - {description}")
+    print(f"已创建任务: {task_id} - {description} (预算: {budget_seconds}s)")
     return True
+
+
+def start_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> bool:
+    """开始任务计时"""
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            if task["started_at"] is None:
+                task["started_at"] = datetime.now().isoformat()
+                task["status"] = "in_progress"
+                task["updated_at"] = datetime.now().isoformat()
+                save_tracker(path, tracker)
+                print(f"任务已开始: {task_id}")
+                return True
+            else:
+                print(f"任务已在进行中: {task_id}")
+                return False
+
+    print(f"任务未找到: {task_id}")
+    return False
+
+
+def check_task_budget(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> dict:
+    """检查任务预算状态"""
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            if task["started_at"] is None:
+                return {
+                    "task_id": task_id,
+                    "started": False,
+                    "budget_seconds": task.get("budget_seconds", 300),
+                    "time_spent_seconds": 0,
+                    "over_budget": False
+                }
+
+            started = datetime.fromisoformat(task["started_at"])
+            elapsed = (datetime.now() - started).total_seconds()
+            budget = task.get("budget_seconds", 300)
+            over_budget = elapsed > budget
+
+            return {
+                "task_id": task_id,
+                "started": True,
+                "started_at": task["started_at"],
+                "budget_seconds": budget,
+                "time_spent_seconds": int(elapsed),
+                "remaining_seconds": max(0, budget - int(elapsed)),
+                "over_budget": over_budget,
+                "budget_percent": min(100, int(elapsed / budget * 100)) if budget > 0 else 0
+            }
+
+    return {"error": f"任务未找到: {task_id}"}
+
+
+def update_quality_gate(task_id: str, passed: bool, path: str = DEFAULT_TRACKER_FILE) -> bool:
+    """更新任务质量门禁状态"""
+    tracker = load_tracker(path)
+
+    for task in tracker["tasks"]:
+        if task["id"] == task_id:
+            task["quality_gates_passed"] = passed
+            task["updated_at"] = datetime.now().isoformat()
+            save_tracker(path, tracker)
+            status = "通过" if passed else "未通过"
+            print(f"质量门禁更新: {task_id} -> {status}")
+            return True
+
+    print(f"任务未找到: {task_id}")
+    return False
 
 
 def update_status(task_id: str, status: str, progress: int = None,
@@ -189,7 +281,7 @@ def generate_report(path: str = DEFAULT_TRACKER_FILE) -> str:
 def main():
     parser = argparse.ArgumentParser(description='Task Tracker - 任务状态追踪工具')
     parser.add_argument('--path', default=DEFAULT_TRACKER_FILE, help='追踪文件路径')
-    parser.add_argument('--op', choices=['create', 'status', 'issue', 'get', 'list', 'report'],
+    parser.add_argument('--op', choices=['create', 'status', 'issue', 'get', 'list', 'report', 'start', 'budget', 'quality-gate'],
                        required=True, help='操作类型')
     parser.add_argument('--task-id', help='任务ID')
     parser.add_argument('--desc', help='任务描述')
@@ -199,6 +291,8 @@ def main():
     parser.add_argument('--deps', nargs='*', help='依赖任务ID')
     parser.add_argument('--issue', help='问题描述')
     parser.add_argument('--solution', help='解决方案')
+    parser.add_argument('--budget-seconds', type=int, default=300, help='预算时间（秒，默认300）')
+    parser.add_argument('--passed', type=lambda x: x.lower() == 'true', default=True, help='质量门禁是否通过')
 
     args = parser.parse_args()
 
@@ -206,7 +300,36 @@ def main():
         if not args.task_id or not args.desc:
             print("错误: --task-id 和 --desc 必须指定")
             return 1
-        create_task(args.task_id, args.desc, args.priority, args.deps, args.path)
+        create_task(args.task_id, args.desc, args.priority, args.deps, args.path, args.budget_seconds)
+
+    elif args.op == 'start':
+        if not args.task_id:
+            print("错误: --task-id 必须指定")
+            return 1
+        start_task(args.task_id, args.path)
+
+    elif args.op == 'budget':
+        if not args.task_id:
+            print("错误: --task-id 必须指定")
+            return 1
+        result = check_task_budget(args.task_id, args.path)
+        if "error" in result:
+            print(result["error"])
+        else:
+            print(f"任务: {result['task_id']}")
+            print(f"  开始时间: {result.get('started_at', 'N/A')}")
+            print(f"  预算: {result['budget_seconds']}s")
+            print(f"  已用: {result['time_spent_seconds']}s")
+            print(f"  剩余: {result.get('remaining_seconds', 'N/A')}s")
+            print(f"  进度: {result.get('budget_percent', 0)}%")
+            if result.get('over_budget'):
+                print("  ⚠️ 已超出预算!")
+
+    elif args.op == 'quality-gate':
+        if not args.task_id:
+            print("错误: --task-id 必须指定")
+            return 1
+        update_quality_gate(args.task_id, args.passed, args.path)
 
     elif args.op == 'status':
         if not args.task_id or not args.status:
