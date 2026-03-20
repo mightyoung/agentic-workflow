@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-4.9-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-4.13-blue.svg)](SKILL.md)
 
 ---
 
@@ -23,7 +23,7 @@
 
 ## What is Agentic Workflow?
 
-Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.9). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
+Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v4.13). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
 
 ### Core Philosophy
 
@@ -33,41 +33,136 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 
 ---
 
-## v4.9 New Features
+## v4.13 New Features
 
-### 1. Self-Evolution Mechanisms
+### 1. YAGNI Check (v4.13)
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Self-Reflection Log** | Structured reflection template in COMPLETE phase | New |
-| **3x Confirmation Rule** | WAL pattern promotion after 3 corrections | New |
-| **Decision Point** | Human-in-loop for self-correction | Implemented |
+> **Core Principle**: Don't implement features that aren't needed yet.
 
-### 2. Self-Evolution Loop
+| Question | If Yes | Correct Action |
+|----------|--------|----------------|
+| Did user explicitly require this? | ❌ Not needed now | Delete it |
+| Is this in the user story? | ❌ No | Delete it |
+| Will tests fail if removed? | ❌ No | Delete it |
+| Is this "just in case"? | ✅ Over-engineering | Delete it |
+
+### 2. Frequent Commit Rules (v4.13)
+
+> **Core Principle**: Commit after every meaningful independent unit of work.
+
+| When Complete | Must Commit |
+|--------------|-------------|
+| One function/method | ✅ |
+| One test case | ✅ |
+| One small feature module | ✅ |
+| Bug fix | ✅ |
+| Refactoring (behavior unchanged) | ✅ |
+| Documentation update | ✅ |
+
+---
+
+## v4.12 New Features
+
+### 1. HARD-GATE Design Gate
+
+> **Core Principle**: No implementation until design is approved by user.
 
 ```
-Detection → Decision Point → Human Approval → Evolution
-     ↑                                        ↓
-     ←←←←←←←← (Pattern Learning) ←←←←←←←←←←
+<HARD-GATE>
+Before any implementation:
+- ❌ Write any code
+- ❌ Set up project structure
+- ❌ Execute any implementation action
+- ❌ Call implementation skills
+
+Must complete:
+- ✅ Understand what user truly wants
+- ✅ Propose 2-3 options with trade-off analysis
+- ✅ Get segmented approval from user
+- ✅ Write design to documentation
 ```
 
-### 3. WAL Protocol (Write-Ahead Logging)
+### 2. Red Flags - Anti-Self-Rationalization
 
-Memory trigger detection for user corrections, preferences, and decisions:
+> **Core Principle**: If there's even 1% chance a skill applies, you must invoke it.
 
-| Type | Example | Action |
-|------|---------|--------|
-| Correction | "是X，不是Y" | Update SESSION-STATE |
-| Preference | "我喜欢X" | Record preference |
-| Decision | "用X方案" | Save decision |
-| Value | Numbers, URLs, IDs | Store exact value |
+| When You Think | Actual Meaning | Correct Action |
+|----------------|----------------|----------------|
+| "This is a simple issue" | Issue = task, check skill | STOP, check skill |
+| "I need to learn more first" | Skill check before context | Call skill first |
+| "Quick look at the file" | File lacks conversational context | Call skill first |
 
-### 4. Three-Layer Memory Architecture
+### 3. Segmented Design Confirmation
+
+Complex designs are presented in sections with incremental approval:
+
+| Project Type | Design Length | Confirmation Rhythm |
+|--------------|---------------|-------------------|
+| Simple (single file) | A few sentences | 1 confirmation |
+| Medium (2-3 files) | 100-200 words per section | Confirm per section |
+| Complex (multi-system) | 200-300 words per section | Confirm per section |
+
+---
+
+## v4.11 New Features: Idle Detection & Result Tracking
+
+### Idle Detection
+
+When user returns after 30+ minutes of inactivity:
+
+1. **Detect**: Read timestamp from SESSION-STATE.md
+2. **判断**: If last_active > 30 minutes, show recovery card
+3. **恢复**: Continue from breakpoint or start new task
+
+### Result Tracking (JSONL)
+
+Task execution history in append-only JSONL format:
+
+```json
+{"timestamp": "2026-03-20T10:45:00", "task_id": "T001", "status": "success", "duration_seconds": 300}
+```
+
+---
+
+## v4.9 Self-Evolution Mechanisms
+
+### Self-Reflection Log
+
+Structured reflection in COMPLETE phase:
+
+```markdown
+## Self-Reflection Log
+
+### Task
+[Task description]
+
+### Execution Result
+- Status: success/partial/failed
+- Key Decisions: [what was decided]
+
+### Observations
+- What was discovered: [observations during execution]
+- Unexpected issues: [unanticipated problems]
+
+### Lessons
+- How to improve next time: [specific improvements]
+- Pattern recognition: [recurring patterns]
+
+### WAL Pattern Promotion Check
+- Similar corrections: N
+- Needs promotion: [Yes/No]
+```
+
+### 3x Confirmation Rule
+
+When same pattern corrected 3+ times, trigger promotion:
 
 ```
-SESSION-STATE.md     → Working memory (current session)
-memory/YYYY-MM-DD.md → Daily logs (optional)
-MEMORY.md           → Long-term memory (optional)
+Detected 3 similar corrections: "User prefers X over Y"
+Confirm this as permanent rule?
+  [1] Confirm and add to PATTERNS.md
+  [2] Ignore temporarily
+  [3] View history
 ```
 
 ---
@@ -150,7 +245,7 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 
 ---
 
-## Testing Status (v4.9)
+## Testing Status (v4.13)
 
 | Component | Status |
 |-----------|--------|
@@ -163,7 +258,11 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 | Quality Gate | P0 - typecheck/lint/test |
 | Budget Control | P1 - start/budget/quality-gate |
 | Self-Correction | P2 - Decision Point Pattern |
-| 3x Confirmation | v4.9 - WAL Pattern Promotion |
+| HARD-GATE | v4.12 - Design Gate |
+| Red Flags | v4.12 - Anti-Self-Rationalization |
+| Segmented Design | v4.12 - Incremental Confirmation |
+| YAGNI Check | v4.13 - Prevent Over-Engineering |
+| Frequent Commit | v4.13 - Commit After Each Unit |
 
 ---
 
@@ -207,7 +306,7 @@ agentic-workflow/
 2. **Do-First Rule** - Search, read source, verify before asking
 3. **Proactive Rule** - End-to-end delivery, not "just enough"
 
-### PUA激励 (Pressure Escalation)
+### PUA Pressure Escalation
 
 When failing, automatically triggers:
 - Exhaust 3 approaches
