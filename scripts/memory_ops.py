@@ -28,8 +28,27 @@ from typing import Optional, Dict, List, Any
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
 
 
+def _validate_path(path: str) -> bool:
+    """验证路径安全（防止路径遍历攻击）"""
+    try:
+        # 解析为绝对路径
+        abs_path = os.path.abspath(path)
+        # 允许的目录：当前工作目录或系统临时目录
+        cwd = os.getcwd()
+        temp_dirs = ['/tmp', '/var/folders', '/tmp/']
+        for temp in temp_dirs:
+            if abs_path.startswith(temp):
+                return True
+        # 确保路径在当前工作目录下（防止 ../etc/cron.d 类型的攻击）
+        return abs_path.startswith(cwd)
+    except Exception:
+        return False
+
+
 def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
     """确保 SESSION-STATE.md 存在"""
+    if not _validate_path(path):
+        return False
     if not os.path.exists(path):
         # 确保父目录存在
         parent_dir = os.path.dirname(path)
