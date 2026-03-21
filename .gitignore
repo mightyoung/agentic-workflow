@@ -47,6 +47,16 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 
+# Cache directories
+.mypy_cache/
+.ruff_cache/
+tests/__pycache__/
+
+# Test results
+tests/*.json
+tests/*.json.backup
+*.json.backup
+
 # Temporary files
 *.tmp
 *.bak
