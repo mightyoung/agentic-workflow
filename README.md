@@ -61,6 +61,51 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 
 ---
 
+## v5.4.2 WITH vs WITHOUT Skill Benchmark (2026-03-22)
+
+### When to Use Skill
+
+> **Simple tasks (<100 lines, <3 files)**: Direct implementation is faster
+> **Complex tasks (>500 lines, >3 files)**: Skill workflow is worth the overhead
+
+### Benchmark Results
+
+| Metric | WITHOUT Skill | WITH Skill | Difference |
+|--------|-------------|------------|------------|
+| **Token Consumption** | Baseline | +38-100% | ❌ More expensive |
+| **Code Quality** | 5-65/100 | 8.5-93/100 | ✅ 30-70% better |
+| **Test Coverage** | 0-60% | 85%+ | ✅ Overwhelming advantage |
+| **Execution Speed** | Baseline | 2x slower | ❌ Slower |
+| **TDD First-pass Rate** | 60-70% | 100% | ✅ 40% better |
+
+### Skill Value Threshold
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Use Skill when:                                           │
+│    ✅ Code > 500 lines                                     │
+│    ✅ Files > 3                                            │
+│    ✅ Requires TDD/Review flow                             │
+│    ✅ Production code quality required                      │
+│                                                             │
+│  Direct implementation when:                                 │
+│    ❌ Simple scripts (<100 lines)                          │
+│    ❌ One-time tools                                       │
+│    ❌ Quick prototype validation                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Findings
+
+| Task Type | Recommendation | Reason |
+|-----------|---------------|--------|
+| Classic algorithms (LRU, sorting) | ❌ Skip Skill | +38% tokens, no benefit |
+| Simple CRUD (<100 lines) | ❌ Skip Skill | +100% tokens, slower |
+| Complex system (>500 lines) | ✅ Use Skill | Quality + TDD + Review |
+| Production code | ✅ Use Skill | Bug interception + coverage |
+
+---
+
 ## v5.4 Performance Optimization (2026-03-21)
 
 ### Key Fixes and Improvements

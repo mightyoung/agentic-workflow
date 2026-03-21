@@ -1,155 +1,126 @@
 {
-  "version": "4.13.0",
-  "updated_at": "2026-03-20T12:50:00Z",
-  "description": "Agentic Workflow v4.13 版本锁定文件",
+  "version": "5.4.2",
+  "updated_at": "2026-03-22T01:15:00Z",
+  "description": "Agentic Workflow v5.4.2 版本锁定文件 - P1级改进整合",
   "changes": [
-    "v4.13: YAGNI 检查规则 - 防止过度设计和提前实现",
-    "v4.13: 频繁提交规则 - 每完成独立单元立即提交",
-    "v4.11: 空闲检测机制 - check_idle_status",
-    "v4.11: 结果追踪 - JSONL格式 .task_history.jsonl",
-    "v4.11: 周报/月报 - generate_weekly_report"
+    "v5.4.2: REVIEWING 增加5维详细检查清单 - Security/Performance/Architecture/Testing/Accessibility",
+    "v5.4.2: DEBUGGING 增加7步假设驱动调查协议 - ACH方法论具体流程",
+    "v5.4.2: PLANNING 增加Team Lead协调模式 - 团队生命周期和任务分解协议",
+    "v5.4.2: Phase 版本更新 - planning:1.2.0, reviewing:1.4.0, debugging:1.2.0",
+    "v5.4.1: REVIEWING 增加发现去重规则和严重度校准标准",
+    "v5.4.1: REVIEWING 增加合并报告模板 - 多审查者结果统一输出格式",
+    "v5.4.1: DEBUGGING 增加假设生成框架 - 6类失败模式和证据标准",
+    "v5.4.1: PLANNING 增加 Interface Contracts 和 Owned Files 部分 - 支持并行执行",
+    "v5.4.1: Phase 版本更新 - planning:1.1.0, reviewing:1.3.0, debugging:1.1.0",
+    "v5.4.0: Router L2 关键词覆盖增强 - 补充思考一下、报错、错误、异常、bug、调试",
+    "v5.4.0: Router L2 增加 DEBUGGING 关键词行",
+    "v5.4.0: Router L2 增加匹配优先级规则 - 解决 REVIEWING vs RESEARCH 冲突",
+    "v5.4.0: Router L3 增加 debug 意图分类",
+    "v5.4.0: THINKING 穷举检查清单增加成本、时间、运维复杂度维度",
+    "v5.4.0: PLANNING 复杂度增加量化定义 - LOW/MEDIUM/HIGH 具体数值标准",
+    "v5.3.3: Router L0 增加统计检测无意义请求",
+    "v5.3.3: Router 复杂度评估增加技术难度维度",
+    "v5.3.3: Router L1 增加 /office-hours 命令",
+    "v5.3.3: Router L2 增加 OFFICE-HOURS 关键词",
+    "v5.3.3: Router L3 增加 idea 意图分类",
+    "v5.3.3: Office-Hours 增加伪需求模式识别",
+    "v5.3.3: Research 增加来源可靠性分级评估",
+    "v5.3.3: Planning 增加验收标准可测试性检查",
+    "v5.3.3: Thinking PUA激励增加穷举方案结构化流程",
+    "v5.3.3: gstack/SKILL.md 增加 AskUserQuestion 和 Boil the Lake",
+    "v5.3.3: preamble 增加循环引用检测函数"
   ],
-  "dependencies": {
-    "tavily": {
-      "version": "1.0.0",
-      "type": "skill",
-      "description": "AI优化的网络搜索"
-    }
-  },
-  "modules": {
-    "research": {
-      "path": "references/modules/executing.md",
-      "version": "1.0"
-    },
-    "thinking": {
-      "path": "references/modules/thinking.md",
-      "version": "1.0"
-    },
-    "planning": {
-      "path": "references/templates/",
-      "version": "1.0"
-    },
-    "executing": {
-      "path": "references/modules/executing.md",
-      "version": "1.0"
-    },
-    "reviewing": {
-      "path": "references/modules/reviewing.md",
-      "version": "1.0"
-    },
-    "debugging": {
-      "path": "references/modules/debugging.md",
-      "version": "1.0"
-    },
-    "memory": {
-      "path": "references/memory_integration.md",
-      "version": "2.0"
-    },
-    "decision_point": {
-      "path": "SKILL.md (内置)",
-      "version": "1.0",
-      "description": "自修正决策点 - 人类决策模式"
-    }
-  },
-  "scripts": {
-    "wal_scanner": {
-      "path": "scripts/wal_scanner.py",
-      "version": "2.0",
-      "status": "verified",
-      "features": ["wal_scan", "3x_confirmation", "pattern_promotion"]
-    },
-    "memory_ops": {
-      "path": "scripts/memory_ops.py",
-      "version": "1.0",
-      "status": "verified"
-    },
-    "memory_daily": {
-      "path": "scripts/memory_daily.py",
-      "version": "1.0",
-      "status": "new"
-    },
-    "memory_longterm": {
-      "path": "scripts/memory_longterm.py",
-      "version": "1.0",
-      "status": "new"
-    },
-    "task_tracker": {
-      "path": "scripts/task_tracker.py",
-      "version": "1.1",
-      "status": "verified",
-      "features": ["budget_control", "quality_gate_tracking"]
-    },
-    "router": {
-      "path": "scripts/router.py",
-      "version": "1.0",
-      "status": "verified"
-    },
-    "quality_gate": {
-      "path": "scripts/quality_gate.py",
-      "version": "1.0",
-      "status": "new",
-      "gates": ["typecheck", "lint", "test"]
-    }
-  },
-  "triggers": {
-    "should_trigger": [
-      "开发", "修复", "规划", "分析", "审查", "调研", "实施", "实现", "创建"
+  "architecture": {
+    "entry": "SKILL.md (82 lines)",
+    "phases": [
+      {"name": "router", "path": "skills/router/skill.md", "version": "1.2.0"},
+      {"name": "office-hours", "path": "skills/office-hours/skill.md", "version": "1.0.0"},
+      {"name": "research", "path": "skills/research/skill.md", "version": "1.0.0"},
+      {"name": "thinking", "path": "skills/thinking/skill.md", "version": "1.0.0"},
+      {"name": "planning", "path": "skills/planning/skill.md", "version": "1.2.0"},
+      {"name": "executing", "path": "skills/executing/skill.md", "version": "1.0.0"},
+      {"name": "reviewing", "path": "skills/reviewing/skill.md", "version": "1.4.0"},
+      {"name": "debugging", "path": "skills/debugging/skill.md", "version": "1.2.0"},
+      {"name": "complete", "path": "skills/complete/skill.md", "version": "1.2.0"},
+      {"name": "retro", "path": "skills/gstack/commands/retro.md", "version": "1.0.0"}
     ],
-    "do_not_trigger": [
-      "天气", "笑话", "你好", "谢谢", " hi", "hello"
+    "shared": [
+      {"name": "preamble", "path": "skills/_shared/preamble.md"},
+      {"name": "ask-user-question", "path": "skills/_shared/ask-user-question.md"},
+      {"name": "boil-the-lake", "path": "skills/_shared/boil-the-lake.md"},
+      {"name": "telemetry", "path": "skills/_shared/telemetry.md", "status": "disabled"},
+      {"name": "contributor-mode", "path": "skills/_shared/contributor-mode.md"},
+      {"name": "browser-daemon", "path": "skills/_shared/browser-daemon.md"}
+    ],
+    "gstack_integration": [
+      {"name": "gstack", "path": "skills/gstack/SKILL.md", "version": "1.0.0"},
+      {"name": "qa", "path": "skills/gstack/commands/qa.md", "version": "1.0.0"},
+      {"name": "ship", "path": "skills/gstack/commands/ship.md", "version": "1.0.0"},
+      {"name": "retro", "path": "skills/gstack/commands/retro.md", "version": "1.0.0"}
     ]
   },
-  "modules": {
-    "research": {
-      "path": "references/modules/executing.md",
-      "version": "1.0"
+  "v5_3_features": {
+    "browser_daemon": {
+      "location": "skills/_shared/browser-daemon.md",
+      "purpose": "Browser Daemon 接口合约 - E2E 测试和文档预览能力",
+      "capabilities": ["screenshot", "click", "fill", "scroll", "a11y", "eval"],
+      "pattern": "http_api_with_graceful_fallback"
     },
-    "thinking": {
-      "path": "references/modules/thinking.md",
-      "version": "1.2"
+    "e2e_visual_testing": {
+      "location": "skills/reviewing/skill.md",
+      "purpose": "REVIEWING 阶段可选 E2E 视觉回归测试",
+      "pattern": "dynamic_delegation_with_fallback"
     },
-    "planning": {
-      "path": "references/templates/",
-      "version": "1.0"
-    },
-    "executing": {
-      "path": "references/modules/executing.md",
-      "version": "1.0"
-    },
-    "reviewing": {
-      "path": "references/modules/reviewing.md",
-      "version": "1.0"
-    },
-    "debugging": {
-      "path": "references/modules/debugging.md",
-      "version": "1.0"
-    },
-    "memory": {
-      "path": "references/memory_architecture.md",
-      "version": "2.1"
-    },
-    "decision_point": {
-      "path": "SKILL.md (内置)",
-      "version": "1.1"
+    "document_preview": {
+      "location": "skills/complete/skill.md",
+      "purpose": "COMPLETE 阶段文档发布预览能力",
+      "pattern": "optional_gate_with_manual_fallback"
     }
   },
-  "test_results": {
-    "trigger_routing": "100% (40/40)",
-    "bash_scripts": "100% (8/8)",
-    "python_scripts": "100% (task_tracker/budget/quality_gate/wal_scanner)",
-    "windows_scripts": "100% (5/5 check_template已修复)",
-    "subagent_architecture": "100% (7/7)",
-    "memory_system": "Layer 1/2/3 全部实现",
-    "quality_gate": "P0 已实现 - typecheck/lint/test",
-    "budget_control": "P1 已实现 - start/budget/quality-gate",
-    "self_correction": "P2 已实现 - 决策点模式",
-    "self_reflection": "v4.9 新增 - COMPLETE阶段结构化反思",
-    "3x_confirmation": "v4.9 新增 - WAL模式晋升机制",
-    "hard_gate": "v4.12 新增 - 设计门禁强制设计确认",
-    "red_flags": "v4.12 新增 - 技能触发自我检查",
-    "segmented_design": "v4.12 新增 - 分段设计确认机制",
-    "yagni_check": "v4.13 新增 - YAGNI检查防止过度设计",
-    "frequent_commit": "v4.13 新增 - 频繁提交规则"
+  "v5_2_features": {
+    "qa_delegation": {
+      "location": "skills/reviewing/skill.md",
+      "purpose": "QA 工作流委托到 gstack/qa，支持单元/集成/E2E测试",
+      "pattern": "dynamic_delegation_with_fallback"
+    },
+    "ship_gate": {
+      "location": "skills/complete/skill.md",
+      "purpose": "发布门在 VBR 检查清单后执行",
+      "pattern": "optional_gate_with_manual_fallback"
+    },
+    "retro_routing": {
+      "location": "skills/router/skill.md",
+      "purpose": "独立回顾入口，通过 L1 显式命令触发",
+      "pattern": "standalone_entry_point"
+    }
   },
-  "fingerprint": "v4.13.0-yagni-commit"
+  "v5_1_features": {
+    "preload_detection": {
+      "location": "skills/router/skill.md",
+      "features": ["environment_validation", "dependency_checks", "session_state_validation"]
+    },
+    "office_hours": {
+      "location": "skills/office-hours/skill.md",
+      "purpose": "在开始编码前重构产品想法，确保理解用户真正想要什么"
+    }
+  },
+  "long_term_plan": {
+    "location": "docs/long_term_plan.md",
+    "recommendations": ["/qa", "/ship", "/retro", "/browser-e2e", "/preview"],
+    "status": "已实施"
+  },
+  "dependencies": {
+    "tavily": {"version": "1.0.0", "type": "skill", "description": "AI优化的网络搜索"},
+    "gstack": {"version": "1.0.0", "type": "skill", "description": "QA/Ship/Retro 工作流集成"}
+  },
+  "migration": {
+    "from": "v5.3.2",
+    "to": "v5.3.3",
+    "date": "2026-03-22",
+    "backward_compatible": true
+  },
+  "fingerprint": "v5.4.1-agents-integration",
+  "sources": [
+    {"name": "wshobson/agents", "description": "multi-reviewer-patterns, parallel-debugging, task-coordination-strategies"}
+  ]
 }
