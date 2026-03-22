@@ -1,8 +1,10 @@
 {
-  "version": "5.5.0",
-  "updated_at": "2026-03-22T11:45:00Z",
-  "description": "Agentic Workflow v5.5.0 版本锁定文件 - Result-only Subagent Spawning",
+  "version": "5.5.1",
+  "updated_at": "2026-03-22T14:00:00Z",
+  "description": "Agentic Workflow v5.5.1 版本锁定文件 - THINKING 第一性原理增强",
   "changes": [
+    "v5.5.1: THINKING 增加第一性原理分析 - Step 0: 基本事实识别、假设质疑、从零构建",
+    "v5.5.1: THINKING 版本从 1.0.0 更新到 1.1.0",
     "v5.5.0: Router 增加 Result-only 意图检测 - 跳过全部 PHASE 直接派生 Subagent",
     "v5.5.0: 新增 5 个专业 Subagent 定义 - frontend_developer, backend_architect, devops_automator, database_optimizer, technical_writer",
     "v5.5.0: Subagent 总数从 7 扩展到 12",
@@ -41,7 +43,7 @@
       {"name": "router", "path": "skills/router/skill.md", "version": "1.2.0"},
       {"name": "office-hours", "path": "skills/office-hours/skill.md", "version": "1.0.0"},
       {"name": "research", "path": "skills/research/skill.md", "version": "1.0.0"},
-      {"name": "thinking", "path": "skills/thinking/skill.md", "version": "1.0.0"},
+      {"name": "thinking", "path": "skills/thinking/skill.md", "version": "1.1.0"},
       {"name": "planning", "path": "skills/planning/skill.md", "version": "1.2.0"},
       {"name": "executing", "path": "skills/executing/skill.md", "version": "1.0.0"},
       {"name": "reviewing", "path": "skills/reviewing/skill.md", "version": "1.4.0"},

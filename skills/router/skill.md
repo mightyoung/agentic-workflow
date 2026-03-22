@@ -1,6 +1,6 @@
 ---
 name: router
-version: 1.0.0
+version: 1.5.0
 description: |
   智能路由 - 根据任务复杂度自动选择工作流阶段
   3层路由：负面过滤 → 显式命令 → 智能检测
@@ -379,6 +379,8 @@ END
 | `/debug` | DEBUGGING | 1 |
 | `/retro` | RETRO | 1 |
 | `/office-hours` | OFFICE-HOURS | 1 |
+| `/refining` | REFINING | 1 |
+| `/iterate` | REFINING | 1 |
 | `/help` | HELP | 1 |
 
 **L1 动态命令检测**:
@@ -418,6 +420,7 @@ decision_record "explicit_command" "用户显式命令" "$SELECTED_PHASE" ""
 | REVIEWING | review、审核、检查、看看有什么问题 | 审查类 |
 | DEBUGGING | 报错、错误、异常、bug、调试、debug、修复 | 调试类 |
 | OFFICE-HOURS | 想法、概念、产品、不确定方向、帮我构思、怎么开始 | 产品咨询类 |
+| REFINING | 迭代、优化、精炼、改进、改进、发现问题、分析问题、修改错误、反馈循环 | 精炼类 |
 
 **匹配优先级规则**:
 
@@ -479,16 +482,17 @@ decision_record "complexity_assessment" "$COMPLEXITY_REASON" "$COMPLEXITY" "HIGH
 
 **意图分类**:
 
-| 意图 | 描述 | 默认阶段 |
-|------|------|----------|
-| `inquiry` | 简单问题/查询 | EXECUTING |
-| `implementation` | 开发/实现任务 | EXECUTING |
-| `investigation` | 研究/调研任务 | RESEARCH |
-| `analysis` | 分析/思考任务 | THINKING |
-| `planning` | 规划/设计任务 | PLANNING |
-| `verification` | 验证/测试任务 | REVIEWING |
-| `debug` | 调试/修复错误 | DEBUGGING |
-| `idea` | 产品想法/概念不明确 | OFFICE-HOURS |
+| 意图 | 描述 | 默认阶段 | Result-only 行为 |
+|------|------|----------|-----------------|
+| `inquiry` | 简单问题/查询 | EXECUTING | → 直接派生 researcher |
+| `implementation` | 开发/实现任务 | EXECUTING | → 直接派生 coder |
+| `investigation` | 研究/调研任务 | RESEARCH | → 直接派生 researcher |
+| `analysis` | 分析/思考任务 | THINKING | → 派生 analyst (如需要) |
+| `planning` | 规划/设计任务 | PLANNING | → 直接派生 planner |
+| `verification` | 验证/测试任务 | REVIEWING | → 直接派生 reviewer |
+| `debug` | 调试/修复错误 | DEBUGGING | → 直接派生 debugger |
+| `idea` | 产品想法/概念不明确 | OFFICE-HOURS | → 需要咨询 |
+| `result_only` | **仅需结果，不关心过程** | SUBAGENT | → **跳过 PHASE，直接派生执行** |
 
 **复杂度等级**:
 
@@ -517,18 +521,21 @@ decision_record "agent_routing" "基于复杂度和意图选择阶段" "$SELECTE
 │              │  investigation → RESEARCH                            │
 │              │  analysis → THINKING                                │
 │              │  planning → PLANNING                                │
+│              │  result_only → RESEARCH → SUBAGENT                 │
 ├──────────────┼─────────────────────────────────────────────────────┤
 │  MEDIUM      │  inquiry → EXECUTING                                │
 │              │  implementation → THINKING → PLANNING → EXECUTING   │
 │              │  investigation → RESEARCH                           │
 │              │  analysis → THINKING                                │
 │              │  planning → PLANNING                               │
+│              │  result_only → SUBAGENT (派生地质学家直接执行)      │
 ├──────────────┼─────────────────────────────────────────────────────┤
 │  LOW         │  inquiry → EXECUTING                                │
 │              │  implementation → EXECUTING                         │
 │              │  investigation → EXECUTING                          │
 │              │  analysis → EXECUTING                              │
 │              │  planning → EXECUTING                              │
+│              │  result_only → SUBAGENT (派生地质学家/执行者直接执行)│
 └──────────────┴─────────────────────────────────────────────────────┘
 ```
 
@@ -571,6 +578,91 @@ IF 匹配以下任一条件 THEN Fast Path = true:
    - 不涉及依赖变更
 ```
 
+### Result-only 识别标准 (v5.5 新增)
+
+> **Result-only 核心特征**: 用户只要结果，不关心过程、不需要解释、不需要最佳实践
+
+**Result-only 特征检测**:
+
+| 特征 | 判断条件 | 示例 |
+|------|----------|------|
+| 结果导向措辞 | 包含"给我"、"直接"、"就行"、"就好"、"搞定" | "直接给我一个排序函数就行" |
+| 无过程要求 | 不包含"怎么做"、"告诉我"、"解释一下"、"分析一下" | "给我一个 LRU 缓存实现" |
+| 明确输出 | 指定了输出格式/形式 | "用 Python 写"、"返回 JSON" |
+| 无审查要求 | 不包含"审查"、"看看有什么问题"、"帮我检查" | "帮我实现这个功能" |
+| 急迫语气 | 包含"快点"、"赶紧"、"马上" | "快点给我代码" |
+
+**Result-only 检测规则**:
+
+```
+# Result-only 意图识别
+IF 满足以下条件 THEN Result-only = true:
+
+1. 明确结果导向 (满足任一):
+   - 包含 "给我" / "直接给" / "就行" / "就好"
+   - 明确指定输出格式: "Python实现" / "返回JSON" / "用TS写"
+
+AND 满足以下全部:
+
+2. 无过程需求:
+   - 不包含 "怎么做" / "如何实现" / "最佳实践" / "什么原理"
+   - 不包含 "告诉我" / "解释" / "分析一下"
+   - 不包含 "看看有什么问题" / "审查"
+
+3. 任务明确:
+   - 用户已描述清楚要什么
+   - 不需要进一步澄清
+```
+
+### Result-only Subagent 直接派生流程 (v5.5 新增)
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         RESULT-ONLY TASK             │
+                    └─────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    RESULT-ONLY SUBAGENT SPAWNING                         │
+│                                                                         │
+│   用户: "给我写一个 LRU 缓存"                                           │
+│                                                                         │
+│   检测: result_only=true, complexity=LOW                                │
+│                                                                         │
+│   直接派生:                                                            │
+│   ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐           │
+│   │ RESULT  │───▶│ SPAWN   │───▶│ EXECUTE │───▶│ RETURN  │           │
+│   │  ONLY   │    │ CODER   │    │         │    │ RESULT  │           │
+│   │ DETECTED│    │ SUBAGENT│    │         │    │         │           │
+│   └─────────┘    └─────────┘    └─────────┘    └─────────┘           │
+│                                                                         │
+│   跳过: RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING         │
+│   直接: SPAWN (专业 subagent) → EXECUTE → COMPLETE                     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Result-only Subagent 映射表
+
+| 任务类型 | 派生子 Agent | 跳过 Phase | 适用场景 |
+|----------|-------------|------------|----------|
+| 代码实现 | `coder` | THINKING, PLANNING, REVIEWing | "给我一个排序算法" |
+| 调研搜索 | `researcher` | THINKING, PLANNING | "给我查一下 JWT 的最佳实践" |
+| 代码审查 | `reviewer` | THINKING, PLANNING | "直接给我审查报告" |
+| 调试修复 | `debugger` | THINKING, PLANNING | "帮我直接修了这个bug" |
+| 性能优化 | `performance_expert` | THINKING, PLANNING | "直接优化这个查询" |
+| 安全审查 | `security_expert` | THINKING, PLANNING | "直接给我安全报告" |
+
+### Result-only vs Fast Path vs Standard Path
+
+| 维度 | Result-only | Fast Path | Standard Path |
+|------|-------------|-----------|---------------|
+| 意图 | 只要结果 | 简单任务快速执行 | 复杂任务完整流程 |
+| Subagent | **直接派生** | 主Agent处理 | 视情况派生 |
+| Phase Flow | **完全跳过** | EXECUTING | 完整 PHASE 序列 |
+| 适用场景 | "给我X就行" | 单文件小改动 | 多阶段复杂任务 |
+| 复杂度 | LOW-MEDIUM | LOW | HIGH |
+| 审查 | 无 | 可选 | 必须 |
+
 ### Fast Path 流程
 
 ```
@@ -578,20 +670,21 @@ IF 匹配以下任一条件 THEN Fast Path = true:
                     │           ROUTER DECISION            │
                     └─────────────────────────────────────┘
                                       │
-                    ┌─────────────────┴─────────────────┐
-                    │                                   │
-                    ▼                                   ▼
-              ┌───────────┐                    ┌───────────────┐
-              │ FAST PATH │                    │ STANDARD PATH │
-              └───────────┘                    └───────────────┘
-                    │                                   │
-                    ▼                                   ▼
-    ┌───────────────────────────────────┐    ┌───────────────────────┐
-    │  ROUTER → EXECUTING → COMPLETE    │    │  Full Phase Flow      │
-    │                                   │    │  (根据复杂度选择)      │
-    │  跳过: RESEARCH, THINKING, PLANNING│    └───────────────────────┘
-    │  跳过: REVIEWING (除非用户要求)     │
-    └───────────────────────────────────┘
+                    ┌─────────────────┼─────────────────┐
+                    │                 │                 │
+                    ▼                 ▼                 ▼
+              ┌───────────┐    ┌───────────┐    ┌───────────────┐
+              │FAST PATH  │    │RESULT-ONLY│    │ STANDARD PATH │
+              └───────────┘    └───────────┘    └───────────────┘
+                    │                 │                 │
+                    ▼                 ▼                 ▼
+    ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────────┐
+    │ROUTER→EXECUTING   │ │RESULT-ONLY SPAWN  │ │  Full Phase Flow       │
+    │→COMPLETE          │ │→SUBAGENT→COMPLETE │ │  (根据复杂度选择)       │
+    │跳过:              │ │跳过:              │ └───────────────────────┘
+    │RESEARCH,THINKING  │ │所有PHASE直接执行  │
+    │PLANNING,REVIEWING │ │                   │
+    └───────────────────┘ └───────────────────┘
 ```
 
 ### Fast Path vs Standard Path
@@ -639,6 +732,45 @@ IF 匹配以下任一条件 THEN Fast Path = true:
 - 预计时间: < 2 分钟
 
 **下一步**: 进入 EXECUTING 阶段
+```
+
+### Result-only 决策输出 (v5.5 新增)
+
+```
+## Router Status
+
+**状态**: DONE
+
+**路由层级**: L3 (Result-only 识别)
+
+**选中路径**: RESULT-ONLY SUBAGENT SPAWNING
+
+**路由原因**: result_only_intent_detected
+
+**复杂度**: LOW
+
+**Result-only**: YES
+- 理由: 用户只要结果，无过程要求
+- 检测特征: ["给我", "就行", "无过程要求"]
+- 派生子Agent: coder
+- 跳过: RESEARCH, THINKING, PLANNING, EXECUTING, REVIEWING
+- 预计时间: < 1 分钟
+
+**下一步**: 直接派生 coder subagent 执行
+```
+
+### Result-only 用户控制
+
+```bash
+# 强制不使用 result-only（需要完整流程）
+/agentic-workflow --no-result-only "给我一个排序算法，但我要看分析过程"
+
+# 查看是否使用 result-only
+/agentic-workflow --show-path "直接给我JSON解析器"
+# 输出: Result-only: YES (理由: 结果导向，无过程要求)
+
+# 强制 result-only
+/agentic-workflow --result-only "给我实现这个功能就行"
 ```
 
 ## State Machine Integration

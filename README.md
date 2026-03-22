@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.5-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.5.1-blue.svg)](SKILL.md)
 
 ---
 
@@ -289,6 +289,70 @@ Skill Value
 ```
 
 **Core Insight**: Skill value is **proportional to task complexity**. Router's job is to correctly identify complexity and route accordingly.
+
+---
+
+## v5.5.1 THINKING First Principles Enhancement (2026-03-22)
+
+### Overview
+
+> **Core Improvement**: THINKING phase now incorporates First Principles Thinking methodology to challenge assumptions and build from ground truth.
+
+### New: Step 0 - First Principles Analysis
+
+```
+Step 0: First Principles Analysis [NEW]
+├── 3.1 Identify Axioms (Basic Facts)
+│   └── Extract undeniable facts from user requirements
+├── 3.2 Challenge Assumptions
+│   └── Question every implicit assumption
+└── 3.3 Build from Scratch
+    └── Forget existing solutions, derive from first principles
+```
+
+### Three-Step Method
+
+| Step | Description | Output |
+|------|-------------|--------|
+| 3.1 Identify Axioms | Extract undeniable facts | Axioms List |
+| 3.2 Challenge Assumptions | Question each implicit assumption | Challenged Assumptions |
+| 3.3 Build from Scratch | Derive solution from first principles | From-Scratch Solution |
+
+### First Principles Checklist
+
+```
+- [ ] Did you identify basic facts (Axioms)?
+- [ ] Did you list implicit assumptions and challenge each?
+- [ ] Did you attempt to build from scratch?
+- [ ] Is the final solution better than the from-scratch approach?
+```
+
+### When to Use First Principles
+
+| Scenario | Recommendation | Reason |
+|----------|---------------|--------|
+| Tech Stack Selection | ✅ Strongly Recommend | Many assumptions, high impact |
+| Architecture Design | ✅ Strongly Recommend | Need to derive from principles |
+| New Tech Research | ⚠️ Recommend | Avoid cognitive bias |
+| Team Process Optimization | ⚠️ Recommend | Challenge status quo |
+| Simple Bug Fix | ❌ Skip | Over-engineering |
+| Standard CRUD | ❌ Skip | Known best practices |
+
+### v5.5.1 Test Results
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 205 passed, 10 warnings in 6.71s =======================
+```
+
+### Comparison with Reference Projects
+
+| Project | First Principles | Implementation |
+|---------|-----------------|----------------|
+| agency-agents | Partial | Five Whys root cause |
+| deer-flow | No | Task decomposition |
+| agents | Partial | Five Whys |
+| **agentic-workflow v5.5.1** | **Yes** | **Step 0: Axioms→Challenge→Build** |
 
 ---
 

@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.5-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.5.1-blue.svg)](SKILL.md)
 
 ---
 
@@ -289,6 +289,70 @@ Skill 价值
 ```
 
 **核心洞察**: Skill 价值与**任务复杂度成正比**。Router 的职责是正确判断复杂度并智能路由。
+
+---
+
+## v5.5.1 THINKING 第一性原理增强 (2026-03-22)
+
+### 概述
+
+> **核心改进**：THINKING 阶段新增第一性原理（First Principles Thinking）方法论，挑战假设，从基本原则构建。
+
+### 新增: Step 0 - 第一性原理分析
+
+```
+Step 0: 第一性原理分析 [新增]
+├── 3.1 识别基本事实 (Axioms)
+│   └── 从用户需求中提取不可辩驳的事实
+├── 3.2 质疑假设 (Challenge Assumptions)
+│   └── 对每个隐含假设追问
+└── 3.3 从零构建 (Build from Scratch)
+    └── 忘掉现有方案，从基本原则重新推导
+```
+
+### 三步法
+
+| 步骤 | 说明 | 输出 |
+|------|------|------|
+| 3.1 识别基本事实 | 提取不可辩驳的事实 | 基本事实清单 |
+| 3.2 质疑假设 | 逐一审查隐含假设 | 被质疑的假设 |
+| 3.3 从零构建 | 从基本原则重新推导 | 从零方案 |
+
+### 第一性原理检查清单
+
+```
+- [ ] 是否识别了基本事实（Axioms）？
+- [ ] 是否列出了隐含假设并逐一质疑？
+- [ ] 是否尝试了从零构建？
+- [ ] 最终方案是否优于从零方案？
+```
+
+### 适用场景
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| 技术栈选型 | ✅ 强烈建议 | 假设多、影响大 |
+| 架构设计 | ✅ 强烈建议 | 需要从基本原则推导 |
+| 新技术调研 | ⚠️ 建议启用 | 避免被现有认知束缚 |
+| 团队流程优化 | ⚠️ 建议启用 | 挑战现有工作方式 |
+| 简单 Bug 修复 | ❌ 跳过 | 过度设计 |
+| 常规 CRUD | ❌ 跳过 | 已有最佳实践 |
+
+### v5.5.1 测试结果
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 205 passed, 10 warnings in 6.71s =======================
+```
+
+### 与参考项目对比
+
+| 项目 | 第一性原理 | 实现方式 |
+|------|----------|---------|
+| agency-agents | 部分 | 五问法根因分析 |
+| deer-flow | 否 | 任务分解、澄清优先 |
+| agents | 部分 | 五问法 |
+| **agentic-workflow v5.5.1** | **是** | **Step 0: 基本事实→假设质疑→从零构建** |
 
 ---
 
