@@ -18,6 +18,7 @@
 | **EXECUTING** | TDD, pua | Test-driven + pressure escalation | Code correctness guaranteed |
 | **REVIEWING** | verification, openspec | Graded review + spec-driven | 60%+ Bug interception |
 | **DEBUGGING** | systematic-debugging, pua | 5-step methodology + 7 checks | 10x debugging efficiency |
+| **REFINING** | feedback-loop | DISCOVER→ANALYZE→FIX→VERIFY | Structured iteration with limits |
 
 ---
 
@@ -103,6 +104,59 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 | Simple CRUD (<100 lines) | ❌ Skip Skill | +100% tokens, slower |
 | Complex system (>500 lines) | ✅ Use Skill | Quality + TDD + Review |
 | Production code | ✅ Use Skill | Bug interception + coverage |
+
+---
+
+## v5.4.3 REFINING Phase (2026-03-22)
+
+### Overview
+
+REFINING is the feedback loop phase for detecting, diagnosing, and fixing problems in the workflow.
+
+### Feedback Loop: DISCOVER → ANALYZE → FIX → VERIFY
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      FEEDBACK LOOP                               │
+│   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐│
+│   │ DISCOVER │───▶│ ANALYZE  │───▶│   FIX    │───▶│ VERIFY   ││
+│   └──────────┘    └──────────┘    └──────────┘    └──────────┘│
+│        │                                               │       │
+│        │              LOOP UNTIL                        │       │
+│        └───────────────────────────────────────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Problem Classification
+
+| Category | Description |
+|----------|-------------|
+| `consistency` | Internal contradictions |
+| `completeness` | Missing edge cases |
+| `feasibility` | Technically impossible |
+| `performance` | Speed/resource issues |
+| `quality` | Code style/documentation |
+| `alignment` | User expectation mismatch |
+
+### Severity Levels
+
+| Level | Description | Max Iterations |
+|-------|-------------|----------------|
+| `P0_CRITICAL` | Blocking issue | 5 |
+| `P1_HIGH` | Core functionality | 3 |
+| `P2_MEDIUM` | UX impact | 2 |
+| `P3_LOW` | Edge case | 1 |
+
+### REFINING Test Results
+
+| Metric | WITHOUT REFINING | WITH REFINING |
+|--------|------------------|---------------|
+| Discovery | REVIEWING | REVIEWING → REFINING |
+| Iteration | ~2 times | 1 (single loop) |
+| Problem Leakage | Possible | 0 (structured tracking) |
+| Output | Ad-hoc | refining_report.md + issues.md |
+
+**Conclusion**: REFINING provides structured feedback loop with iteration limits, preventing infinite loops and ensuring problem traceability.
 
 ---
 
