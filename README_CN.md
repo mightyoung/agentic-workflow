@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.5.1-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.6.0-blue.svg)](SKILL.md)
 
 ---
 
@@ -59,6 +59,39 @@ Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**，融合了 10+
 | 修复一个 bug | ✅ |
 | 完成重构（行为不变） | ✅ |
 | 完成文档更新 | ✅ |
+
+---
+
+## v5.6 并行执行 (默认启用)
+
+> **默认并行优先模式**：独立任务自动并行执行，最大化吞吐量。
+
+### Band 架构
+
+| Band | Phase | 并行策略 |
+|------|-------|----------|
+| Band 0 | ROUTER | 串行（入口点） |
+| Band 1 | RESEARCH \|\| THINKING | 并行 - research 结果直接供给 thinking |
+| Band 2 | PLANNING | 串行 - 依赖 Band 1 |
+| Band 3 | EXECUTING | 串行 - 依赖 Band 2 |
+| Band 4 | REVIEWING \|\| DEBUGGING | 部分并行 |
+| Band 5 | COMPLETE | 串行（收尾） |
+
+### 核心特性
+
+- **任务依赖图**：将任务分类为独立/顺序/混合
+- **文件所有权策略**：每个文件一个所有者，避免冲突
+- **并发限制保护**：最多 3 个并行 phase，3 个并行 subagent，15 分钟超时
+- **Research + Thinking 并行**：默认启用，时间减少 37.5%
+
+### 性能提升
+
+| 场景 | 串行 | 并行 | 提升 |
+|------|------|------|------|
+| RESEARCH → THINKING | 8分钟 | 5分钟 | 37.5% |
+| REVIEWING (3 项检查) | 9分钟 | 3分钟 | 66.7% |
+| EXECUTING + REVIEWING | 15分钟 | 10分钟 | 33.3% |
+| 完整流程（无缓存） | 45分钟 | 28分钟 | 37.8% |
 
 ---
 

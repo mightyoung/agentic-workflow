@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.5.0
+version: 5.6.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,7 +12,7 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.5)
+## 单入口设计 (v5.6)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
@@ -23,6 +23,17 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
                 ↓
         OFFICE-HOURS → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
 ```
+
+## 并行执行 (v5.6)
+
+默认启用并行优先，独立任务自动并行执行。详见: `skills/_shared/parallel-execution.md`
+
+### 并行 Band 设计
+
+| Band | Phase | 说明 |
+|------|-------|------|
+| Band 1 | RESEARCH \|\| THINKING | 并行 |
+| Band 4 | REVIEWING \|\| DEBUGGING | 部分并行 |
 
 ## 快速开始
 
@@ -66,6 +77,8 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | `skills/_shared/boil-the-lake.md` | 完整性原则 |
 | `skills/_shared/telemetry.md` | 遥测（已禁用）|
 | `skills/_shared/contributor-mode.md` | 贡献者模式 |
+| `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
+| `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
 
 ## 核心原则
 

@@ -1,8 +1,13 @@
 {
-  "version": "5.5.1",
-  "updated_at": "2026-03-22T14:00:00Z",
-  "description": "Agentic Workflow v5.5.1 版本锁定文件 - THINKING 第一性原理增强",
+  "version": "5.6.0",
+  "updated_at": "2026-03-22T15:30:00Z",
+  "description": "Agentic Workflow v5.6.0 版本锁定文件 - 默认并行优先",
   "changes": [
+    "v5.6.0: parallel-execution 改为默认启用并行优先",
+    "v5.6.0: parallel-execution 增加任务依赖图 (Task Graph)",
+    "v5.6.0: parallel-execution 增加文件所有权策略 (File Ownership)",
+    "v5.6.0: parallel-execution 增加并发限制保护",
+    "v5.6.0: parallel-execution 版本从 1.0.0 更新到 1.1.0",
     "v5.5.1: THINKING 增加第一性原理分析 - Step 0: 基本事实识别、假设质疑、从零构建",
     "v5.5.1: THINKING 版本从 1.0.0 更新到 1.1.0",
     "v5.5.0: Router 增加 Result-only 意图检测 - 跳过全部 PHASE 直接派生 Subagent",
@@ -57,7 +62,8 @@
       {"name": "boil-the-lake", "path": "skills/_shared/boil-the-lake.md"},
       {"name": "telemetry", "path": "skills/_shared/telemetry.md", "status": "disabled"},
       {"name": "contributor-mode", "path": "skills/_shared/contributor-mode.md"},
-      {"name": "browser-daemon", "path": "skills/_shared/browser-daemon.md"}
+      {"name": "browser-daemon", "path": "skills/_shared/browser-daemon.md"},
+      {"name": "parallel-execution", "path": "skills/_shared/parallel-execution.md", "version": "1.1.0"}
     ],
     "gstack_integration": [
       {"name": "gstack", "path": "skills/gstack/SKILL.md", "version": "1.0.0"},
@@ -128,6 +134,9 @@
   },
   "fingerprint": "v5.4.1-agents-integration",
   "sources": [
-    {"name": "wshobson/agents", "description": "multi-reviewer-patterns, parallel-debugging, task-coordination-strategies"}
+    {"name": "wshobson/agents", "description": "multi-reviewer-patterns, parallel-debugging, task-coordination-strategies"},
+    {"name": "deer-flow", "description": "LangGraph orchestration, dual-thread-pool, SubagentLimitMiddleware"},
+    {"name": "agency-agents", "description": "4-track parallel, Task-by-Task QA loop, memory context passing"},
+    {"name": "system-prompts", "description": "Parallel tool calls, concurrent agent spawning"}
   ]
 }

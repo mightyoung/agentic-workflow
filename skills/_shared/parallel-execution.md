@@ -1,10 +1,11 @@
 ---
 name: parallel-execution
-version: 1.0.0
+version: 1.1.0
 description: |
   并行执行规则 - 定义 phase 并行化策略和依赖关系
   支持独立 phase 并行执行以提升性能
-tags: [core, optimization, parallel]
+  默认启用并行优先模式
+tags: [core, optimization, parallel, default-enabled]
 ---
 
 # Parallel Execution
@@ -12,6 +13,15 @@ tags: [core, optimization, parallel]
 ## Overview
 
 并行执行通过同时运行独立 phase 来提升整体吞吐量，同时保持逻辑正确性。
+
+**默认行为**: 并行执行已启用，无需额外配置
+
+## 核心原则
+
+1. **并行优先**: 默认启用并行，除非显式禁用
+2. **依赖驱动**: 独立任务并行，有依赖任务串行
+3. **文件所有权**: 每个文件一个所有者，避免冲突
+4. **质量门禁**: 并行不牺牲质量，每个输出通过验证
 
 ## 依赖关系图
 
@@ -125,32 +135,141 @@ EXECUTING ─────▶ REVIEWING (发现问题)
                     COMPLETE
 ```
 
-## 并行度控制
+## 任务依赖图 (Task Graph)
 
-### 配置参数
+### 任务类型分类
+
+| 类型 | 说明 | 处理方式 |
+|------|------|---------|
+| **独立任务** | 无依赖，可并行执行 | Band 内并行 |
+| **顺序任务** | 前置依赖必须串行 | 等待依赖完成 |
+| **混合任务** | 部分并行部分串行 | 分组后并行 |
+
+### 依赖图表示
+
+```
+## 独立任务 (最佳并行)
+
+Task A ─┐
+Task B ─┼─→ Integration
+Task C ─┘
+
+## 顺序任务 (必要依赖)
+
+Task A → Task B → Task C
+
+## 钻石任务 (混合)
+
+        ┌→ Task B ─┐
+Task A ─┤          ├─→ Task D
+        └→ Task C ─┘
+```
+
+### 任务描述模板
+
+```markdown
+## Task: [任务名称]
+
+## Objective
+[具体目标描述]
+
+## Owned Files
+- src/api/auth.ts        (Owner: coder)
+- src/types/auth.ts       (shared - read only)
+
+## Dependencies
+- Task A (必须先完成)
+
+## Requirements
+- [具体需求列表]
+
+## Acceptance Criteria
+- [可验证的验收标准]
+```
+
+## 文件所有权策略 (File Ownership)
+
+### 原则
+
+1. **唯一所有者**: 每个文件只有一个明确的所有者
+2. **无冲突**: 避免多个 Agent 同时修改同一文件
+3. **只读共享**: 非所有者需要文件时，通过只读方式访问
+
+### 所有权分配
+
+| Agent | Owned Files | 说明 |
+|-------|-------------|------|
+| researcher | findings.md | 研究结果唯一来源 |
+| thinker | analysis.md | 分析结论唯一来源 |
+| planner | task_plan.md | 任务规划唯一来源 |
+| coder | src/** | 所有源代码 |
+| reviewer | (read-only) | 只读访问所有文件 |
+| debugger | (read-only) | 调试时只读 |
+
+### 冲突解决
+
+```
+文件冲突场景:
+Agent-A 和 Agent-B 同时需要修改 config.py
+
+解决方案:
+1. 优先分配给主要负责的 Agent
+2. 另一个 Agent 等待完成后获取最新版本
+3. 使用 merge 工具处理冲突
+```
+
+## 并发限制保护
+
+### 限制规则
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `max_parallel_phases` | 3 | 最多并行 phase 数 |
+| `max_concurrent_subagents` | 3 | 最多并行 subagent 数 |
+| `task_timeout_seconds` | 900 | 单任务超时 (15分钟) |
 | `parallel_research_thinking` | true | RESEARCH+THINKING 并行 |
 | `parallel_review_checks` | true | 三个审查子项并行 |
 | `partial_executing_review` | true | EXECUTING 时提前开始审查 |
-| `aggressive_parallel` | false | 激进并行 (可能影响质量) |
+
+### 限流机制
+
+```python
+# 参考 deer-flow 实现
+if len(active_subagents) >= max_concurrent_subagents:
+    # 排队等待，不丢弃任务
+    pending_queue.add(task)
+
+# SSE 事件推送状态
+- task_started: 子 agent 开始
+- task_running: 每个新消息
+- task_completed: 成功完成
+- task_failed: 失败 (重试 ≤ 2 次)
+- task_timed_out: 超时
+```
+
+### 超时处理
+
+```
+任务执行超时 (默认 15 分钟):
+1. 记录部分完成状态
+2. 标记任务为 TIMED_OUT
+3. 可选: 重试一次或升级处理
+```
 
 ### 用户可配置
 
 ```bash
-# 启用所有优化
-/agentic-workflow --parallel --cache
+# 默认已启用并行（无需显式指定）
+/agentic-workflow
 
-# 仅启用并行
-/agentic-workflow --parallel
-
-# 禁用并行 (保守模式)
+# 禁用并行 (保守模式 - 调试时使用)
 /agentic-workflow --no-parallel
 
 # 查看当前配置
 /agentic-workflow --config
+
+# 激进并行 (可能影响质量 - 谨慎使用)
+/agentic-workflow --aggressive-parallel
 ```
 
 ## 并行安全保证
