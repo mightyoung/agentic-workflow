@@ -96,7 +96,6 @@ class TestResultOnlyDetection:
         """测试 Result-only 肯定案例"""
         print("\n=== 测试1.1: Result-only 肯定案例 ===")
 
-        passed = 0
         failed = 0
 
         for msg in self.RESULT_ONLY_POSITIVE:
@@ -105,20 +104,18 @@ class TestResultOnlyDetection:
             result = self.detect_result_only(full_msg)
 
             if result["result_only"]:
-                passed += 1
                 print(f"  ✅ \"{msg}\" → result_only=True")
             else:
                 failed += 1
                 print(f"  ❌ \"{msg}\" → result_only=False (期望 True)")
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过")
-        return passed, failed
+        print(f"\n  结果: {len(self.RESULT_ONLY_POSITIVE)-failed}/{len(self.RESULT_ONLY_POSITIVE)} 通过")
+        assert failed == 0, f"{failed} 个测试失败"
 
     def test_negative_cases(self):
         """测试 Result-only 否定案例"""
         print("\n=== 测试1.2: Result-only 否定案例 ===")
 
-        passed = 0
         failed = 0
 
         for msg in self.RESULT_ONLY_NEGATIVE:
@@ -126,14 +123,13 @@ class TestResultOnlyDetection:
             result = self.detect_result_only(full_msg)
 
             if not result["result_only"]:
-                passed += 1
                 print(f"  ✅ \"{msg}\" → result_only=False")
             else:
                 failed += 1
                 print(f"  ❌ \"{msg}\" → result_only=True (期望 False)")
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过")
-        return passed, failed
+        print(f"\n  结果: {len(self.RESULT_ONLY_NEGATIVE)-failed}/{len(self.RESULT_ONLY_NEGATIVE)} 通过")
+        assert failed == 0, f"{failed} 个测试失败"
 
     def test_mixed_cases(self):
         """测试混合场景"""
@@ -151,7 +147,6 @@ class TestResultOnlyDetection:
             ("给我写个脚本：遍历目录", True),
         ]
 
-        passed = 0
         failed = 0
 
         for msg, expected in test_cases:
@@ -159,14 +154,13 @@ class TestResultOnlyDetection:
             actual = result["result_only"]
 
             if actual == expected:
-                passed += 1
                 print(f"  ✅ \"{msg[:30]}...\" → {actual}")
             else:
                 failed += 1
                 print(f"  ❌ \"{msg[:30]}...\" → {actual} (期望 {expected})")
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过")
-        return passed, failed
+        print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
+        assert failed == 0, f"{failed} 个测试失败"
 
 
 # ============================================================
@@ -198,7 +192,6 @@ class TestSubagentMapping:
             ("规划一下这个项目", "planning", "planner"),
         ]
 
-        passed = 0
         failed = 0
 
         for task, intent, expected_agent in test_cases:
@@ -206,14 +199,13 @@ class TestSubagentMapping:
             actual_agent = self.SUBAGENT_MAP.get(intent)
 
             if actual_agent == expected_agent:
-                passed += 1
                 print(f"  ✅ {task} → {actual_agent}")
             else:
                 failed += 1
                 print(f"  ❌ {task} → {actual_agent} (期望 {expected_agent})")
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过")
-        return passed, failed
+        print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
+        assert failed == 0, f"{failed} 个测试失败"
 
 
 # ============================================================
@@ -260,7 +252,6 @@ class TestRoutingPathComparison:
             ("帮我分析一下架构", "MEDIUM", False, "STANDARD_PATH"),
         ]
 
-        passed = 0
         failed = 0
 
         for msg, complexity, result_only, expected_path in test_cases:
@@ -268,15 +259,14 @@ class TestRoutingPathComparison:
             actual_path = result["path"]
 
             if actual_path == expected_path:
-                passed += 1
                 print(f"  ✅ \"{msg[:20]}...\" → {actual_path}")
                 print(f"     跳过: {result['phases_skipped']}")
             else:
                 failed += 1
                 print(f"  ❌ \"{msg[:20]}...\" → {actual_path} (期望 {expected_path})")
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过")
-        return passed, failed
+        print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
+        assert failed == 0, f"{failed} 个测试失败"
 
 
 # ============================================================
@@ -309,12 +299,8 @@ class TestEfficiencyEstimation:
         result_only_time = self.PATH_EFFICIENCY["RESULT_ONLY"]["time_reduction"]
         fast_path_time = self.PATH_EFFICIENCY["FAST_PATH"]["time_reduction"]
 
-        if result_only_time > fast_path_time:
-            print(f"\n  ✅ Result-only 效率提升最高 ({result_only_time*100:.0f}% 时间减少)")
-            return 1, 0
-        else:
-            print(f"\n  ❌ 效率对比异常")
-            return 0, 1
+        assert result_only_time > fast_path_time, "Result-only 效率应该最高"
+        print(f"\n  ✅ Result-only 效率提升最高 ({result_only_time*100:.0f}% 时间减少)")
 
 
 # ============================================================
@@ -341,21 +327,15 @@ class TestPhaseSelectionMatrix:
         complexities = ["HIGH", "MEDIUM", "LOW"]
         intents = ["result_only", "implementation", "inquiry", "debug"]
 
-        passed = 0
-        failed = 0
-
         for complexity in complexities:
             for intent in intents:
                 key = (complexity, intent)
                 if key in self.MATRIX:
                     print(f"  ✅ {key} → {self.MATRIX[key]}")
-                    passed += 1
                 else:
                     print(f"  ⚠️  {key} → 未定义 (使用默认逻辑)")
-                    passed += 1  # 未定义使用默认，不算失败
 
-        print(f"\n  结果: {passed}/{passed+failed} 通过 (包含未定义使用默认)")
-        return passed, failed
+        print(f"\n  结果: Matrix 完整性验证通过 (未定义使用默认逻辑)")
 
 
 # ============================================================
