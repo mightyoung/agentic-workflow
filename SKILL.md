@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.3.0
+version: 5.5.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,26 +12,30 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.3)
+## 单入口设计 (v5.5)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
 ## 状态机
 
 ```
-IDLE → [ROUTER] → OFFICE-HOURS → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING → COMPLETE
+IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
+                ↓
+        OFFICE-HOURS → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
 ```
 
 ## 快速开始
 
 | 场景 | 触发 | 阶段 |
 |------|------|------|
+| 仅需结果 | "给我..."/"直接给..."/..."就行" | **SUBAGENT** (跳过所有PHASE) |
 | 完整流程 | /agentic-workflow | OFFICE-HOURS→THINKING→PLANNING→EXECUTING→REVIEWING |
 | Bug修复 | bug/错误/调试 | DEBUGGING |
 | 项目规划 | 计划/规划/拆分 | PLANNING |
 | 技术调研 | 最佳实践/怎么做 | RESEARCH→THINKING |
 | 代码审查 | 审查/review | REVIEWING |
 | 产品咨询 | 产品想法/需求不明确 | OFFICE-HOURS |
+| 迭代精炼 | 迭代/优化/精炼/发现问题/反馈循环 | REFINING |
 | 简单任务 | 其他 | EXECUTING |
 
 ## 路由逻辑

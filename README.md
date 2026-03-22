@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.4-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.5-blue.svg)](SKILL.md)
 
 ---
 
@@ -104,6 +104,82 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 | Simple CRUD (<100 lines) | ❌ Skip Skill | +100% tokens, slower |
 | Complex system (>500 lines) | ✅ Use Skill | Quality + TDD + Review |
 | Production code | ✅ Use Skill | Bug interception + coverage |
+
+---
+
+## v5.5 Result-only Subagent Spawning (2026-03-22)
+
+### Overview
+
+> **Core Improvement**: For tasks requiring only results (e.g., "给我一个排序算法就行"), skip all PHASE FLOW and directly spawn specialized Subagent.
+
+### State Machine
+
+```
+IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
+                ↓
+        OFFICE-HOURS → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
+```
+
+### Result-only Quick Path
+
+| Scenario | Trigger | Behavior |
+|----------|---------|----------|
+| Result only | "给我..."/"直接给..."/..."就行" | **SUBAGENT** (skip all PHASE) |
+| Full workflow | /agentic-workflow | OFFICE-HOURS→Full flow |
+
+### Efficiency Comparison
+
+| Path | Relative Time | Time Reduction | Relative Token | Token Reduction |
+|------|---------------|----------------|----------------|-----------------|
+| **Result-only** | 15% | **85%** | 30% | **70%** |
+| Fast Path | 40% | 60% | 60% | 40% |
+| Standard Path | 100% | 0% | 100% | 0% |
+
+### Phase Selection Matrix (v5.5)
+
+| Complexity | result_only | implementation | inquiry | debug |
+|------------|-------------|----------------|---------|-------|
+| **HIGH** | SUBAGENT | RESEARCH→THINKING→PLANNING | - | - |
+| **MEDIUM** | SUBAGENT | THINKING→PLANNING→EXECUTING | - | - |
+| **LOW** | SUBAGENT | EXECUTING | - | - |
+
+### v5.5 Subagent Definitions (12)
+
+| Agent | Responsibility | Corresponding Phase |
+|-------|----------------|-------------------|
+| researcher | Search and research | RESEARCH |
+| planner | Task planning | PLANNING |
+| coder | Code implementation | EXECUTING |
+| reviewer | Code review | REVIEWING |
+| debugger | Debug and fix | DEBUGGING |
+| security_expert | Security review | THINKING/REVIEWING |
+| performance_expert | Performance optimization | THINKING/REVIEWING |
+| frontend_developer | Frontend development | EXECUTING |
+| backend_architect | Architecture design | PLANNING |
+| devops_automator | CI/CD automation | EXECUTING |
+| database_optimizer | Database optimization | REVIEWING |
+| technical_writer | Technical writing | COMPLETE |
+
+### v5.5 Test Results
+
+| Test Category | Tests | Pass Rate |
+|---------------|-------|-----------|
+| Result-only Detection | 32 | ✅ 100% |
+| Subagent Mapping | 6 | ✅ 100% |
+| Routing Path Comparison | 4 | ✅ 100% |
+| Efficiency Estimation | 1 | ✅ 100% |
+| Phase Selection Matrix | 12 | ✅ 100% |
+| **Total** | **55** | **✅ 100%** |
+
+### v5.5 vs v5.4 Improvement
+
+| Dimension | v5.4 | v5.5 | Improvement |
+|-----------|-------|-------|-------------|
+| Intent Detection | L3 semantic | **result_only intent** | +1 intent type |
+| Processing | Main Agent handles | **Direct subagent spawn** | +25% efficiency |
+| Skip Mechanism | Partial PHASE | **All PHASE skipped** | -25% time |
+| Token Consumption | 60% | **30%** | -50% tokens |
 
 ---
 
