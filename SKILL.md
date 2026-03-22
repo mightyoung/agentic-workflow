@@ -68,6 +68,12 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | COMPLETE | `skills/complete/skill.md` | 验证与复盘 |
 | RETRO | `skills/gstack/commands/retro.md` | 独立回顾（可选） |
 
+## Utility Skills
+
+| Skill | 核心职责 |
+|-------|----------|
+| `skills/baidu-search/skill.md` | 百度AI搜索（tavily降级方案） |
+
 ## Shared Modules
 
 | Module | 用途 |

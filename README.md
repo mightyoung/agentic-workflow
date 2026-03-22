@@ -95,6 +95,52 @@ This principle, inspired by the best-minds approach, ensures we always leverage 
 
 ---
 
+## v5.6.1 Multi-Level Search Fallback (2026-03-23)
+
+> **Default search chain**: tavily → websearch → baidu-search. If primary search fails, automatically falls back to the next level.
+
+### Search Fallback Chain
+
+| Priority | Search Provider | Fallback Trigger | Status |
+|---------|---------------|-----------------|--------|
+| 1 | **tavily** | Primary AI-optimized search | ✅ Tested |
+| 2 | **websearch** | Fallback when tavily unavailable | ⚠️ MCP only |
+| 3 | **baidu-search** | Final fallback (Baidu Qianfan AI) | ✅ Tested |
+
+### Baidu AI Search Integration
+
+| Feature | Description |
+|---------|-------------|
+| **Endpoint** | `https://qianfan.baidubce.com/v2/ai_search/chat/completions` |
+| **Authentication** | Bearer Token (BAIDU_QIANFAN_API_KEY) |
+| **Model** | ERNIE-4.5-turbo-32K |
+| **Features** | AI answers, citations, deep search, recency filter |
+
+### Test Results (2026-03-23)
+
+| Search Provider | Test Query | Status | Response |
+|----------------|-----------|--------|----------|
+| tavily | "什么是人工智能" | ❌ Failed (432) | Not available |
+| websearch | - | ❌ Not available | MCP only |
+| **baidu-search** | "今天北京天气" | ✅ Success | 200 OK, 58% humidity |
+
+### Environment Variables
+
+```bash
+# .env file (gitignored)
+BAIDU_QIANFAN_API_KEY=bce-v3/ALTAK-xxx/xxx
+```
+
+### Privacy Assessment
+
+| Check | Status |
+|-------|--------|
+| Secrets in code | ✅ None (all from env vars) |
+| .env gitignored | ✅ Verified |
+| API keys hardcoded | ✅ None found |
+
+---
+
 ## v5.4.2 WITH vs WITHOUT Skill Benchmark (2026-03-22)
 
 ### When to Use Skill

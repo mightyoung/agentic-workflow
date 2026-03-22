@@ -95,6 +95,52 @@ Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**，融合了 10+
 
 ---
 
+## v5.6.1 多级搜索降级 (2026-03-23)
+
+> **默认搜索链**: tavily → websearch → baidu-search。当前一级搜索失败时，自动降级到下一级。
+
+### 搜索降级链
+
+| 优先级 | 搜索提供商 | 降级触发条件 | 状态 |
+|--------|-----------|-------------|------|
+| 1 | **tavily** | 主搜索（AI优化） | ✅ 已测试 |
+| 2 | **websearch** | tavily 不可用时 | ⚠️ 仅 MCP |
+| 3 | **baidu-search** | 最终降级（百度千帆AI） | ✅ 已测试 |
+
+### 百度AI搜索集成
+
+| 特性 | 说明 |
+|------|------|
+| **Endpoint** | `https://qianfan.baidubce.com/v2/ai_search/chat/completions` |
+| **认证方式** | Bearer Token (BAIDU_QIANFAN_API_KEY) |
+| **模型** | ERNIE-4.5-turbo-32K |
+| **功能** | AI答案、引用标注、深度搜索、时间过滤 |
+
+### 测试结果 (2026-03-23)
+
+| 搜索提供商 | 测试查询 | 状态 | 响应 |
+|-----------|---------|------|------|
+| tavily | "什么是人工智能" | ❌ 失败 (432) | 不可用 |
+| websearch | - | ❌ 不可用 | 仅 MCP |
+| **baidu-search** | "今天北京天气" | ✅ 成功 | 200 OK, 湿度58% |
+
+### 环境变量
+
+```bash
+# .env 文件（已加入 .gitignore）
+BAIDU_QIANFAN_API_KEY=bce-v3/ALTAK-xxx/xxx
+```
+
+### 隐私评估
+
+| 检查项 | 状态 |
+|--------|------|
+| 代码中是否包含密钥 | ✅ 无（均从环境变量读取） |
+| .env 是否被 gitignore | ✅ 已验证 |
+| 是否有硬编码 API Key | ✅ 未发现 |
+
+---
+
 ## v5.4.2 WITH vs WITHOUT Skill 基准测试 (2026-03-22)
 
 ### 何时使用 Skill
