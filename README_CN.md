@@ -1007,6 +1007,65 @@ agentic-workflow/
 
 ---
 
+## v5.7 评估增强 (2026-03-24)
+
+### 概述
+
+v5.7 引入了借鉴 OpenYoung RL 机制的综合评估框架，增加了量化追踪和奖励计算能力。
+
+### 新增组件
+
+| 脚本 | 用途 | 核心特性 |
+|------|------|----------|
+| `run_tracker.py` | 执行追踪 | steps, tokens, duration |
+| `step_recorder.py` | 阶段记录 | 基准对比 |
+| `reward_calculator.py` | 多维奖励 | GRPO 启发式评分 |
+| `experience_store.py` | 经验存储 | 分类查询 |
+| `pattern_detector.py` | 失败检测 | 错误模式分析 |
+
+### 奖励计算 (GRPO 启发)
+
+```
+Total = task_completion + efficiency + quality + token_efficiency + penalty
+```
+
+| 场景 | steps | tokens | reward |
+|------|-------|--------|--------|
+| 高效完成 | 8 | 400 | **+1.42** |
+| 正常完成 | 15 | 800 | +1.28 |
+| 低效完成 | 25 | 1200 | +1.05 |
+| 失败 | 30 | 1500 | **-0.80** |
+
+### v5.7 测试结果 (2026-03-24)
+
+| 测试套件 | 测试数 | 通过率 |
+|----------|--------|--------|
+| RunTracker | 3 | ✅ 100% |
+| StepRecorder | 3 | ✅ 100% |
+| RewardCalculator | 3 | ✅ 100% |
+| ExperienceStore | 3 | ✅ 100% |
+| PatternDetector | 2 | ✅ 100% |
+| **总计** | **14** | **✅ 100%** |
+
+### v5.7 vs v5.6 改进
+
+| 维度 | v5.6 | v5.7 | 改进 |
+|------|------|------|------|
+| 评估方式 | 手动 | **量化** | +100% |
+| 经验追踪 | 无 | **存储+查询** | 新增能力 |
+| 模式检测 | 无 | **自动检测** | 新增能力 |
+| EXPLORING 阶段 | 无 | **苏格拉底追问** | +1 阶段 |
+
+### 安全修复 (v5.7)
+
+| 问题 | 文件 | 修复 |
+|------|------|------|
+| 路径遍历 | `memory_ops.py` | `os.path.realpath` 验证 |
+| 路径遍历 | `task_tracker.py` | `os.path.realpath` 验证 |
+| 路径遍历 | `wal_scanner.py` | `os.path.realpath` 验证 |
+
+---
+
 ## 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件。

@@ -1005,6 +1005,65 @@ When failing, automatically triggers:
 
 ---
 
+## v5.7 Evaluation Enhancement (2026-03-24)
+
+### Overview
+
+v5.7 introduces a comprehensive evaluation framework inspired by OpenYoung's RL mechanism, adding quantitative tracking and reward calculation capabilities.
+
+### New Components
+
+| Script | Purpose | Key Features |
+|--------|---------|--------------|
+| `run_tracker.py` | Execution tracking | Steps, tokens, duration |
+| `step_recorder.py` | Phase recording | Benchmark comparison |
+| `reward_calculator.py` | Multi-dimensional reward | GRPO-inspired scoring |
+| `experience_store.py` | Experience storage | Category-based query |
+| `pattern_detector.py` | Failure detection | Error pattern analysis |
+
+### Reward Calculation (GRPO-inspired)
+
+```
+Total = task_completion + efficiency + quality + token_efficiency + penalty
+```
+
+| Scenario | Steps | Tokens | Reward |
+|----------|-------|--------|--------|
+| Efficient | 8 | 400 | **+1.42** |
+| Normal | 15 | 800 | +1.28 |
+| Inefficient | 25 | 1200 | +1.05 |
+| Failed | 30 | 1500 | **-0.80** |
+
+### v5.7 Test Results (2026-03-24)
+
+| Test Suite | Tests | Pass Rate |
+|------------|-------|-----------|
+| RunTracker | 3 | ✅ 100% |
+| StepRecorder | 3 | ✅ 100% |
+| RewardCalculator | 3 | ✅ 100% |
+| ExperienceStore | 3 | ✅ 100% |
+| PatternDetector | 2 | ✅ 100% |
+| **Total** | **14** | **✅ 100%** |
+
+### v5.7 vs v5.6 Improvement
+
+| Dimension | v5.6 | v5.7 | Improvement |
+|-----------|------|------|-------------|
+| Evaluation | Manual | **Quantitative** | +100% |
+| Experience Tracking | None | **Store + Query** | New capability |
+| Pattern Detection | None | **Auto-detect** | New capability |
+| EXPLORING Phase | None | **Socratic questioning** | +1 phase |
+
+### Security Fixes (v5.7)
+
+| Issue | File | Fix |
+|-------|------|-----|
+| Path Traversal | `memory_ops.py` | `os.path.realpath` validation |
+| Path Traversal | `task_tracker.py` | `os.path.realpath` validation |
+| Path Traversal | `wal_scanner.py` | `os.path.realpath` validation |
+
+---
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) file.
