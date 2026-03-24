@@ -21,7 +21,7 @@ requires:
 ```
 IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
                 ↓
-        OFFICE-HOURS → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
+        OFFICE-HOURS → EXPLORING → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
 ```
 
 ## 并行执行 (v5.6)
@@ -40,12 +40,13 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | 场景 | 触发 | 阶段 |
 |------|------|------|
 | 仅需结果 | "给我..."/"直接给..."/..."就行" | **SUBAGENT** (跳过所有PHASE) |
-| 完整流程 | /agentic-workflow | OFFICE-HOURS→THINKING→PLANNING→EXECUTING→REVIEWING |
+| 完整流程 | /agentic-workflow | OFFICE-HOURS→EXPLORING→THINKING→PLANNING→EXECUTING→REVIEWING |
 | Bug修复 | bug/错误/调试 | DEBUGGING |
 | 项目规划 | 计划/规划/拆分 | PLANNING |
 | 技术调研 | 最佳实践/怎么做 | RESEARCH→THINKING |
 | 代码审查 | 审查/review | REVIEWING |
 | 产品咨询 | 产品想法/需求不明确 | OFFICE-HOURS |
+| **深度探索** | "实验"/"想法"/"深层"/"本质" | **EXPLORING** |
 | 迭代精炼 | 迭代/优化/精炼/发现问题/反馈循环 | REFINING |
 | 简单任务 | 其他 | EXECUTING |
 
@@ -59,6 +60,7 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 |-------|-------|----------|
 | ROUTER | `skills/router/skill.md` | 智能路由选择 |
 | OFFICE-HOURS | `skills/office-hours/skill.md` | 产品咨询（重构产品想法） |
+| **EXPLORING** | `skills/exploring/skill.md` | 苏格拉底式深度追问 |
 | RESEARCH | `skills/research/skill.md` | 搜索最佳实践 |
 | THINKING | `skills/thinking/skill.md` | 专家视角分析 |
 | PLANNING | `skills/planning/skill.md` | 任务规划 |
@@ -83,7 +85,6 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | `skills/_shared/boil-the-lake.md` | 完整性原则 |
 | `skills/_shared/telemetry.md` | 遥测（已禁用）|
 | `skills/_shared/contributor-mode.md` | 贡献者模式 |
-| `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
 | `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
 
 ## 核心原则

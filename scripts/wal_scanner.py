@@ -59,14 +59,16 @@ PROMOTION_THRESHOLD = 3
 def _validate_path(path: str) -> bool:
     """验证路径安全（防止路径遍历攻击）"""
     try:
-        abs_path = os.path.abspath(path)
+        # 解析符号链接，获取真实路径
+        real_path = os.path.realpath(path)
+        # 允许绝对路径（用户明确指定的位置，如临时文件）
+        # 只阻止使用 .. 进行遍历的相对路径
+        if os.path.isabs(path):
+            return True
+        # 相对路径：检查解析后是否在当前目录内
         cwd = os.getcwd()
-        temp_dirs = ['/tmp', '/var/folders', '/tmp/']
-        for temp in temp_dirs:
-            if abs_path.startswith(temp):
-                return True
-        return abs_path.startswith(cwd)
-    except Exception:
+        return real_path.startswith(cwd)
+    except OSError:
         return False
 
 

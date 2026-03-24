@@ -15,7 +15,8 @@ class TestStringReverse(unittest.TestCase):
         self.assertEqual(string_reverse("hello"), "olleh")
 
     def test_empty(self):
-        self.assertEqual(string_reverse(""), "")
+        with self.assertRaises(ValueError):
+            string_reverse("")
 
     def test_single_char(self):
         self.assertEqual(string_reverse("a"), "a")

@@ -111,6 +111,7 @@ class TestResultOnlyDetection:
 
         print(f"\n  结果: {len(self.RESULT_ONLY_POSITIVE)-failed}/{len(self.RESULT_ONLY_POSITIVE)} 通过")
         assert failed == 0, f"{failed} 个测试失败"
+        return len(self.RESULT_ONLY_POSITIVE) - failed, failed
 
     def test_negative_cases(self):
         """测试 Result-only 否定案例"""
@@ -130,6 +131,7 @@ class TestResultOnlyDetection:
 
         print(f"\n  结果: {len(self.RESULT_ONLY_NEGATIVE)-failed}/{len(self.RESULT_ONLY_NEGATIVE)} 通过")
         assert failed == 0, f"{failed} 个测试失败"
+        return len(self.RESULT_ONLY_NEGATIVE) - failed, failed
 
     def test_mixed_cases(self):
         """测试混合场景"""
@@ -161,6 +163,7 @@ class TestResultOnlyDetection:
 
         print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
         assert failed == 0, f"{failed} 个测试失败"
+        return len(test_cases) - failed, failed
 
 
 # ============================================================
@@ -206,6 +209,7 @@ class TestSubagentMapping:
 
         print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
         assert failed == 0, f"{failed} 个测试失败"
+        return len(test_cases) - failed, failed
 
 
 # ============================================================
@@ -267,6 +271,7 @@ class TestRoutingPathComparison:
 
         print(f"\n  结果: {len(test_cases)-failed}/{len(test_cases)} 通过")
         assert failed == 0, f"{failed} 个测试失败"
+        return len(test_cases) - failed, failed
 
 
 # ============================================================
@@ -301,6 +306,7 @@ class TestEfficiencyEstimation:
 
         assert result_only_time > fast_path_time, "Result-only 效率应该最高"
         print(f"\n  ✅ Result-only 效率提升最高 ({result_only_time*100:.0f}% 时间减少)")
+        return 1, 0  # 1 passed, 0 failed
 
 
 # ============================================================
@@ -326,16 +332,21 @@ class TestPhaseSelectionMatrix:
 
         complexities = ["HIGH", "MEDIUM", "LOW"]
         intents = ["result_only", "implementation", "inquiry", "debug"]
+        defined = 0
+        undefined = 0
 
         for complexity in complexities:
             for intent in intents:
                 key = (complexity, intent)
                 if key in self.MATRIX:
                     print(f"  ✅ {key} → {self.MATRIX[key]}")
+                    defined += 1
                 else:
                     print(f"  ⚠️  {key} → 未定义 (使用默认逻辑)")
+                    undefined += 1
 
-        print(f"\n  结果: Matrix 完整性验证通过 (未定义使用默认逻辑)")
+        print(f"\n  结果: Matrix 完整性验证通过 (定义: {defined}, 未定义: {undefined})")
+        return defined, undefined
 
 
 # ============================================================

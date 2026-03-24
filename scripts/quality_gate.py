@@ -88,8 +88,38 @@ def detect_project_type(project_dir: str) -> Dict[str, bool]:
     }
 
 
+def _validate_command(command: str) -> bool:
+    """验证命令安全性，防止shell注入攻击"""
+    import re
+    # 允许的命令模式: 字母数字、空格、路径字符、常见的shell操作符
+    # 允许: npx, npm, node, python, pytest, pylint, flake8, mypy, pyright, tsc, eslint
+    # 允许: 参数(-, --, .), 2>&1, ||, &&, |, >, <, &
+    # 阻止: ;, $, `, (, ), {, }, [, ], \, 变量展开, 命令替换
+    dangerous_patterns = [
+        r'\$\w',           # 变量展开 $var
+        r'\`',             # 命令替换 `command`
+        r'\(',             # 子shell (
+        r'\)',             # )
+        r'\{',             # 命令块 {
+        r'\}',             # }
+        r'\[',             # 数组 [
+        r'\]',             # ]
+        r';',              # 命令分隔符
+        r'\\',             # 反斜杠
+    ]
+    for pattern in dangerous_patterns:
+        if re.search(pattern, command):
+            return False
+    return True
+
+
 def run_command(command: str, timeout: int = 60, cwd: str = None) -> tuple:
     """执行命令并返回 (returncode, stdout, stderr, duration_ms)"""
+    # 安全验证
+    if not _validate_command(command):
+        duration_ms = 0
+        return -3, "", "ERROR: Command contains disallowed shell constructs", duration_ms
+
     start_time = time.time()
     try:
         result = subprocess.run(
@@ -105,7 +135,7 @@ def run_command(command: str, timeout: int = 60, cwd: str = None) -> tuple:
     except subprocess.TimeoutExpired:
         duration_ms = int((time.time() - start_time) * 1000)
         return -1, "", f"TIMEOUT after {timeout}s", duration_ms
-    except Exception as e:
+    except OSError as e:
         duration_ms = int((time.time() - start_time) * 1000)
         return -2, "", f"ERROR: {str(e)}", duration_ms
 

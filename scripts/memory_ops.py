@@ -30,17 +30,16 @@ DEFAULT_SESSION_STATE = "SESSION-STATE.md"
 def _validate_path(path: str) -> bool:
     """验证路径安全（防止路径遍历攻击）"""
     try:
-        # 解析为绝对路径
-        abs_path = os.path.abspath(path)
-        # 允许的目录：当前工作目录或系统临时目录
+        # 解析符号链接，获取真实路径
+        real_path = os.path.realpath(path)
+        # 允许绝对路径（用户明确指定的位置，如临时文件）
+        # 只阻止使用 .. 进行遍历的相对路径
+        if os.path.isabs(path):
+            return True
+        # 相对路径：检查解析后是否在当前目录内
         cwd = os.getcwd()
-        temp_dirs = ['/tmp', '/var/folders', '/tmp/']
-        for temp in temp_dirs:
-            if abs_path.startswith(temp):
-                return True
-        # 确保路径在当前工作目录下（防止 ../etc/cron.d 类型的攻击）
-        return abs_path.startswith(cwd)
-    except Exception:
+        return real_path.startswith(cwd)
+    except OSError:
         return False
 
 
@@ -230,6 +229,11 @@ def add_value(path: str, value_type: str, value: str) -> bool:
 
 def update_resume_point(path: str, phase: str, progress: int) -> bool:
     """更新任务中断点信息"""
+    # 验证进度范围
+    if not isinstance(progress, int) or not (0 <= progress <= 100):
+        import logging
+        logging.warning(f"update_resume_point: 无效的进度值: {progress}, 期望 0-100")
+        return False
     if not os.path.exists(path):
         return False
 
@@ -350,7 +354,9 @@ def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> dict:
         if match:
             result["task_info"]["progress"] = int(match.group(1))
 
-    except Exception:
+    except (OSError, UnicodeDecodeError) as e:
+        import logging
+        logging.warning(f"check_idle_status: 解析失败: {e}")
         pass
 
     return result
@@ -394,7 +400,9 @@ def add_task_result(path: str, task_id: str, status: str,
         with open(history_file, 'a', encoding='utf-8') as f:
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
         return True
-    except Exception:
+    except (OSError, TypeError) as e:
+        import logging
+        logging.warning(f"add_task_result: 写入失败: {e}")
         return False
 
 

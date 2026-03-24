@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.6.0-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.7.0-blue.svg)](SKILL.md)
 
 ---
 
@@ -19,6 +19,7 @@
 | **REVIEWING** | verification, openspec | Graded review + spec-driven | 60%+ Bug interception |
 | **DEBUGGING** | systematic-debugging, pua | 5-step methodology + 7 checks | 10x debugging efficiency |
 | **REFINING** | feedback-loop | DISCOVER→ANALYZE→FIX→VERIFY | Structured iteration with limits |
+| **EXPLORING** | exploration | Socratic questioning | Uncover hidden assumptions |
 
 ---
 
@@ -368,6 +369,100 @@ Skill Value
 ```
 
 **Core Insight**: Skill value is **proportional to task complexity**. Router's job is to correctly identify complexity and route accordingly.
+
+---
+
+## v5.7 EXPLORING Phase - Socratic Deep Exploration (2026-03-24)
+
+> **Core Addition**: New phase for deep exploration using Socratic questioning to uncover hidden assumptions.
+
+### Overview
+
+EXPLORING is a **deep exploration phase** that uses Socratic questioning to challenge assumptions and uncover the true nature of problems before committing to solutions.
+
+### When to Use EXPLORING
+
+| Scenario | Trigger Keywords |
+|----------|-----------------|
+| Deep investigation | "实验"/"想法"/"深层"/"本质" |
+| Assumption challenging | Questions starting with "为什么"/"凭什么" |
+| Edge case exploration | "如果...会怎样" / "极端情况" |
+| Hidden requirements | Problem seems simple but has subtle complexity |
+
+### State Machine Integration
+
+```
+IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
+                ↓
+        OFFICE-HOURS → EXPLORING → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
+```
+
+### Core Question Bank
+
+#### 1. 假设追问 (Assumption Probing)
+```
+- 这个假设是真的吗？
+- 什么证据支持这个假设？
+- 有没有相反的证据？
+- 这个假设在什么条件下不成立？
+```
+
+#### 2. 反面追问 (Contrarian Probing)
+```
+- 最大的反对意见是什么？
+- 如果你是反对者，你会指出什么问题？
+- 你试图在避免什么？
+```
+
+#### 3. 极限追问 (Extreme Probing)
+```
+- 如果用户量增加100倍，还work吗？
+- 如果时间只剩1/10，怎么调整？
+- 如果团队换成完全不同技术背景，会怎样？
+```
+
+#### 4. 5-Why 追问 (Root Cause)
+```
+为什么1：[回答]
+为什么2：[基于上一个回答追问]
+为什么3：
+为什么4：
+为什么5：
+——根本原因：[识别出的根本原因]
+```
+
+### EXPLORING vs THINKING
+
+| Dimension | EXPLORING | THINKING |
+|-----------|-----------|----------|
+| Focus | Uncover hidden assumptions | Expert analysis |
+| Method | Socratic questioning | First principles |
+| Entry | When problem seems unclear | When problem is clear but complex |
+| Output | Questioned assumptions + clarity | Expert recommendations |
+
+### v5.7 Test Results (2026-03-24)
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 219 passed, 10 warnings in 3.41s =======================
+```
+
+### Privacy Assessment (v5.7)
+
+| Check | Status |
+|-------|--------|
+| No hardcoded secrets | ✅ Verified |
+| .env gitignored | ✅ Verified |
+| API keys from env vars only | ✅ Verified |
+| Path traversal protection | ✅ Fixed |
+
+### v5.7 Security Fixes
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| Path traversal in scripts | CRITICAL | Use `os.path.realpath()` + validation |
+| Bare exception handling | HIGH | Specific exception types |
+| Shell injection risk | CRITICAL | Command validation added |
 
 ---
 

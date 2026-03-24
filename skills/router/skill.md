@@ -420,6 +420,7 @@ decision_record "explicit_command" "用户显式命令" "$SELECTED_PHASE" ""
 | REVIEWING | review、审核、检查、看看有什么问题 | 审查类 |
 | DEBUGGING | 报错、错误、异常、bug、调试、debug、修复 | 调试类 |
 | OFFICE-HOURS | 想法、概念、产品、不确定方向、帮我构思、怎么开始 | 产品咨询类 |
+| EXPLORING | 实验、深层、挖掘、本质、根本、潜意识、我有一个想法、帮我分析 | 深度探索类 |
 | REFINING | 迭代、优化、精炼、改进、改进、发现问题、分析问题、修改错误、反馈循环 | 精炼类 |
 
 **匹配优先级规则**:
@@ -427,7 +428,7 @@ decision_record "explicit_command" "用户显式命令" "$SELECTED_PHASE" ""
 ```
 # 当多个阶段关键词匹配时，按以下优先级选择:
 # 1. 精确匹配优先于模糊匹配（匹配字符越长越精确）
-# 2. 长度相同时：DEBUGGING > REVIEWING > THINKING > PLANNING > RESEARCH > EXECUTING
+# 2. 长度相同时：DEBUGGING > REVIEWING > EXPLORING > THINKING > PLANNING > RESEARCH > EXECUTING
 # 3. 特殊命令（/xxx）永远优先于关键词匹配
 
 IF "看看有什么问题" THEN
@@ -492,6 +493,7 @@ decision_record "complexity_assessment" "$COMPLEXITY_REASON" "$COMPLEXITY" "HIGH
 | `verification` | 验证/测试任务 | REVIEWING | → 直接派生 reviewer |
 | `debug` | 调试/修复错误 | DEBUGGING | → 直接派生 debugger |
 | `idea` | 产品想法/概念不明确 | OFFICE-HOURS | → 需要咨询 |
+| `exploration` | 深度探索/实验/挖掘深层想法 | EXPLORING | → 苏格拉底式追问 |
 | `result_only` | **仅需结果，不关心过程** | SUBAGENT | → **跳过 PHASE，直接派生执行** |
 
 **复杂度等级**:

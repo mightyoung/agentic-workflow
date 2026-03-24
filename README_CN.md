@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.6.0-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.7.0-blue.svg)](SKILL.md)
 
 ---
 
@@ -19,6 +19,7 @@
 | **REVIEWING** | verification, openspec | 分级审查 + 规范驱动 | 60%+ Bug 拦截 |
 | **DEBUGGING** | systematic-debugging, pua | 5步方法论 + 7项检查 | 10x 调试效率 |
 | **REFINING** | feedback-loop | DISCOVER→ANALYZE→FIX→VERIFY | 结构化迭代+限制 |
+| **EXPLORING** | exploration | 苏格拉底式追问 | 挖掘隐藏假设 |
 
 ---
 
@@ -368,6 +369,100 @@ Skill 价值
 ```
 
 **核心洞察**: Skill 价值与**任务复杂度成正比**。Router 的职责是正确判断复杂度并智能路由。
+
+---
+
+## v5.7 EXPLORING 阶段 - 苏格拉底式深度探索 (2026-03-24)
+
+> **核心新增**：新阶段，使用苏格拉底式追问挑战假设，揭示问题本质。
+
+### 概述
+
+EXPLORING 是一个**深度探索阶段**，通过苏格拉底式追问挑战假设，在确定解决方案前揭示问题的真正本质。
+
+### 何时使用 EXPLORING
+
+| 场景 | 触发关键词 |
+|------|-----------|
+| 深度调研 | "实验"/"想法"/"深层"/"本质" |
+| 假设挑战 | "为什么"/"凭什么" 开头的问题 |
+| 边界探索 | "如果...会怎样" / "极端情况" |
+| 隐藏需求 | 问题看似简单但有微妙复杂性 |
+
+### 状态机集成
+
+```
+IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
+                ↓
+        OFFICE-HOURS → EXPLORING → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
+```
+
+### 核心题库
+
+#### 1. 假设追问
+```
+- 这个假设是真的吗？
+- 什么证据支持这个假设？
+- 有没有相反的证据？
+- 这个假设在什么条件下不成立？
+```
+
+#### 2. 反面追问
+```
+- 最大的反对意见是什么？
+- 如果你是反对者，你会指出什么问题？
+- 你试图在避免什么？
+```
+
+#### 3. 极限追问
+```
+- 如果用户量增加100倍，还work吗？
+- 如果时间只剩1/10，怎么调整？
+- 如果团队换成完全不同技术背景，会怎样？
+```
+
+#### 4. 5-Why 追问
+```
+为什么1：[回答]
+为什么2：[基于上一个回答追问]
+为什么3：
+为什么4：
+为什么5：
+——根本原因：[识别出的根本原因]
+```
+
+### EXPLORING vs THINKING
+
+| 维度 | EXPLORING | THINKING |
+|------|-----------|----------|
+| 焦点 | 挖掘隐藏假设 | 专家分析 |
+| 方法 | 苏格拉底式追问 | 第一性原理 |
+| 入口 | 问题不明确时 | 问题清晰但复杂时 |
+| 输出 | 被质疑的假设 + 清晰化 | 专家建议 |
+
+### v5.7 测试结果 (2026-03-24)
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 219 passed, 10 warnings in 3.41s =======================
+```
+
+### 隐私评估 (v5.7)
+
+| 检查项 | 状态 |
+|--------|------|
+| 无硬编码密钥 | ✅ 已验证 |
+| .env 已 gitignore | ✅ 已验证 |
+| API 密钥仅从环境变量读取 | ✅ 已验证 |
+| 路径遍历保护 | ✅ 已修复 |
+
+### v5.7 安全修复
+
+| 问题 | 严重度 | 修复 |
+|------|--------|------|
+| 脚本路径遍历 | 严重 | 使用 `os.path.realpath()` + 验证 |
+| 裸异常处理 | 高 | 具体异常类型 |
+| Shell 注入风险 | 严重 | 命令验证 |
 
 ---
 

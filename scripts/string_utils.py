@@ -8,6 +8,8 @@ from typing import List
 
 def string_reverse(s: str) -> str:
     """字符串反转 - O(n) 时间复杂度"""
+    if not s:
+        raise ValueError("Empty string not allowed")
     return s[::-1]
 
 
