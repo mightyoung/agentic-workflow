@@ -87,6 +87,18 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | `skills/_shared/contributor-mode.md` | 贡献者模式 |
 | `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
 
+## Evaluation Scripts (v5.7)
+
+基于 OpenYoung 评估机制增强的轻量化追踪系统：
+
+| Script | 用途 |
+|--------|------|
+| `run_tracker.py` | 追踪执行统计 (steps, tokens, duration) |
+| `step_recorder.py` | 记录每个 phase 的执行情况 |
+| `reward_calculator.py` | 多维度奖励计算 |
+| `experience_store.py` | 经验存储与查询 |
+| `pattern_detector.py` | 失败模式检测与建议 |
+
 ## 核心原则
 
 1. **专家模拟**: 不问"你怎么看"，问"谁最懂？"

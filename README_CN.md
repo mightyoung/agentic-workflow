@@ -827,6 +827,41 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 
 ---
 
+## v5.7 评估增强 (2026-03-24)
+
+> **基于 OpenYoung 分析**：轻量化评估机制，借鉴 RL 系统的多维度 Reward 设计。
+
+### 评估脚本
+
+| 脚本 | 用途 | 来源 |
+|------|------|------|
+| `run_tracker.py` | 追踪执行 (steps, tokens, duration) | DataCenter RunTracker |
+| `step_recorder.py` | 记录 phase 执行情况 | StepRecorder |
+| `reward_calculator.py` | 多维度奖励计算 | OpenYoung Rewards |
+| `experience_store.py` | 经验存储与查询 | Experience Engine |
+| `pattern_detector.py` | 失败模式检测与建议 | PatternDetector |
+
+### 奖励公式
+
+```
+Total = task_completion + efficiency + quality + token_efficiency + penalty
+
+task_completion: +1.0 (成功) / -0.5 (失败)
+efficiency:      (1 - steps/max_steps) * 0.2
+quality:         quality_score * 0.3 (LLM judge)
+token_efficiency:(1 - tokens/max_tokens) * 0.1
+penalty:         -0.1 * error_count
+```
+
+### v5.7 测试结果
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 233 passed, 10 warnings in 5.59s =======================
+```
+
+---
+
 ## 多维度评估结果 (v5.4)
 
 > **评估日期**: 2026-03-20 | **置信度**: 88.8% 综合置信度

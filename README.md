@@ -825,6 +825,41 @@ IDLE → RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMP
 
 ---
 
+## v5.7 Evaluation Enhancement (2026-03-24)
+
+> **基于 OpenYoung 分析**：轻量化评估机制，借鉴 RL 系统的多维度 Reward 设计。
+
+### Evaluation Scripts
+
+| Script | Purpose | Inspired By |
+|--------|---------|------------|
+| `run_tracker.py` | Track execution (steps, tokens, duration) | DataCenter RunTracker |
+| `step_recorder.py` | Record phase execution | StepRecorder |
+| `reward_calculator.py` | Multi-dimensional reward | OpenYoung Rewards |
+| `experience_store.py` | Experience storage | Experience Engine |
+| `pattern_detector.py` | Failure pattern detection | PatternDetector |
+
+### Reward Formula
+
+```
+Total = task_completion + efficiency + quality + token_efficiency + penalty
+
+task_completion: +1.0 (success) / -0.5 (failure)
+efficiency:      (1 - steps/max_steps) * 0.2
+quality:         quality_score * 0.3 (LLM judge)
+token_efficiency:(1 - tokens/max_tokens) * 0.1
+penalty:         -0.1 * error_count
+```
+
+### v5.7 Test Results
+
+```bash
+$ python3 -m pytest tests/ -v
+======================= 233 passed, 10 warnings in 5.59s =======================
+```
+
+---
+
 ## Multi-Dimensional Evaluation Results (v5.4)
 
 > **Evaluation Date**: 2026-03-20 | **Confidence Level**: 88.8% composite
