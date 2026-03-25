@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.6.0
+version: 5.7.1
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -64,11 +64,23 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | RESEARCH | `skills/research/skill.md` | 搜索最佳实践 |
 | THINKING | `skills/thinking/skill.md` | 专家视角分析 |
 | PLANNING | `skills/planning/skill.md` | 任务规划 |
-| EXECUTING | `skills/executing/skill.md` | TDD驱动实现 |
+| **EXECUTING** | `skills/executing/skill.md` | TDD驱动实现 + Trajectory持久化 |
 | REVIEWING | `skills/reviewing/skill.md` | 代码审查 |
 | DEBUGGING | `skills/debugging/skill.md` | 5步调试法 |
 | COMPLETE | `skills/complete/skill.md` | 验证与复盘 |
 | RETRO | `skills/gstack/commands/retro.md` | 独立回顾（可选） |
+
+### v5.7 执行增强
+
+**Trajectory 持久化**（借鉴 SWE-agent）：
+- 记录每个任务的完整执行过程（步骤、决策、挑战）
+- 支持断点恢复和事后分析
+- 位置：`./trajectories/<task_id>_<timestamp>.json`
+
+**快速模式**：
+- 跳过状态跟踪，不创建 task_plan.md
+- 使用简化 Trajectory（内存中记录）
+- 适用于低复杂度任务
 
 ## Utility Skills
 

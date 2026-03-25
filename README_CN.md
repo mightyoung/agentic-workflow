@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.7.0-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.7.1-blue.svg)](SKILL.md)
 
 ---
 
@@ -447,11 +447,13 @@ $ python3 -m pytest tests/ -v
 ======================= 219 passed, 10 warnings in 3.41s =======================
 ```
 
-### 隐私评估 (v5.7)
+### 隐私评估 (v5.7.1) - 2026-03-25
 
 | 检查项 | 状态 |
 |--------|------|
 | 无硬编码密钥 | ✅ 已验证 |
+| 无硬编码 API Keys | ✅ 已验证 |
+| 无硬编码密码 | ✅ 已验证 |
 | .env 已 gitignore | ✅ 已验证 |
 | API 密钥仅从环境变量读取 | ✅ 已验证 |
 | 路径遍历保护 | ✅ 已修复 |
@@ -1063,6 +1065,55 @@ Total = task_completion + efficiency + quality + token_efficiency + penalty
 | 路径遍历 | `memory_ops.py` | `os.path.realpath` 验证 |
 | 路径遍历 | `task_tracker.py` | `os.path.realpath` 验证 |
 | 路径遍历 | `wal_scanner.py` | `os.path.realpath` 验证 |
+
+---
+
+## v5.7.1 执行增强 (2026-03-25)
+
+### Trajectory 持久化（借鉴 SWE-agent）
+
+> **核心功能**：记录每个任务的完整执行轨迹，支持断点恢复和事后分析。
+
+**格式**：存储在 `./trajectories/<task_id>_<timestamp>.json`
+
+| 字段 | 描述 |
+|------|------|
+| `metadata` | 任务 ID、名称、开始时间、agent、模型 |
+| `trajectory` | 步骤数组（action, observation, thought, state） |
+| `decisions` | 关键决策及其推理 |
+| `challenges` | 遇到的问题及解决方案 |
+| `file_changes` | 创建/修改/删除的文件 |
+
+**记录触发条件**：
+- ✅ 完成关键决策
+- ✅ 遇到并解决挑战
+- ✅ 完成文件变更
+- ✅ 完成状态转换
+- ✅ 遇到执行错误
+
+**性能优化**：
+- 批量写入：每 5 个步骤或 30 秒
+- 异步写入：不阻塞主流程
+- 简化模式：适用于低复杂度任务
+
+### 快速模式
+
+适用于简单任务（<20字、单一文件）：
+- 跳过状态跟踪（不创建 task_plan.md）
+- 使用简化 trajectory（内存中记录）
+- 不触发并行机制
+
+### 结果导向委托原则
+
+**关键**：委托时描述 **WHAT（结果）**，而非 **HOW（方法）**：
+
+```
+✅ 正确：实现用户认证，创建 src/auth/login.ts
+❌ 错误：使用 useEffect + useShallow 来修复状态管理
+```
+
+**允许的约束类型**：输出格式、安全、合规、API/接口定义、环境
+**禁止的约束类型**：实现建议、具体技术选择
 
 ---
 

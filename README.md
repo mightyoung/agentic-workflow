@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.7.0-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-5.7.1-blue.svg)](SKILL.md)
 
 ---
 
@@ -447,11 +447,13 @@ $ python3 -m pytest tests/ -v
 ======================= 219 passed, 10 warnings in 3.41s =======================
 ```
 
-### Privacy Assessment (v5.7)
+### Privacy Assessment (v5.7.1) - 2026-03-25
 
 | Check | Status |
 |-------|--------|
 | No hardcoded secrets | ✅ Verified |
+| No hardcoded API Keys | ✅ Verified |
+| No hardcoded passwords | ✅ Verified |
 | .env gitignored | ✅ Verified |
 | API keys from env vars only | ✅ Verified |
 | Path traversal protection | ✅ Fixed |
@@ -1061,6 +1063,55 @@ Total = task_completion + efficiency + quality + token_efficiency + penalty
 | Path Traversal | `memory_ops.py` | `os.path.realpath` validation |
 | Path Traversal | `task_tracker.py` | `os.path.realpath` validation |
 | Path Traversal | `wal_scanner.py` | `os.path.realpath` validation |
+
+---
+
+## v5.7.1 Execution Enhancement (2026-03-25)
+
+### Trajectory Persistence (SWE-agent inspired)
+
+> **Core Feature**: Records complete execution trajectory for each task, enabling breakpoint recovery and post-execution analysis.
+
+**Format**: JSON stored at `./trajectories/<task_id>_<timestamp>.json`
+
+| Field | Description |
+|-------|-------------|
+| `metadata` | Task ID, name, start time, agent, model |
+| `trajectory` | Array of steps with action, observation, thought, state |
+| `decisions` | Key decisions with reasoning |
+| `challenges` | Issues encountered and solutions |
+| `file_changes` | Files created/modified/deleted |
+
+**Recording Triggers**:
+- ✅ Key decision completed
+- ✅ Challenge encountered and resolved
+- ✅ File change completed
+- ✅ State transition
+- ✅ Execution error
+
+**Performance Optimization**:
+- Batch write: Every 5 steps or 30 seconds
+- Async write: Non-blocking
+- Simplified mode: For low complexity tasks
+
+### Fast Mode
+
+For simple tasks (<20 characters, single file):
+- Skip state tracking (no task_plan.md)
+- Use simplified trajectory (in-memory)
+- No parallel mechanism
+
+### Result-Only Delegation Principle
+
+**CRITICAL**: Describe **WHAT** (result), not **HOW** (method) when delegating:
+
+```
+✅ CORRECT: "Implement user auth, create src/auth/login.ts"
+❌ WRONG: "Use useEffect with useShallow to fix state management"
+```
+
+**Allowed Constraints**: Output format, safety, compliance, API/interface definitions, environment
+**Forbidden**: Implementation suggestions, specific technical choices
 
 ---
 
