@@ -366,3 +366,78 @@ performance:
         phases: [executing, reviewing]
         partial: true  # 部分重叠
 ```
+
+## Git Worktree 隔离 (v5.7.1)
+
+### 适用场景
+
+当并行任务存在**高风险文件冲突**时，使用 Git Worktree 提供**进程级硬隔离**：
+
+| 场景 | 文件冲突风险 | 推荐方案 |
+|------|------------|---------|
+| 多 Agent 修改同一模块 | 高 | **Worktree 隔离** |
+| 独立功能开发 | 低 | 文件所有权策略 |
+| Review + Debug 并行 | 中 | 文件所有权策略 |
+
+### Worktree 隔离原理
+
+```
+传统并行 (文件所有权):
+┌─────────────────┐     ┌─────────────────┐
+│   Agent-A       │     │   Agent-B       │
+│   Owner: src/a  │     │   Owner: src/b  │
+│   Write: src/a │     │   Write: src/b  │
+└────────┬────────┘     └────────┬────────┘
+         │                           │
+         └───────────┬───────────────┘
+                     ▼
+            文件系统 (可能冲突)
+
+Worktree 隔离:
+┌─────────────────┐     ┌─────────────────┐
+│  Agent-A        │     │  Agent-B        │
+│  Branch: wt/A  │     │  Branch: wt/B  │
+│  Worktree: .wt/A│    │  Worktree: .wt/B│
+└────────┬────────┘     └────────┬────────┘
+         │                           │
+         ▼                           ▼
+    独立目录                    独立目录
+    (无冲突)                    (无冲突)
+```
+
+### 使用方法
+
+```bash
+# 创建 worktree
+python scripts/worktree_manager.py --op=create --task-id=T001 --branch=feature-a
+
+# 进入 worktree 工作
+cd .worktrees/task-T001
+
+# 完成工作后标记并合并
+python scripts/worktree_manager.py --op=completed --task-id=T001
+python scripts/worktree_manager.py --op=merge --task-id=T001
+```
+
+### 脚本命令
+
+| 命令 | 说明 |
+|------|------|
+| `--op=create --task-id=T001` | 为任务创建独立 worktree |
+| `--op=list` | 列出所有 worktree |
+| `--op=completed --task-id=T001` | 标记任务完成 |
+| `--op=merge --task-id=T001` | 合并回主分支 |
+| `--op=cleanup` | 清理已完成的 worktree |
+| `--op=prune` | 清理失效引用 |
+
+### 何时使用 Worktree
+
+- **高风险场景**: 多 Agent 可能同时修改有关联的文件
+- **安全优先**: 需要确保任务完全隔离
+- **复杂合并**: 预期会有文件冲突需要手动处理
+
+### 何时不用 Worktree
+
+- **低风险场景**: 文件所有权策略已足够
+- **简单任务**: 单文件或明确分离的模块
+- **快速任务**: Worktree 创建/删除有开销

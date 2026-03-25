@@ -14,6 +14,12 @@
 | `memory_longterm.py` | 长期记忆 | 管理 MEMORY.md |
 | `task_tracker.py` | 任务追踪 | 追踪任务进度和状态 |
 | `router.py` | 路由决策 | 辅助判断用户意图和触发阶段 |
+| `worktree_manager.py` | Git Worktree 管理 | 并行任务进程级隔离 |
+| `run_tracker.py` | 执行追踪 | 追踪 steps, tokens, duration |
+| `step_recorder.py` | 阶段记录 | 记录每个 phase 执行情况 |
+| `reward_calculator.py` | 奖励计算 | 多维度奖励计算 (OpenYoung) |
+| `experience_store.py` | 经验存储 | 经验存储与查询 (v5.7.1 增强) |
+| `pattern_detector.py` | 模式检测 | 失败模式检测与建议 |
 
 ### Bash 脚本（Unix/Linux/macOS）
 
@@ -83,6 +89,22 @@ python scripts/memory_longterm.py --op=refine --days=7  # 从7天日志提炼
 python scripts/memory_longterm.py --op=search --query="关键词"
 python scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
 python scripts/router.py "帮我搜索最佳实践"
+
+# 评估与追踪 (v5.7)
+python scripts/run_tracker.py --op=start --task-id=T001
+python scripts/step_recorder.py --op=record --phase=EXECUTING --duration=5000
+python scripts/reward_calculator.py --success=1 --steps=15 --tokens=800 --json
+python scripts/experience_store.py --op=stats
+python scripts/experience_store.py --op=extract-patterns --category=DEBUGGING
+python scripts/experience_store.py --op=suggest-skills
+python scripts/pattern_detector.py --op=detect-failures --json
+
+# Git Worktree 隔离 (v5.7.1)
+python scripts/worktree_manager.py --op=create --task-id=T001 --branch=feature-x
+python scripts/worktree_manager.py --op=list
+python scripts/worktree_manager.py --op=completed --task-id=T001
+python scripts/worktree_manager.py --op=merge --task-id=T001
+python scripts/worktree_manager.py --op=cleanup
 
 # Bash 脚本
 bash scripts/init_session.sh                    # 初始化会话
