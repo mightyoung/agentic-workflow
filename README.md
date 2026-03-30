@@ -640,6 +640,8 @@ REFINING is the feedback loop phase for detecting, diagnosing, and fixing proble
 
 ### v5.4 Comprehensive Test Suite Results
 
+> Historical benchmark snapshot. These figures should be read as archived evaluation results, not as a guarantee that every current script/runtime path is fully covered by real end-to-end tests.
+
 | Test Suite | Tests | Pass Rate | Details |
 |------------|-------|-----------|---------|
 | **Full Routing Test** | 40 | ✅ 100% | 40/40 stage routing accuracy |
@@ -998,14 +1000,11 @@ agentic-workflow/
 ├── .gitignore                  # Git ignore rules
 ├── agentic-workflow.lock       # Version lock file
 ├── references/
-│   ├── modules/                # Workflow modules
-│   │   ├── executing.md
-│   │   ├── thinking.md
-│   │   ├── debugging.md
-│   │   └── reviewing.md
-│   ├── templates/              # File templates
+│   ├── templates/              # Current file templates
 │   │   ├── task_plan.md
-│   │   └── session_state.md
+│   │   ├── findings.md
+│   │   └── progress.md
+│   ├── _deprecated_v4/         # Legacy references kept for migration/history
 │   ├── memory_integration.md   # Memory system
 │   └── builtin_tdd.md          # Built-in TDD
 ├── scripts/
@@ -1069,6 +1068,8 @@ Total = task_completion + efficiency + quality + token_efficiency + penalty
 
 ### v5.7 Test Results (2026-03-24)
 
+> Script-level evaluation snapshot for the tracking components.
+
 | Test Suite | Tests | Pass Rate |
 |------------|-------|-----------|
 | RunTracker | 3 | ✅ 100% |
@@ -1115,6 +1116,8 @@ Current implementation note:
 | `challenges` | Issues encountered and solutions |
 | `file_changes` | Files created/modified/deleted |
 
+These fields describe the intended trajectory schema, not a currently emitted default artifact.
+
 **Recording Triggers**:
 - ✅ Key decision completed
 - ✅ Challenge encountered and resolved
@@ -1133,6 +1136,8 @@ For simple tasks (<20 characters, single file):
 - Skip state tracking (no task_plan.md)
 - Use simplified trajectory (in-memory)
 - No parallel mechanism
+
+This section is design guidance, not proof of a fully implemented fast-mode runtime.
 
 ### Result-Only Delegation Principle
 
