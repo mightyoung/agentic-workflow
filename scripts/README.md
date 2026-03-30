@@ -11,6 +11,7 @@
 - `task_tracker.py`: 任务状态追踪
 - `run_tracker.py`: 执行统计，输出 `.run_tracker.json`
 - `step_recorder.py`: phase 记录，输出 `.step_records.json`
+- `create_plan.sh`: 基于 `references/templates/task_plan.md` 生成项目内 `task_plan.md`
 
 说明：
 - 文档中提到的更完整 orchestration 能力并不都已在脚本层落地
@@ -41,11 +42,11 @@
 | 脚本 | 功能 | 用途 |
 |------|------|------|
 | `init_session.sh` | 初始化会话 | 创建 SESSION-STATE.md |
-| `check_template.sh` | 检查模板 | 验证任务计划模板是否存在 |
+| `check_template.sh` | 检查模板 | 验证 `references/templates/` 下模板是否存在 |
 | `quick_tdd.sh` | 快速 TDD | 执行 TDD 循环 (红-绿-重构) |
 | `check_env.sh` | 环境检查 | 检查必需工具和环境变量 |
 | `auto_commit.sh` | 自动提交 | 快捷 git 提交 |
-| `create_plan.sh` | 创建计划 | 生成任务计划文件 |
+| `create_plan.sh` | 创建计划 | 生成项目内 `task_plan.md` |
 | `quick_review.sh` | 快速审查 | 代码审查 (TODO/密码/空文件) |
 | `watch_progress.sh` | 监控进度 | 监控 progress.md 变化 |
 
@@ -56,9 +57,9 @@
 | 脚本 | 功能 | 用途 |
 |------|------|------|
 | `init_session.bat` | 初始化会话 | 创建 SESSION-STATE.md |
-| `check_template.bat` | 检查模板 | 验证任务计划模板是否存在 |
+| `check_template.bat` | 检查模板 | 验证 `references\templates\` 下模板是否存在 |
 | `check_env.bat` | 环境检查 | 检查必需工具和环境变量 |
-| `create_plan.bat` | 创建计划 | 生成任务计划文件 |
+| `create_plan.bat` | 创建计划 | 生成项目内 `task_plan.md` |
 | `quick_review.bat` | 快速审查 | 代码审查 (TODO/密码/空文件) |
 
 ### 跨平台脚本调用
@@ -129,7 +130,7 @@ bash scripts/init_session.sh                    # 初始化会话
 bash scripts/check_template.sh                 # 检查模板
 bash scripts/check_env.sh                      # 检查环境
 bash scripts/quick_tdd.sh "npm test" "npm run build"  # TDD循环
-bash scripts/create_plan.sh "新功能开发"        # 创建计划
+bash scripts/create_plan.sh "新功能开发"        # 创建 task_plan.md
 bash scripts/quick_review.sh src/              # 快速审查
 bash scripts/auto_commit.sh . "完成功能X"     # 提交代码
 bash scripts/watch_progress.sh progress.md 5   # 监控进度

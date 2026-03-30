@@ -1,155 +1,89 @@
 ---
 name: preamble
-version: 1.0.0
+version: 1.1.0
 description: |
-  标准化 Preamble - 每个 skill 启动时必须运行
-  包含更新检查、会话追踪、任务进度和时间戳记录
+  标准化 Preamble - 每个 skill 启动时的最小共享约定
+  当前版本对齐项目内状态文件，而不是 ~/.gstack 会话目录
 ---
 
-## Preamble (v1.0)
+## Preamble
 
-### 1. 更新检查
-> 调用 gstack-update-check 检查是否有新版本
+## 1. Current Storage Model
 
-```bash
-# 检查 skill 更新
-npx @claude-flow/cli@latest skills check-update --skill agentic-workflow
-```
+当前仓库的共享状态默认保存在项目目录，而不是 `~/.gstack/sessions/...`。
 
-### 2. 会话追踪
-> 维护 ~/.gstack/sessions/ 目录下的会话状态
+标准文件：
 
-```bash
-# 会话状态文件路径
-SESSION_STATE_FILE="${HOME}/.gstack/sessions/${SESSION_ID:-default}/state.md"
+- `SESSION-STATE.md`: 当前任务、决策、偏好、上下文进度
+- `progress.md`: 阶段进度概览
+- `task_plan.md`: 规划阶段生成的任务计划
 
-# 确保会话目录存在
-mkdir -p "$(dirname "$SESSION_STATE_FILE")"
-```
+如果这些文件不存在，应优先使用仓库内现有脚本初始化或创建，而不是假定外部会话系统已经存在。
 
-**SESSION-STATE.md 格式：**
-```markdown
-# Session State
+## 2. Session State
 
-## 元数据
-- session_id: {SESSION_ID}
-- started_at: {TIMESTAMP}
-- last_active: {TIMESTAMP}
-
-## 贡献者模式
-- contributor_mode: {true|false}
-- gstack_contributor: {配置值}
-
-## 主动建议
-- proactive_mode: {true|false}
-```
-
-### 3. 任务进度
-> 读取或初始化任务进度追踪
+推荐使用项目内状态文件：
 
 ```bash
-TASK_PROGRESS_FILE="${HOME}/.gstack/sessions/${SESSION_ID:-default}/progress.md"
-
-# 读取当前进度（如果存在）
-if [ -f "$TASK_PROGRESS_FILE" ]; then
-  source "$TASK_PROGRESS_FILE"
-else
-  # 初始化进度
-  CURRENT_PHASE="initialization"
-  PHASE_START_TIME=$(date +%s)
-  TOTAL_PHASES=8
-fi
+SESSION_STATE_FILE="${PWD}/SESSION-STATE.md"
 ```
 
-**进度状态：**
-- `initialization` - 初始化
-- `router` - 路由选择
-- `research` - 研究阶段
-- `thinking` - 思考阶段
-- `planning` - 规划阶段
-- `executing` - 执行阶段
-- `reviewing` - 审查阶段
-- `debugging` - 调试阶段
-- `complete` - 完成阶段
-
-### 4. 时间戳记录
-> 记录各阶段进入时间，用于性能分析
+如果需要初始化状态，使用真实脚本：
 
 ```bash
-FUNCTION timestamp_record() {
-  local phase="$1"
-  local elapsed_ms=$(($(date +%s%N) / 1000000 - PHASE_START_MS))
-  echo "[$(date +%H:%M:%S)] $phase: ${elapsed_ms}ms"
-  PHASE_START_MS=$(date +%s%N | cut -b1-13)
-}
+bash scripts/init_session.sh .
+python3 scripts/memory_ops.py --op=show
 ```
 
-**时间戳格式：** `HH:MM:SS PHASE: duration`
+## 3. Progress Tracking
 
-### 循环引用检测
+项目内进度文件约定为：
 
-```
-# Phase 依赖图（有向无环图）
-declare -A PHASE_DEPS=(
-    [ROUTER]="OFFICE-HOURS RESEARCH THINKING PLANNING EXECUTING REVIEWING DEBUGGING COMPLETE"
-    [OFFICE-HOURS]="THINKING PLANNING"
-    [RESEARCH]="THINKING PLANNING"
-    [THINKING]="PLANNING"
-    [PLANNING]="EXECUTING"
-    [EXECUTING]="REVIEWING"
-    [REVIEWING]="DEBUGGING COMPLETE"
-    [DEBUGGING]="REVIEWING"
-    [COMPLETE]=""
-)
-
-# 检测循环依赖
-detect_cycle() {
-    local phase=$1
-    local visited=()
-    local stack=()
-
-    function dfs {
-        local current=$1
-        if [[ " ${stack[@]} " =~ " ${current} " ]]; then
-            echo "ERROR: Circular dependency detected: ${stack[@]} -> ${current}"
-            return 1
-        fi
-        if [[ " ${visited[@]} " =~ " ${current} " ]]; then
-            return 0
-        fi
-
-        stack+=($current)
-        for dep in ${PHASE_DEPS[$current]}; do
-            dfs $dep || return 1
-        done
-        stack=(${stack[@]/$current})
-        visited+=($current)
-        return 0
-    }
-
-    dfs $phase
-}
+```bash
+TASK_PROGRESS_FILE="${PWD}/progress.md"
 ```
 
-**Phase 依赖规则**:
-- ROUTER 可转向任何阶段
-- REVIEWING 可转向 DEBUGGING 或 COMPLETE
-- 其他阶段只能转向后续阶段（不允许回退）
+如果 `progress.md` 不存在，可以手动创建，或从模板目录复制最小模板：
 
----
+```bash
+cp references/templates/progress.md ./progress.md
+```
 
-## 执行流程
+## 4. Planning File
 
-1. **进入 skill 时** → 执行更新检查
-2. **更新会话状态** → 记录 last_active
-3. **检查/创建进度** → 确定当前阶段
-4. **记录阶段时间戳** → 进入新阶段
+规划阶段的标准计划文件约定为：
 
-## 配置检查
+```bash
+TASK_PLAN_FILE="${PWD}/task_plan.md"
+```
 
-| 配置项 | 来源 | 默认值 |
-|--------|------|--------|
-| `gstack_contributor` | 环境变量 | false |
-| `telemetry_consent` | 会话状态 | null（已禁用）|
-| `proactive_mode` | 环境变量 | false |
-| `update_check` | 环境变量 | true |
+创建方式：
+
+```bash
+bash scripts/create_plan.sh "任务名称" .
+```
+
+## 5. Time Tracking
+
+如果需要记录阶段耗时，使用当前仓库已存在的轻量追踪脚本，而不是假定 phase telemetry API：
+
+```bash
+python3 scripts/run_tracker.py --op=start --run-id=R001 --category=PLANNING
+python3 scripts/step_recorder.py --op=start --run-id=R001 --phase=PLANNING
+python3 scripts/step_recorder.py --op=end --run-id=R001 --phase=PLANNING --output-tokens=300
+python3 scripts/run_tracker.py --op=finish --run-id=R001 --status=success
+```
+
+## Execution Flow
+
+1. 确认当前工作目录
+2. 检查 `SESSION-STATE.md` 是否存在
+3. 检查或创建 `progress.md`
+4. 如进入规划阶段，检查或创建 `task_plan.md`
+5. 如需统计执行情况，调用 `run_tracker.py` / `step_recorder.py`
+
+## Notes
+
+- `~/.gstack` 相关路径目前应视为历史设计或外部集成方向
+- 当前仓库中的 phase 文档应优先引用项目内文件
+- 不要把未实现的 telemetry、session daemon 或 preload 检查写成既有能力

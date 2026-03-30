@@ -1,5 +1,5 @@
 #!/bin/bash
-# check_template.sh - 检查任务计划模板是否存在
+# check_template.sh - 检查项目模板是否存在
 # 用法: bash scripts/check_template.sh [项目路径]
 
 PROJECT_DIR="${1:-.}"

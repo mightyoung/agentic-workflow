@@ -133,10 +133,10 @@ except SkillNotFound:
 
 ```bash
 # 会话状态文件路径
-SESSION_STATE_FILE="${HOME}/.gstack/sessions/${SESSION_ID:-default}/state.md"
+SESSION_STATE_FILE="${PWD}/SESSION-STATE.md"
 
-# 确保会话目录存在
-mkdir -p "$(dirname "$SESSION_STATE_FILE")"
+# 如果不存在，先初始化项目内状态文件
+bash scripts/init_session.sh .
 ```
 
 更新以下内容：

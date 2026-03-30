@@ -38,7 +38,7 @@ The current executable surface is centered on the scripts in [scripts/README.md]
 - `scripts/task_tracker.py` for task progress tracking
 - `scripts/run_tracker.py` for run-level statistics in `.run_tracker.json`
 - `scripts/step_recorder.py` for phase-level records in `.step_records.json`
-- `scripts/create_plan.sh` and `scripts/check_template.sh` for plan/template utilities
+- `scripts/create_plan.sh` and `scripts/check_template.sh` for project-local `task_plan.md` and template utilities
 
 Important: several sections below describe target workflow design, benchmarks, or historical iterations. They should not be read as proof that every capability already exists in the current scripts.
 
@@ -1101,9 +1101,11 @@ Total = task_completion + efficiency + quality + token_efficiency + penalty
 
 ### Trajectory Persistence (SWE-agent inspired)
 
-> **Core Feature**: Records complete execution trajectory for each task, enabling breakpoint recovery and post-execution analysis.
+> **Roadmap Feature**: target design for complete execution trajectory persistence.
 
-**Format**: JSON stored at `./trajectories/<task_id>_<timestamp>.json`
+Current implementation note:
+- The repository currently ships `run_tracker.py` and `step_recorder.py`
+- Full `./trajectories/<task_id>_<timestamp>.json` persistence is not yet implemented as the default runtime
 
 | Field | Description |
 |-------|-------------|
