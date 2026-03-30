@@ -27,6 +27,37 @@
 
 Agentic Workflow is a **unified AI development workflow skill** that combines the essence of 10+ world-class skills into a single, powerful framework (v5.4). It provides a systematic approach to handling complex development tasks, from thinking and planning to execution and debugging.
 
+## Current Runtime Surface
+
+This repository is primarily a workflow skill repository, not a packaged application.
+
+The current executable surface is centered on the scripts in [scripts/README.md](/Users/muyi/Downloads/dev/agentic-workflow/scripts/README.md), especially:
+
+- `scripts/router.py` for lightweight phase routing
+- `scripts/memory_ops.py` for project-local `SESSION-STATE.md` updates
+- `scripts/task_tracker.py` for task progress tracking
+- `scripts/run_tracker.py` for run-level statistics in `.run_tracker.json`
+- `scripts/step_recorder.py` for phase-level records in `.step_records.json`
+- `scripts/create_plan.sh` and `scripts/check_template.sh` for plan/template utilities
+
+Important: several sections below describe target workflow design, benchmarks, or historical iterations. They should not be read as proof that every capability already exists in the current scripts.
+
+## Minimal Quickstart
+
+Use the real scripts first:
+
+```bash
+python3 scripts/router.py "帮我搜索最佳实践"
+python3 scripts/memory_ops.py --op=update --key=task --value="修正文档与测试"
+python3 scripts/run_tracker.py --op=start --run-id=R001 --category=DOCS
+python3 scripts/step_recorder.py --op=start --run-id=R001 --phase=ROUTER
+pytest
+```
+
+Notes:
+- On environments without a `python` alias, use `python3`
+- `src/` contains examples and auxiliary code, not the workflow runtime entry point
+
 ### Core Philosophy
 
 **Don't ask "What do you think?" — ask "Who knows this best? What would they say?"**

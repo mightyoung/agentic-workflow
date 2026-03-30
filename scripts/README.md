@@ -2,6 +2,21 @@
 
 > 可执行的脚本，用于自动化任务执行和环境操作。支持跨平台运行。
 
+## 当前真实运行面
+
+如果你只想知道仓库现在实际能跑什么，先看这几个脚本：
+
+- `router.py`: 轻量关键词路由
+- `memory_ops.py`: 维护项目内 `SESSION-STATE.md`
+- `task_tracker.py`: 任务状态追踪
+- `run_tracker.py`: 执行统计，输出 `.run_tracker.json`
+- `step_recorder.py`: phase 记录，输出 `.step_records.json`
+
+说明：
+- 文档中提到的更完整 orchestration 能力并不都已在脚本层落地
+- 命令示例以本目录脚本的真实 CLI 为准
+- 如果环境没有 `python` 命令，请使用 `python3`
+
 ## 目录内容
 
 ### Python 脚本（跨平台）
@@ -78,33 +93,36 @@ Agent 在需要时通过 Bash 工具调用这些脚本：
 
 ```bash
 # Python 脚本
-python scripts/wal_scanner.py "用户消息文本"
-python scripts/memory_ops.py --op=update --key=task --value="任务描述"
-python scripts/memory_daily.py --op=create --date=2026-03-20
-python scripts/memory_daily.py --op=add-task --task-id=T001 --desc="完成任务" --result=success
-python scripts/memory_daily.py --op=distill  # 从SESSION-STATE蒸馏到每日日志
-python scripts/memory_longterm.py --op=init
-python scripts/memory_longterm.py --op=add-experience --exp="学到X"
-python scripts/memory_longterm.py --op=refine --days=7  # 从7天日志提炼
-python scripts/memory_longterm.py --op=search --query="关键词"
-python scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
-python scripts/router.py "帮我搜索最佳实践"
+python3 scripts/wal_scanner.py "用户消息文本"
+python3 scripts/memory_ops.py --op=update --key=task --value="任务描述"
+python3 scripts/memory_daily.py --op=create --date=2026-03-20
+python3 scripts/memory_daily.py --op=add-task --task-id=T001 --desc="完成任务" --result=success
+python3 scripts/memory_daily.py --op=distill  # 从SESSION-STATE蒸馏到每日日志
+python3 scripts/memory_longterm.py --op=init
+python3 scripts/memory_longterm.py --op=add-experience --exp="学到X"
+python3 scripts/memory_longterm.py --op=refine --days=7  # 从7天日志提炼
+python3 scripts/memory_longterm.py --op=search --query="关键词"
+python3 scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
+python3 scripts/router.py "帮我搜索最佳实践"
 
 # 评估与追踪 (v5.7)
-python scripts/run_tracker.py --op=start --task-id=T001
-python scripts/step_recorder.py --op=record --phase=EXECUTING --duration=5000
-python scripts/reward_calculator.py --success=1 --steps=15 --tokens=800 --json
-python scripts/experience_store.py --op=stats
-python scripts/experience_store.py --op=extract-patterns --category=DEBUGGING
-python scripts/experience_store.py --op=suggest-skills
-python scripts/pattern_detector.py --op=detect-failures --json
+python3 scripts/run_tracker.py --op=start --run-id=R001 --category=DEBUGGING
+python3 scripts/run_tracker.py --op=step --run-id=R001 --step=THINKING --tokens=1500
+python3 scripts/run_tracker.py --op=finish --run-id=R001 --status=success
+python3 scripts/step_recorder.py --op=start --run-id=R001 --phase=EXECUTING --input-tokens=120
+python3 scripts/step_recorder.py --op=end --run-id=R001 --phase=EXECUTING --output-tokens=500
+python3 scripts/reward_calculator.py --success=1 --steps=15 --tokens=800 --json
+python3 scripts/experience_store.py --op=stats
+python3 scripts/experience_store.py --op=extract-patterns --category=DEBUGGING
+python3 scripts/experience_store.py --op=suggest-skills
+python3 scripts/pattern_detector.py --op=detect-failures --json
 
 # Git Worktree 隔离 (v5.7.1)
-python scripts/worktree_manager.py --op=create --task-id=T001 --branch=feature-x
-python scripts/worktree_manager.py --op=list
-python scripts/worktree_manager.py --op=completed --task-id=T001
-python scripts/worktree_manager.py --op=merge --task-id=T001
-python scripts/worktree_manager.py --op=cleanup
+python3 scripts/worktree_manager.py --op=create --task-id=T001 --branch=feature-x
+python3 scripts/worktree_manager.py --op=list
+python3 scripts/worktree_manager.py --op=completed --task-id=T001
+python3 scripts/worktree_manager.py --op=merge --task-id=T001
+python3 scripts/worktree_manager.py --op=cleanup
 
 # Bash 脚本
 bash scripts/init_session.sh                    # 初始化会话

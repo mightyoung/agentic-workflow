@@ -2,20 +2,18 @@
 """
 Router - 路由决策辅助工具
 
-基于关键词匹配判断用户意图，返回应该触发的阶段：
-- RESEARCH
-- THINKING
-- PLANNING
-- EXECUTING
-- DEBUGGING
-- REVIEWING
-- 直接回答
+当前实现是一个轻量级关键词路由器，不是多层语义编排器。
+
+行为顺序：
+1. 负面触发过滤，直接走 DIRECT_ANSWER
+2. 强制触发词，直接走 FULL_WORKFLOW
+3. 按阶段关键词顺序匹配
+4. 无匹配时默认 EXECUTING
 
 用法:
-    python router.py "用户消息"
+    python3 router.py "用户消息"
 """
 
-import re
 import sys
 from typing import Optional, Tuple
 
@@ -26,13 +24,14 @@ ROUTE_KEYWORDS = {
         "网络上搜索", "在网上搜索", "最佳实践", "有什么", "有哪些",
         "选型", "参考", "案例", "了解一下", "想知道", "查一下",
         "找一下", "有没有", "哪里有", "如何实现", "怎么做的",
-        "是什么原理", "怎么做", "如何做", "怎么实现"
+        "是什么原理", "怎么做", "如何做", "怎么实现", "方法",
+        "部署", "数据库优化"
     ],
     "THINKING": [
         "谁最懂", "专家", "分析", "理解", "看看", "分析一下",
         "这个怎么实现", "那个行不行", "哪个好", "建议", "看法",
         "思路", "怎么选", "哪个更", "有什么区别", "帮我看看",
-        "给点意见"
+        "给点意见", "顶级", "怎么看"
     ],
     "PLANNING": [
         "计划", "规划", "拆分", "设计", "安排", "整理一下",
@@ -45,7 +44,7 @@ ROUTE_KEYWORDS = {
         "失败", "回报", "卡住", "挂起", "响应很慢", "太慢了",
         "跑不通", "不能用", "失效", "超时", "卡死", "无响应",
         "不动了", "没有反应", "卡住了", "运行出错", "启动失败",
-        "连接失败"
+        "连接失败", "nameerror", "定位", "定位问题"
     ],
     "REVIEWING": [
         "代码审查", "帮我review", "审查这段代码", "审计", "审查",
@@ -185,37 +184,30 @@ def format_output(result: Tuple[str, str], text: str, format: str = 'simple') ->
 
 
 def main():
-    # 从命令行读取文本
     if len(sys.argv) > 1:
         text = sys.argv[1]
         result = route(text)
         print(format_output(result, text, 'simple'))
-    else:
-        # 交互式模式
-        print("Router - 路由决策辅助工具")
-        print("输入消息进行路由判断 (Ctrl+C 退出)")
-        print("-" * 50)
+        return 0
 
-        while True:
-            try:
-                text = input("\n> ")
-                if not text.strip():
-                    continue
+    print("Router - 路由决策辅助工具")
+    print("输入消息进行路由判断 (Ctrl+C 退出)")
+    print("-" * 50)
 
-                result = route(text)
-                print(format_output(result, text, 'verbose'))
-            except KeyboardInterrupt:
-                print("\n退出")
-                break
+    while True:
+        try:
+            text = input("\n> ")
+            if not text.strip():
+                continue
+
+            result = route(text)
+            print(format_output(result, text, 'verbose'))
+        except KeyboardInterrupt:
+            print("\n退出")
+            break
 
     return 0
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        text = sys.argv[1]
-        result = route(text)
-        print(format_output(result, text, 'simple'))
-        sys.exit(0)
-    else:
-        sys.exit(main())
+    sys.exit(main())

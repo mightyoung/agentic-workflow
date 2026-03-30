@@ -16,6 +16,21 @@ requires:
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
+## 当前实现状态
+
+当前仓库已经落地的主要运行面在 `scripts/`：
+
+- `scripts/router.py`: 轻量关键词路由，按“负面过滤 → 强制触发 → 阶段关键词 → 默认 EXECUTING”执行
+- `scripts/memory_ops.py`: 在项目内维护 `SESSION-STATE.md`
+- `scripts/run_tracker.py`: 记录 `.run_tracker.json`
+- `scripts/step_recorder.py`: 记录 `.step_records.json`
+
+以下内容仍应视为目标设计或文档规范，而不是全部已经实现的运行时能力：
+
+- 多层语义路由
+- 完整 phase orchestration API
+- trajectory 文件体系 `./trajectories/<task_id>_<timestamp>.json`
+
 ## 状态机
 
 ```
@@ -72,10 +87,10 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 
 ### v5.7 执行增强
 
-**Trajectory 持久化**（借鉴 SWE-agent）：
-- 记录每个任务的完整执行过程（步骤、决策、挑战）
-- 支持断点恢复和事后分析
-- 位置：`./trajectories/<task_id>_<timestamp>.json`
+**Trajectory 持久化**（目标设计，当前未完整实现）：
+- 目标是记录每个任务的完整执行过程（步骤、决策、挑战）
+- 当前仓库中已实现的是 `run_tracker.py` 和 `step_recorder.py`
+- `./trajectories/<task_id>_<timestamp>.json` 仍应视为 roadmap
 
 **快速模式**：
 - 跳过状态跟踪，不创建 task_plan.md
