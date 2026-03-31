@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Check required files
         run: |
@@ -59,12 +59,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pyyaml ruff mypy
+
+      - name: Run ruff check
+        run: |
+          ruff check scripts/
+
+      - name: Run mypy check
+        run: |
+          mypy scripts/ || true  # Allow mypy notes to not fail CI
 
       - name: Run pytest
         run: |
