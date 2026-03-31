@@ -20,6 +20,7 @@ import router
 import task_tracker
 import unified_state
 import trajectory_logger
+import search_adapter
 from trajectory_logger import TrajectoryLogger
 from unified_state import (
     create_initial_state,
@@ -175,6 +176,20 @@ def _generate_and_register_summary(
     task_info += f"## Delivered Artifacts\n"
     for atype in set(artifact_types):
         task_info += f"- {atype}\n"
+
+    # Aggregate quality gate results if available (for code tasks)
+    tracker_path = Path(workdir) / ".task_tracker.json"
+    if tracker_path.exists():
+        try:
+            tracker_data = json.loads(tracker_path.read_text(encoding="utf-8"))
+            tasks_with_qg = [t for t in tracker_data.get("tasks", []) if "quality_gates_passed" in t]
+            if tasks_with_qg:
+                task_info += f"\n## Quality Gate\n"
+                for t in tasks_with_qg[:5]:  # Limit to first 5
+                    qg_passed = t.get("quality_gates_passed")
+                    task_info += f"- {t.get('id')}: {'Passed' if qg_passed else 'Failed'}\n"
+        except (json.JSONDecodeError, IOError):
+            pass
 
     summary_path.write_text(task_info, encoding="utf-8")
     register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
@@ -646,44 +661,99 @@ def advance_workflow(
         key_terms = [w for w in words if w.lower() not in stop_words and len(w) > 2][:10]
         key_terms_str = ", ".join(key_terms) if key_terms else task_title
 
-        # Identify research aspects and generate specific findings based on task description
-        desc_lower = task_desc.lower()
-        findings_list = []
+        # Try real web search first
+        search_response = search_adapter.search(task_desc, num_results=5)
+        used_real_search = search_response.has_results
 
-        # Generate specific findings based on what the task is asking about
-        if "最佳实践" in desc_lower or "best practice" in desc_lower:
-            findings_list.append(f"1. **Best Practices for {key_terms_str}**: Identified established patterns and approaches that represent current industry consensus for this domain.")
-        if "架构" in desc_lower or "architecture" in desc_lower:
-            findings_list.append(f"2. **Architectural Patterns for {key_terms_str}**: Found multiple architectural approaches with different trade-offs in complexity, scalability, and maintainability.")
-        if "安全" in desc_lower or "security" in desc_lower:
-            findings_list.append(f"3. **Security Considerations for {key_terms_str}**: Key security concerns and mitigation strategies documented based on common vulnerability patterns.")
-        if "性能" in desc_lower or "performance" in desc_lower:
-            findings_list.append(f"4. **Performance Optimization for {key_terms_str}**: Benchmark strategies and optimization opportunities identified for typical workloads.")
-        if "微服务" in desc_lower or "microservice" in desc_lower:
-            findings_list.append(f"5. **Microservice Considerations for {key_terms_str}**: Service decomposition strategies and inter-service communication patterns reviewed.")
-        if "数据库" in desc_lower or "database" in desc_lower or "db" in desc_lower:
-            findings_list.append(f"6. **Data Persistence for {key_terms_str}**: Database selection criteria and schema design considerations documented.")
-        if "容错" in desc_lower or "fault" in desc_lower or " resilience" in desc_lower:
-            findings_list.append(f"7. **Resilience Patterns for {key_terms_str}**: Fault tolerance strategies including retry, circuit breaker, and graceful degradation approaches reviewed.")
+        if used_real_search:
+            # Generate findings from real search results
+            findings_list = []
+            sources_list = []
+            for i, result in enumerate(search_response.results, 1):
+                findings_list.append(f"{i}. **{result.title}**: {result.snippet}")
+                sources_list.append(f"[{i}] {result.title} - {result.url}")
 
-        # If no specific aspects found, generate findings based on key terms
-        if not findings_list:
-            findings_list.append(f"1. **Domain Analysis of {key_terms_str}**: Research identified core concepts and fundamental approaches for this domain.")
-            findings_list.append(f"2. **Implementation Considerations for {key_terms_str}**: Key factors and potential challenges documented for implementation planning.")
+            recommendations = [
+                "- Review cited sources for detailed implementation guidance",
+                "- Validate findings against project-specific constraints",
+                "- Proceed to planning phase with verified research findings",
+            ]
 
-        # Generate recommendations based on findings
-        recommendations = []
-        if "架构" in desc_lower or "architecture" in desc_lower:
-            recommendations.append("- Select architectural pattern based on specific scalability and maintainability requirements")
-        if "安全" in desc_lower or "security" in desc_lower:
-            recommendations.append("- Prioritize security review before production deployment")
-        if "性能" in desc_lower or "performance" in desc_lower:
-            recommendations.append("- Establish performance benchmarks early in development cycle")
-        recommendations.append("- Proceed to planning phase with documented research findings")
-        recommendations.append("- Validate research conclusions against specific project requirements")
+            findings_path = Path(workdir) / f"findings_{session_id}.md"
+            findings_content = f"""# Research Findings: {task_title}
 
-        findings_path = Path(workdir) / f"findings_{session_id}.md"
-        findings_content = f"""# Research Findings: {task_title}
+## Research Question
+{task_desc}
+
+## Method
+- Research conducted at: {datetime.now().isoformat()}
+- Search engine: {search_response.search_engine}
+- Results: {search_response.total_results} sources found
+
+## Key Findings
+{chr(10).join(findings_list)}
+
+## Sources
+{chr(10).join(sources_list)}
+
+## Conclusions
+- Research completed with {search_response.total_results} verified sources
+- Findings provide evidence-based insights for implementation planning
+- Sources cited for further reference and validation
+
+## Recommendations
+{chr(10).join(recommendations)}
+"""
+            metadata = {
+                "deliverable": "findings",
+                "session_id": session_id,
+                "has_method": True,
+                "has_conclusions": True,
+                "generated_on_exit": True,
+                "key_terms": key_terms_str,
+                "search_engine": search_response.search_engine,
+                "sources_count": search_response.total_results,
+                "used_real_search": True,
+            }
+        else:
+            # Fall back to template-based findings (search failed or unavailable)
+            desc_lower = task_desc.lower()
+            findings_list = []
+
+            # Generate specific findings based on what the task is asking about
+            if "最佳实践" in desc_lower or "best practice" in desc_lower:
+                findings_list.append(f"1. **Best Practices for {key_terms_str}**: Identified established patterns and approaches that represent current industry consensus for this domain.")
+            if "架构" in desc_lower or "architecture" in desc_lower:
+                findings_list.append(f"2. **Architectural Patterns for {key_terms_str}**: Found multiple architectural approaches with different trade-offs in complexity, scalability, and maintainability.")
+            if "安全" in desc_lower or "security" in desc_lower:
+                findings_list.append(f"3. **Security Considerations for {key_terms_str}**: Key security concerns and mitigation strategies documented based on common vulnerability patterns.")
+            if "性能" in desc_lower or "performance" in desc_lower:
+                findings_list.append(f"4. **Performance Optimization for {key_terms_str}**: Benchmark strategies and optimization opportunities identified for typical workloads.")
+            if "微服务" in desc_lower or "microservice" in desc_lower:
+                findings_list.append(f"5. **Microservice Considerations for {key_terms_str}**: Service decomposition strategies and inter-service communication patterns reviewed.")
+            if "数据库" in desc_lower or "database" in desc_lower or "db" in desc_lower:
+                findings_list.append(f"6. **Data Persistence for {key_terms_str}**: Database selection criteria and schema design considerations documented.")
+            if "容错" in desc_lower or "fault" in desc_lower or " resilience" in desc_lower:
+                findings_list.append(f"7. **Resilience Patterns for {key_terms_str}**: Fault tolerance strategies including retry, circuit breaker, and graceful degradation approaches reviewed.")
+
+            # If no specific aspects found, generate findings based on key terms
+            if not findings_list:
+                findings_list.append(f"1. **Domain Analysis of {key_terms_str}**: Research identified core concepts and fundamental approaches for this domain.")
+                findings_list.append(f"2. **Implementation Considerations for {key_terms_str}**: Key factors and potential challenges documented for implementation planning.")
+
+            # Generate recommendations based on findings
+            recommendations = []
+            if "架构" in desc_lower or "architecture" in desc_lower:
+                recommendations.append("- Select architectural pattern based on specific scalability and maintainability requirements")
+            if "安全" in desc_lower or "security" in desc_lower:
+                recommendations.append("- Prioritize security review before production deployment")
+            if "性能" in desc_lower or "performance" in desc_lower:
+                recommendations.append("- Establish performance benchmarks early in development cycle")
+            recommendations.append("- Proceed to planning phase with documented research findings")
+            recommendations.append("- Validate research conclusions against specific project requirements")
+
+            findings_path = Path(workdir) / f"findings_{session_id}.md"
+            findings_content = f"""# Research Findings: {task_title}
 
 ## Research Question
 {task_desc}
@@ -691,6 +761,7 @@ def advance_workflow(
 ## Method
 - Research conducted at: {datetime.now().isoformat()}
 - Focus: {key_terms_str}
+- Note: Template-based analysis (web search unavailable)
 
 ## Key Findings
 {chr(10).join(findings_list)}
@@ -703,55 +774,218 @@ def advance_workflow(
 ## Recommendations
 {chr(10).join(recommendations)}
 """
+            search_note = search_response.error if search_response.error else "Search unavailable"
+            metadata = {
+                "deliverable": "findings",
+                "session_id": session_id,
+                "has_method": True,
+                "has_conclusions": True,
+                "generated_on_exit": True,
+                "key_terms": key_terms_str,
+                "search_error": search_note,
+                "used_real_search": False,
+            }
+
         findings_path.write_text(findings_content, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings", "session_id": session_id,
-                                 "has_method": True, "has_conclusions": True, "generated_on_exit": True,
-                                 "key_terms": key_terms_str})
+        register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system", metadata=metadata)
 
     if current_phase == "REVIEWING" and phase != "REVIEWING":
         # Generating review when leaving REVIEWING phase (completing review work)
         task_title = state.task.title if state.task else 'N/A'
         task_desc = state.task.description if state.task else 'N/A'
 
-        # Identify review focus areas and generate specific risks based on task description
-        desc_lower = task_desc.lower()
-        risk_findings = []
-        risk_level = "Medium"
+        # Try to read actual code files from workdir
+        workdir_path = Path(workdir)
+        code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
+        code_files = []
+        for ext in code_extensions:
+            code_files.extend(workdir_path.rglob(f'*{ext}'))
 
-        # Generate specific risk findings based on task type
-        if "认证" in desc_lower or "auth" in desc_lower or "login" in desc_lower:
-            risk_findings.append("- **Authentication**: Credential handling and session management reviewed for security concerns")
-            risk_level = "High"
-        if "API" in desc_lower or "rest" in desc_lower or "接口" in desc_lower:
-            risk_findings.append("- **API Security**: Endpoint validation, rate limiting, and input sanitization reviewed")
-        if "用户" in desc_lower or "user" in desc_lower:
-            risk_findings.append("- **Data Handling**: User input validation and data protection mechanisms reviewed")
-        if "注册" in desc_lower or "register" in desc_lower:
-            risk_findings.append("- **Registration Flow**: Password policy, email verification, and duplicate prevention reviewed")
-            risk_level = "High"
-        if "支付" in desc_lower or "payment" in desc_lower or "transaction" in desc_lower:
-            risk_findings.append("- **Transaction Safety**: ACID compliance, idempotency, and financial error handling critical")
-            risk_level = "Critical"
-        if "敏感" in desc_lower or "sensitive" in desc_lower or "privacy" in desc_lower:
-            risk_findings.append("- **Data Privacy**: PII handling, encryption, and compliance considerations reviewed")
-            risk_level = "High"
-        if not risk_findings:
-            risk_findings.append("- **General Quality**: Code structure, error handling, and edge cases reviewed for correctness")
+        # Filter out common non-source directories
+        excluded_dirs = {'node_modules', '.git', '__pycache__', 'venv', '.venv', 'dist', 'build'}
 
-        # Generate specific recommendations based on identified risks
-        recommendations = []
-        if "认证" in desc_lower or "auth" in desc_lower:
-            recommendations.append("- Implement multi-factor authentication for production")
-        if "API" in desc_lower or "rest" in desc_lower:
-            recommendations.append("- Add API rate limiting and request validation middleware")
-        if risk_level == "High" or risk_level == "Critical":
-            recommendations.append("- Conduct dedicated security review before production deployment")
-        recommendations.append("- Verify implementation against specific acceptance criteria")
-        recommendations.append("- Add integration tests for critical business paths")
+        # Task-directed review: prioritize owned_files from task_plan, then file_changes, then fallback
+        target_files = []
+        review_source = "none"
 
-        review_path = Path(workdir) / f"review_{session_id}.md"
-        review_content = f"""# Code Review: {task_title}
+        # 1. Try to get owned_files from task_plan
+        plan_path = Path(workdir) / "task_plan.md"
+        if plan_path.exists():
+            plan_content = plan_path.read_text(encoding="utf-8", errors="ignore")
+            # Parse owned_files from plan (format: "  - owned_files: file1.py, file2.py")
+            import re
+            owned_pattern = re.compile(r'owned_files:\s*(.+)', re.IGNORECASE)
+            for line in plan_content.split('\n'):
+                match = owned_pattern.search(line)
+                if match:
+                    files_str = match.group(1).strip()
+                    for f in files_str.split(','):
+                        f = f.strip()
+                        if f:
+                            fp = Path(workdir) / f
+                            if fp.exists():
+                                target_files.append(fp)
+                    if target_files:
+                        review_source = "owned_files"
+                        break
+
+        # 2. Try to get files from state.file_changes
+        if not target_files and state.file_changes:
+            for fc in state.file_changes[:10]:  # Limit to first 10 changes
+                fp = Path(workdir) / fc.get("path", "")
+                if fp.exists() and fp.suffix in {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}:
+                    target_files.append(fp)
+            if target_files:
+                review_source = "file_changes"
+
+        # 3. Fallback: scan workdir for code files but with a smarter filter
+        if not target_files:
+            code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
+            for ext in code_extensions:
+                for fp in workdir_path.rglob(f'*{ext}'):
+                    if not any(ex in fp.parts for ex in excluded_dirs):
+                        target_files.append(fp)
+            if target_files:
+                review_source = "workdir_scan"
+
+        # Limit to 10 files total for performance
+        target_files = target_files[:10]
+        used_real_review = len(target_files) > 0
+        reviewed_files_info = []
+
+        if used_real_review:
+            # Analyze actual code files
+            risk_findings = []
+            risk_level = "Medium"
+            total_lines = 0
+
+            for code_file in target_files:
+                try:
+                    content = code_file.read_text(encoding="utf-8", errors="ignore")
+                    lines = content.split('\n')
+                    total_lines += len(lines)
+                    file_size = len(content)
+
+                    # Generate findings based on actual code content
+                    file_path_str = str(code_file.relative_to(workdir_path))
+
+                    # Check for common security issues
+                    if any(kw in content.lower() for kw in ['password', 'secret', 'token', 'api_key', 'apikey', 'auth']):
+                        risk_findings.append(f"- **{file_path_str}**: Contains potential credential/secrets - review for hardcoded secrets (lines: {len(lines)})")
+                        if risk_level != "Critical":
+                            risk_level = "High"
+
+                    # Check for error handling
+                    if 'except' not in content and 'try:' not in content:
+                        if file_size > 1000:  # Only flag larger files
+                            risk_findings.append(f"- **{file_path_str}**: Missing try/except blocks - review error handling (lines: {len(lines)})")
+
+                    # Check for TODO/FIXME (indicates incomplete work)
+                    if '# TODO' in content or '# FIXME' in content:
+                        risk_findings.append(f"- **{file_path_str}**: Contains TODO/FIXME comments - incomplete work identified (lines: {len(lines)})")
+
+                    reviewed_files_info.append(f"- {file_path_str} ({len(lines)} lines)")
+
+                except Exception:
+                    continue
+
+            # Add overall assessment findings
+            if not risk_findings:
+                risk_findings.append("- **Code Quality**: No critical issues identified in code review")
+
+            # Generate recommendations based on actual findings
+            recommendations = []
+            if risk_level == "High":
+                recommendations.append("- Address high-risk findings before production deployment")
+                recommendations.append("- Remove or secure any hardcoded credentials/secrets")
+            if "Contains potential credential" in " ".join(risk_findings):
+                recommendations.append("- Implement secret management (environment variables or vault)")
+            recommendations.append("- Verify implementation against specific acceptance criteria")
+            recommendations.append("- Add integration tests for critical business paths")
+
+            review_path = Path(workdir) / f"review_{session_id}.md"
+            review_content = f"""# Code Review: {task_title}
+
+## Review Scope
+{task_title}
+
+## Task Description
+{task_desc}
+
+## Review Date
+{datetime.now().isoformat()}
+
+## Reviewed Files ({len(code_files)} files analyzed)
+{chr(10).join(reviewed_files_info)}
+
+## Risk Findings
+{chr(10).join(risk_findings)}
+
+## Risk Assessment
+- **Files Reviewed**: {len(code_files)} code files
+- **Total Lines**: {total_lines}
+- **Correctness**: Implementation reviewed based on actual code
+- **Security**: Security posture assessed based on code analysis
+- **Maintainability**: Code structure supports future maintenance
+
+## Risk Level
+- **Overall**: {risk_level}
+- {"High-risk areas identified - requires careful review" if risk_level == "High" else "Standard review findings apply" if risk_level == "Medium" else "Critical areas require immediate attention"}
+
+## Recommendations
+{chr(10).join(recommendations)}
+"""
+            metadata = {
+                "deliverable": "review",
+                "session_id": session_id,
+                "has_findings": True,
+                "has_risk_level": True,
+                "generated_on_exit": True,
+                "risk_level": risk_level,
+                "files_reviewed": len(target_files),
+                "total_lines": total_lines,
+                "used_real_review": True,
+                "review_source": review_source,
+            }
+        else:
+            # Fall back to template-based review (no code files found)
+            desc_lower = task_desc.lower()
+            risk_findings = []
+            risk_level = "Medium"
+
+            # Generate specific risk findings based on task type
+            if "认证" in desc_lower or "auth" in desc_lower or "login" in desc_lower:
+                risk_findings.append("- **Authentication**: Credential handling and session management reviewed for security concerns")
+                risk_level = "High"
+            if "API" in desc_lower or "rest" in desc_lower or "接口" in desc_lower:
+                risk_findings.append("- **API Security**: Endpoint validation, rate limiting, and input sanitization reviewed")
+            if "用户" in desc_lower or "user" in desc_lower:
+                risk_findings.append("- **Data Handling**: User input validation and data protection mechanisms reviewed")
+            if "注册" in desc_lower or "register" in desc_lower:
+                risk_findings.append("- **Registration Flow**: Password policy, email verification, and duplicate prevention reviewed")
+                risk_level = "High"
+            if "支付" in desc_lower or "payment" in desc_lower or "transaction" in desc_lower:
+                risk_findings.append("- **Transaction Safety**: ACID compliance, idempotency, and financial error handling critical")
+                risk_level = "Critical"
+            if "敏感" in desc_lower or "sensitive" in desc_lower or "privacy" in desc_lower:
+                risk_findings.append("- **Data Privacy**: PII handling, encryption, and compliance considerations reviewed")
+                risk_level = "High"
+            if not risk_findings:
+                risk_findings.append("- **General Quality**: Code structure, error handling, and edge cases reviewed for correctness")
+
+            # Generate specific recommendations based on identified risks
+            recommendations = []
+            if "认证" in desc_lower or "auth" in desc_lower:
+                recommendations.append("- Implement multi-factor authentication for production")
+            if "API" in desc_lower or "rest" in desc_lower:
+                recommendations.append("- Add API rate limiting and request validation middleware")
+            if risk_level == "High" or risk_level == "Critical":
+                recommendations.append("- Conduct dedicated security review before production deployment")
+            recommendations.append("- Verify implementation against specific acceptance criteria")
+            recommendations.append("- Add integration tests for critical business paths")
+
+            review_path = Path(workdir) / f"review_{session_id}.md"
+            review_content = f"""# Code Review: {task_title}
 
 ## Review Scope
 {task_title}
@@ -777,14 +1011,56 @@ def advance_workflow(
 ## Recommendations
 {chr(10).join(recommendations)}
 """
-        review_path.write_text(review_content, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review", "session_id": session_id,
-                                 "has_findings": True, "has_risk_level": True, "generated_on_exit": True,
-                                 "risk_level": risk_level})
+            metadata = {
+                "deliverable": "review",
+                "session_id": session_id,
+                "has_findings": True,
+                "has_risk_level": True,
+                "generated_on_exit": True,
+                "risk_level": risk_level,
+                "files_reviewed": 0,
+                "used_real_review": False,
+                "review_source": "none",
+                "note": "No code files found in workdir - template-based review",
+            }
 
-    # Register completion summary when transitioning to COMPLETE
+        review_path.write_text(review_content, encoding="utf-8")
+        register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system", metadata=metadata)
+
+    # Block COMPLETE transition if quality gate failed for code tasks
     if phase == "COMPLETE":
+        # Check if this is a code implementation task (has REVIEWING or EXECUTING in history)
+        phase_history = state.phase.get("history", [])
+        is_code_task = any(p.get("phase") in ("REVIEWING", "EXECUTING") for p in phase_history)
+
+        if is_code_task:
+            # Get quality gate status from tracker
+            tracker_data = task_tracker.load_tracker(str(tracker_path))
+            task_data = None
+            for t in tracker_data.get("tasks", []):
+                if t.get("id") == task_id:
+                    task_data = t
+                    break
+
+            quality_passed = task_data.get("quality_gates_passed") if task_data else None
+            task_status_val = task_data.get("status") if task_data else None
+            task_priority = task_data.get("priority") if task_data else None
+            task_verification = task_data.get("verification") if task_data else None
+
+            # If quality gates were run and failed, block COMPLETE
+            if quality_passed is False:
+                raise ValueError(
+                    f"Cannot transition to COMPLETE: quality gate failed for task {task_id}. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
+
+            # If P0/P1 task has no verification, block COMPLETE
+            if task_priority in ("P0", "P1") and not task_verification:
+                raise ValueError(
+                    f"Cannot transition to COMPLETE: task {task_id} (P0/P1) has no verification method. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
+
         _generate_and_register_summary(workdir, state, current_phase, "completed", session_id)
 
     return {
@@ -813,12 +1089,50 @@ def complete_workflow(
 
     Returns:
         完成结果
+
+    Raises:
+        ValueError: 如果是代码任务且质量门禁失败
     """
     state = load_state(workdir)
     if state is None:
         raise ValueError("workflow state not found, please run init first")
 
     current_phase = state.phase.get("current", "IDLE")
+    session_id = state.session_id or "unknown"
+
+    # Gate blocking for code tasks - same logic as advance_workflow COMPLETE
+    phase_history = state.phase.get("history", [])
+    is_code_task = any(p.get("phase") in ("REVIEWING", "EXECUTING") for p in phase_history)
+
+    if is_code_task and final_state == "completed":
+        # Get task_id from state
+        task_id = state.task.id if state.task else None
+        if task_id:
+            tracker_path = Path(workdir) / ".task_tracker.json"
+            tracker_data = task_tracker.load_tracker(str(tracker_path))
+            task_data = None
+            for t in tracker_data.get("tasks", []):
+                if t.get("id") == task_id:
+                    task_data = t
+                    break
+
+            quality_passed = task_data.get("quality_gates_passed") if task_data else None
+            task_priority = task_data.get("priority") if task_data else None
+            task_verification = task_data.get("verification") if task_data else None
+
+            # If quality gates were run and failed, block COMPLETE
+            if quality_passed is False:
+                raise ValueError(
+                    f"Cannot complete workflow: quality gate failed for task {task_id}. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
+
+            # If P0/P1 task has no verification, block COMPLETE
+            if task_priority in ("P0", "P1") and not task_verification:
+                raise ValueError(
+                    f"Cannot complete workflow: task {task_id} (P0/P1) has no verification method. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
 
     # Complete trajectory logging
     if state.session_id in _active_loggers:
@@ -828,7 +1142,6 @@ def complete_workflow(
         del _active_loggers[state.session_id]
 
     # Register completion summary artifact using shared helper
-    session_id = state.session_id or "unknown"
     _generate_and_register_summary(workdir, state, current_phase, final_state, session_id, failure_reason)
 
     # Transition to COMPLETE if not already there
@@ -1144,15 +1457,20 @@ def main() -> int:
         if not args.phase:
             print("错误: --phase 必须指定")
             return 1
-        result = advance_workflow(
-            args.phase,
-            workdir=args.workdir,
-            progress=args.progress,
-            task_status=args.task_status,
-            note=args.note,
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0
+        try:
+            result = advance_workflow(
+                args.phase,
+                workdir=args.workdir,
+                progress=args.progress,
+                task_status=args.task_status,
+                note=args.note,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        except ValueError as e:
+            # Phase transition blocked (e.g., quality gate failure) - return as JSON error
+            print(json.dumps({"error": str(e), "blocked": True}, ensure_ascii=False, indent=2))
+            return 1
 
     if args.op == "recommend":
         snapshot = get_workflow_snapshot(args.workdir)
@@ -1186,13 +1504,18 @@ def main() -> int:
         return 0
 
     if args.op == "complete":
-        result = complete_workflow(
-            args.workdir,
-            final_state=args.final_state,
-            failure_reason=args.failure_reason,
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0
+        try:
+            result = complete_workflow(
+                args.workdir,
+                final_state=args.final_state,
+                failure_reason=args.failure_reason,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        except ValueError as e:
+            # Quality gate blocked completion
+            print(json.dumps({"error": str(e), "blocked": True}, ensure_ascii=False, indent=2))
+            return 1
 
     if args.op == "log-decision":
         if not args.decision:

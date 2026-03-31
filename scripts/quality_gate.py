@@ -147,7 +147,7 @@ def check_typescript(project_dir: str, timeout: int = 60) -> GateResult:
     # 优先使用 tsc
     if os.path.exists(os.path.join(project_dir, "tsconfig.json")):
         returncode, stdout, stderr, duration_ms = run_command(
-            "npx tsc --noEmit 2>&1 || true",
+            "npx tsc --noEmit 2>&1",
             timeout=timeout,
             cwd=project_dir
         )
@@ -157,7 +157,7 @@ def check_typescript(project_dir: str, timeout: int = 60) -> GateResult:
     elif os.path.exists(os.path.join(project_dir, "package.json")):
         # JavaScript 项目使用 eslint
         returncode, stdout, stderr, duration_ms = run_command(
-            "npx eslint . --ext .js,.jsx 2>&1 || true",
+            "npx eslint . --ext .js,.jsx 2>&1",
             timeout=timeout,
             cwd=project_dir
         )
@@ -203,30 +203,36 @@ def check_python(project_dir: str, timeout: int = 60) -> GateResult:
             checked = True
             if tool == "pyright":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    "pyright . 2>&1 || true",
+                    "pyright . 2>&1",
                     timeout=timeout,
                     cwd=project_dir
                 )
             elif tool == "mypy":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    "mypy . --ignore-missing-imports 2>&1 || true",
+                    "mypy . --ignore-missing-imports 2>&1",
                     timeout=timeout,
                     cwd=project_dir
                 )
             elif tool == "pylint":
                 returncode, stdout, stderr, duration_ms = run_command(
-                    "pylint **/*.py 2>&1 || true",
+                    "pylint **/*.py 2>&1",
                     timeout=timeout,
                     cwd=project_dir
                 )
             else:  # flake8
                 returncode, stdout, stderr, duration_ms = run_command(
-                    "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true",
+                    "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1",
                     timeout=timeout,
                     cwd=project_dir
                 )
 
-            if returncode != 0:
+            # Handle "no files to check" as a pass, not a failure
+            # mypy returns exit code 2 when there are no .py files
+            # Also check combined output for "no .py" messages
+            # Note: commands use 2>&1 so stderr may be in stdout
+            combined_output = (stdout + "\n" + stderr).lower()
+            no_files_msg = "there are no .py" in combined_output or "no .py" in combined_output
+            if returncode != 0 and not (tool == "mypy" and no_files_msg):
                 all_passed = False
                 output_lines.append(f"{tool}: issues found")
 
@@ -259,7 +265,7 @@ def check_lint(project_dir: str, timeout: int = 60) -> GateResult:
         if os.path.exists(os.path.join(project_dir, "eslint.config.js")) or \
            os.path.exists(os.path.join(project_dir, ".eslintrc.js")):
             returncode, stdout, stderr, duration_ms = run_command(
-                "npx eslint . 2>&1 || true",
+                "npx eslint . 2>&1",
                 timeout=timeout,
                 cwd=project_dir
             )
@@ -277,7 +283,7 @@ def check_lint(project_dir: str, timeout: int = 60) -> GateResult:
     elif os.path.exists(os.path.join(project_dir, "pyproject.toml")):
         # Python
         returncode, stdout, stderr, duration_ms = run_command(
-            "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true",
+            "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1",
             timeout=timeout,
             cwd=project_dir
         )
@@ -312,10 +318,13 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
         if os.path.exists(os.path.join(project_dir, "jest.config.js")) or \
            os.path.exists(os.path.join(project_dir, "vitest.config.ts")):
             returncode, stdout, stderr, duration_ms = run_command(
-                "npm test -- --coverage=false 2>&1 || true",
+                "npm test -- --coverage=false 2>&1",
                 timeout=timeout,
                 cwd=project_dir
             )
+            passed = returncode == 0
+            output = stdout + stderr if not passed else "Tests passed"
+            error = None if passed else "Tests failed"
         else:
             duration_ms = int((time.time() - start_time) * 1000)
             return GateResult(
@@ -329,7 +338,7 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
          os.path.exists(os.path.join(project_dir, "tests")):
         # pytest
         returncode, stdout, stderr, duration_ms = run_command(
-            "pytest -v --tb=short 2>&1 || true",
+            "pytest -v --tb=short 2>&1",
             timeout=timeout,
             cwd=project_dir
         )

@@ -19,11 +19,11 @@ This section describes what actually works **today** via the scripts layer.
 | ROUTER | ✅ | — | Keyword-based routing |
 | OFFICE-HOURS | ✅ | — | Product consultation |
 | EXPLORING | ✅ | — | Socratic deep exploration |
-| RESEARCH | ✅ | findings_{session}.md | Web search + findings report (🔬 Review for quality) |
+| RESEARCH | ✅ | findings_{session}.md | Web search → findings report (falls back to keyword-based if search unavailable) |
 | THINKING | ✅ | — | Expert reasoning |
 | PLANNING | ✅ | task_plan.md | Task breakdown with task_plan.md |
 | EXECUTING | ✅ | — | TDD-driven implementation |
-| REVIEWING | ✅ | review_{session}.md | Code review report (🔬 Review for quality) |
+| REVIEWING | ✅ | review_{session}.md | Real code analysis when files present (falls back to template-based risk assessment) |
 | DEBUGGING | ✅ | — | 5-step systematic debugging |
 | REFINING | ✅ | — | Feedback loop iteration |
 | COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
@@ -45,6 +45,7 @@ The actual executable surface:
 | `scripts/trajectory_logger.py` | ✅ Stable | Trajectory persistence + resume |
 | `scripts/memory_ops.py` | ✅ Stable | SESSION-STATE.md operations |
 | `scripts/task_tracker.py` | ✅ Stable | Task progress tracking |
+| `scripts/search_adapter.py` | ✅ Stable | Web search adapter for RESEARCH (Exa/DuckDuckGo) |
 | `scripts/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
 | `scripts/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration |
 | `scripts/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
@@ -183,40 +184,20 @@ Layer 2: Workflow Runtime (scripts/*.py)
 
 ### Experimental Features (🔬 Not in Main Runtime)
 
-The following features are available but NOT integrated into the main workflow. They are documented here for reference only and should not be relied upon for production workflows.
+> **Note:** These features are experimental and NOT integrated into the main workflow. Do not rely on them for production use.
 
-**Parallel Execution:**
-```bash
-python3 scripts/parallel_executor.py --op list-bands
-python3 scripts/parallel_executor.py --op execute-band --band 1
-```
+Experimental modules are documented separately in [docs/roadmap/experimental-modules.md](docs/roadmap/experimental-modules.md), including:
+- Module inventory and integration status
+- Promotion criteria (what makes a module ready for stable)
+- Decision criteria for removal
 
-**Multi-Agent Orchestration:**
-```bash
-python3 scripts/agent_spawner.py --op list
-python3 scripts/agent_spawner.py --op orchestrate --task "..."
-```
-
-**Semantic Routing:**
-```bash
-python3 scripts/semantic_router.py --text "..."
-python3 scripts/router.py --semantic "..."
-```
-
-**Execution Loops:**
-```bash
-python3 scripts/execution_loop.py --task "..." --mode iterative
-```
-
-**Generator-Evaluator:**
-```bash
-python3 scripts/evaluator.py --output output.json --threshold 0.7
-```
-
-**Context Manager:**
-```bash
-python3 scripts/context_manager.py --op checkpoint --phase EXECUTING --session-id xxx
-```
+Available experimental modules:
+- `semantic_router.py` - Embedding-based routing (design reference)
+- `execution_loop.py` - ReAct/Plan-and-Execute patterns (design reference)
+- `parallel_executor.py` - Parallel Band execution (high complexity)
+- `agent_spawner.py` - Multi-agent orchestration (based on ruflo patterns)
+- `evaluator.py` - Generator-Evaluator pattern (based on Anthropic harness)
+- `context_manager.py` - Context checkpoint/handoff (based on Anthropic harness)
 
 ### P2 New Features
 
@@ -291,20 +272,14 @@ docs/
 ## Validation
 
 ```bash
+# Full test suite (302 tests)
+python3 -m pytest tests/ -q
+
 # Core workflow tests (69 tests - includes failure handling)
 python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
 
-# Task decomposition tests (14 tests)
-python3 -m pytest tests/test_task_decomposer.py -v
-
-# Artifact registry tests (11 tests)
-python3 -m pytest tests/test_artifact_registry.py -v
-
-# Trajectory tests (18 tests)
-python3 -m pytest tests/test_trajectory.py -v
-
-# Failure handling tests (9 tests)
-python3 -m pytest tests/test_failure_handling.py -v
+# Quality gate tests (19 tests)
+python3 -m pytest tests/test_quality_gate.py -v
 
 # Validate unified state
 python3 scripts/unified_state.py --op=validate --workdir .
