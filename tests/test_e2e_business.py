@@ -171,7 +171,12 @@ class TestE2EBusinessChains(unittest.TestCase):
             else:
                 artifact_path = artifact_path / "review.md"
         elif artifact_type in ("summary", "completion_summary"):
-            artifact_path = artifact_path / "completion_summary.md"
+            # Look for session-aware naming first, fallback to legacy naming
+            candidates = list(artifact_path.glob("completion_summary_*.md")) + list(artifact_path.glob("completion_summary.md"))
+            if candidates:
+                artifact_path = max(candidates, key=lambda p: p.stat().st_mtime)
+            else:
+                artifact_path = artifact_path / "completion_summary.md"
         else:
             return False
 

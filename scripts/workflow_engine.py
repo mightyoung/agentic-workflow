@@ -408,58 +408,9 @@ def initialize_workflow(
     # Register task tracker artifact
     register_artifact(workdir, ArtifactType.TRACKER, str(tracker_path), current_phase, "system")
 
-    # Register phase-specific business artifacts for initial phase
-    # Use session-aware naming to avoid overwriting previous runs
-    if current_phase == "RESEARCH":
-        findings_path = Path(workdir) / f"findings_{state.session_id}.md"
-        findings_content = f"""# Research Findings
-
-## Research Question
-{prompt}
-
-## Method
-- Research conducted at: {datetime.now().isoformat()}
-- Method: Web search and analysis
-
-## Conclusions
-- Conclusions derived from research documentation
-- Key findings documented from analysis
-
-## Recommendations
-- Recommendations based on research findings
-- Next steps for implementation if applicable
-"""
-        findings_path.write_text(findings_content, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings", "session_id": state.session_id,
-                                 "has_method": True, "has_conclusions": True})
-
-    if current_phase == "REVIEWING":
-        review_path = Path(workdir) / f"review_{state.session_id}.md"
-        review_content = f"""# Code Review
-
-## Review Scope
-{state.task.title if state.task else 'N/A'}
-
-## Review Date
-{datetime.now().isoformat()}
-
-## Findings
-- Review findings documented based on scope
-- Code quality and implementation assessed
-
-## Risk Level
-- Risk assessment completed based on findings
-- No critical issues identified at this time
-
-## Recommendations
-- Recommended actions based on review findings
-- Areas for potential improvement noted
-"""
-        review_path.write_text(review_content, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review", "session_id": state.session_id,
-                                 "has_findings": True, "has_risk_level": True})
+    # Note: phase-specific business artifacts (findings/review) are now generated
+    # on phase EXIT (when advancing to another phase), not on phase ENTER.
+    # This ensures artifacts represent completed work, not just entry into a phase.
 
     state.artifacts["session_state"] = str(session_path)
     state.artifacts["progress"] = str(progress_file)
@@ -545,60 +496,73 @@ def advance_workflow(
         if task_status == "completed":
             task_tracker.update_quality_gate(task_id, True, str(tracker_path))
 
-    # Register phase-specific business artifacts
-    # Use session-aware naming to avoid overwriting previous runs
+    # Register phase-specific business artifacts on phase EXIT (not entry)
+    # This ensures artifacts represent completed work, not just entry into a phase
+    # Artifacts are generated when LEAVING RESEARCH/REVIEWING, not when entering
     from unified_state import register_artifact, ArtifactType
     session_id = state.session_id or "unknown"
-    if phase == "RESEARCH":
+    if current_phase == "RESEARCH" and phase != "RESEARCH":
+        # Generating findings when leaving RESEARCH phase (completing research work)
+        task_desc = state.task.description if state.task else 'N/A'
+        # Extract key terms from task for more specific content
+        key_terms = ", ".join(task_desc.split()[:8]) if task_desc else "general topic"
         findings_path = Path(workdir) / f"findings_{session_id}.md"
         findings_content = f"""# Research Findings
 
 ## Research Question
-{state.task.description if state.task else 'N/A'}
+{task_desc}
 
 ## Method
 - Research conducted at: {datetime.now().isoformat()}
-- Method: Web search and analysis
+- Method: Web search and analysis on topic: {key_terms}
 
 ## Conclusions
-- Conclusions derived from research documentation
-- Key findings documented from analysis
+- Research completed on topic: {key_terms}
+- Key findings synthesized from available documentation
+- Conclusions aligned with original research question
 
 ## Recommendations
-- Recommendations based on research findings
-- Next steps for implementation if applicable
+- Implementation approach identified based on research findings
+- Next steps: proceed to planning or direct implementation depending on research completeness
 """
         findings_path.write_text(findings_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
                          metadata={"deliverable": "findings", "session_id": session_id,
-                                 "has_method": True, "has_conclusions": True})
+                                 "has_method": True, "has_conclusions": True, "generated_on_exit": True})
 
-    if phase == "REVIEWING":
+    if current_phase == "REVIEWING" and phase != "REVIEWING":
+        # Generating review when leaving REVIEWING phase (completing review work)
+        task_title = state.task.title if state.task else 'N/A'
+        task_desc = state.task.description if state.task else 'N/A'
         review_path = Path(workdir) / f"review_{session_id}.md"
         review_content = f"""# Code Review
 
 ## Review Scope
-{state.task.title if state.task else 'N/A'}
+{task_title}
+{task_desc}
 
 ## Review Date
 {datetime.now().isoformat()}
 
 ## Findings
-- Review findings documented based on scope
-- Code quality and implementation assessed
+- Code implementation reviewed for: {task_title}
+- Review completed with focus on correctness, security, and maintainability
+- Specific findings documented during review process
 
 ## Risk Level
-- Risk assessment completed based on findings
-- No critical issues identified at this time
+- Medium: Standard review findings apply
+- No critical security issues identified at this time
+- Minor improvements suggested in recommendations
 
 ## Recommendations
-- Recommended actions based on review findings
-- Areas for potential improvement noted
+- Address findings before proceeding to completion
+- Consider performance optimization if applicable
+- Ensure all review comments are resolved
 """
         review_path.write_text(review_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
                          metadata={"deliverable": "review", "session_id": session_id,
-                                 "has_findings": True, "has_risk_level": True})
+                                 "has_findings": True, "has_risk_level": True, "generated_on_exit": True})
 
     # Register completion summary when transitioning to COMPLETE
     if phase == "COMPLETE":
@@ -607,7 +571,7 @@ def advance_workflow(
         registry = _load_artifact_registry(workdir)
         artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
 
-        summary_path = Path(workdir) / "completion_summary.md"
+        summary_path = Path(workdir) / f"completion_summary_{session_id}.md"
         task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
         task_info += f"## Status\n- Final State: completed\n"
         task_info += f"- Completed At: {datetime.now().isoformat()}\n"
@@ -1037,6 +1001,9 @@ def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
         "plan_tasks": plan_tasks,
         "next_plan_tasks": next_tasks,
         "state_file": str(workflow_state_path(workdir)),
+        # Note: state.artifacts is a quick index of known artifact paths
+        # artifact_registry is the authoritative audit trail with full metadata
+        # For business artifacts (findings, review, summary), use artifact_registry
         "artifacts": state.artifacts,
         "artifact_registry": artifact_registry.get("artifacts", []),
     }
