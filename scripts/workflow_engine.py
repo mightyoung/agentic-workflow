@@ -492,6 +492,18 @@ def advance_workflow(
         if task_status == "completed":
             task_tracker.update_quality_gate(task_id, True, str(tracker_path))
 
+    # Register completion summary when transitioning to COMPLETE
+    if phase == "COMPLETE":
+        summary_path = Path(workdir) / "completion_summary.md"
+        task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
+        task_info += f"## Status\n- Final State: completed\n"
+        task_info += f"- Completed At: {datetime.now().isoformat()}\n"
+        task_info += f"- Last Phase: {current_phase}\n"
+        summary_path.write_text(task_info, encoding="utf-8")
+        from unified_state import register_artifact, ArtifactType
+        register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
+                         metadata={"final_state": "completed", "deliverable": "completion_summary"})
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -531,6 +543,21 @@ def complete_workflow(
         logger.exit_phase(current_phase)
         logger.complete(final_state, failure_reason)
         del _active_loggers[state.session_id]
+
+    # Register completion summary artifact
+    summary_path = Path(workdir) / "completion_summary.md"
+    task_info = ""
+    if state.task:
+        task_info = f"# {state.task.title}\n\n"
+        task_info += f"## Status\n- Final State: {final_state}\n"
+        task_info += f"- Completed At: {datetime.now().isoformat()}\n"
+        if failure_reason:
+            task_info += f"- Reason: {failure_reason}\n"
+
+    summary_path.write_text(task_info or "# Workflow Completed\n", encoding="utf-8")
+    from unified_state import register_artifact, ArtifactType
+    register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
+                     metadata={"final_state": final_state, "deliverable": "completion_summary"})
 
     # Transition to COMPLETE if not already there
     if current_phase != "COMPLETE":
