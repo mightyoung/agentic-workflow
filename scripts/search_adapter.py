@@ -33,7 +33,7 @@ class SearchResponse:
     total_results: int
     search_engine: str
     error: Optional[str] = None
-    metadata: dict = None  # Additional search metadata
+    metadata: Optional[dict] = None  # Additional search metadata
 
     def __post_init__(self):
         if self.metadata is None:

@@ -44,7 +44,9 @@ def load_tracker(path: str = DEFAULT_TRACKER_FILE) -> Dict:
         return {"runs": [], "version": "1.0"}
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
     return {"runs": [], "version": "1.0"}
 
 
@@ -117,9 +119,13 @@ def record_step(run_id: str, step_name: str, tokens: int = 0,
 def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> Dict:
     """结束执行追踪"""
     tracker = load_tracker(path)
+    runs = tracker.get("runs", [])
 
-    for run in tracker.get("runs", []):
-        if run["run_id"] == run_id:
+    if not isinstance(runs, list):
+        runs = []
+
+    for run in runs:
+        if isinstance(run, dict) and run.get("run_id") == run_id:
             run["status"] = "completed"
             run["finished_at"] = datetime.now().isoformat()
             run["success"] = success
@@ -138,9 +144,9 @@ def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> 
             print(f"Run {run_id} 已完成")
             print(f"  状态: {'✅ 成功' if success else '❌ 失败'}")
             print(f"  耗时: {duration:.1f}s")
-            print(f"  Steps: {len(run['steps'])}")
-            print(f"  Tokens: {run['total_tokens']}")
-            print(f"  Errors: {run['total_errors']}")
+            print(f"  Steps: {len(run.get('steps', []))}")
+            print(f"  Tokens: {run.get('total_tokens', 0)}")
+            print(f"  Errors: {run.get('total_errors', 0)}")
             print(f"{'='*50}\n")
 
             return run
@@ -154,9 +160,11 @@ def get_run_stats(run_id: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE
     tracker = load_tracker(path)
 
     if run_id:
-        for run in tracker.get("runs", []):
-            if run["run_id"] == run_id:
-                return run
+        runs = tracker.get("runs", [])
+        if isinstance(runs, list):
+            for run in runs:
+                if isinstance(run, dict) and run.get("run_id") == run_id:
+                    return run
         return {"error": f"Run {run_id} 未找到"}
 
     # 汇总统计

@@ -179,7 +179,8 @@ class EmbeddingGenerator:
                 headers={"Content-Type": "application/json"}
             )
             with urllib.request.urlopen(req, timeout=2) as resp:
-                return resp.status == 200
+                status_code: int = resp.status
+                return status_code == 200
         except Exception:
             return False
 

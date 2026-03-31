@@ -144,12 +144,14 @@ def can_parallel(phase1: str, phase2: str) -> bool:
     band2 = get_phase_band(phase2)
     if band1 != band2:
         return False
-    return BAND_CONFIG[band1]["parallel"]
+    parallel: bool = BAND_CONFIG[band1]["parallel"]
+    return parallel
 
 
 def get_band_dependencies(band: PhaseBand) -> List[PhaseBand]:
     """获取 band 的依赖"""
-    return BAND_CONFIG.get(band, {}).get("dependencies", [])
+    deps: List[PhaseBand] = BAND_CONFIG.get(band, {}).get("dependencies", [])
+    return deps
 
 
 def are_dependencies_met(band: PhaseBand, completed_bands: Set[PhaseBand]) -> bool:

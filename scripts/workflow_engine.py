@@ -40,16 +40,26 @@ _active_loggers: Dict[str, TrajectoryLogger] = {}
 DEFAULT_CATEGORY = "WORKFLOW"
 
 
-def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: str) -> bool:
+def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: str, is_code_task: bool = True) -> bool:
     """
     Run quality gate if applicable for the task.
 
     For code implementation tasks, runs typecheck/lint/test.
     For research-only tasks, returns True (no code to check).
 
+    Args:
+        workdir: Working directory
+        task_id: Task ID
+        tracker_path: Path to task tracker
+        is_code_task: Whether this is a code task (False for research-only)
+
     Returns:
         True if gate passed or not applicable, False if gate failed
     """
+    if not is_code_task:
+        # Research-only tasks don't need quality gate
+        return True
+
     try:
         import quality_gate
 
@@ -62,9 +72,9 @@ def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: st
 
         return report.all_passed
     except Exception:
-        # If quality gate fails for any reason, allow completion but log warning
-        # This prevents blocking workflow for non-code tasks
-        return True
+        # If quality gate fails for any reason, block completion for code tasks
+        # This is fail-closed: code tasks must pass quality gate to complete
+        return False
 
 
 def _task_id_from_timestamp() -> str:
@@ -642,7 +652,9 @@ def advance_workflow(
         task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))
         if task_status == "completed":
             # Run actual quality gate before marking as completed
-            quality_passed = _run_quality_gate_if_applicable(workdir, task_id, str(tracker_path))
+            # Research tasks (current_phase == RESEARCH) don't need quality gate
+            is_code_task = current_phase != "RESEARCH"
+            quality_passed = _run_quality_gate_if_applicable(workdir, task_id, str(tracker_path), is_code_task)
             task_tracker.update_quality_gate(task_id, quality_passed, str(tracker_path))
 
     # Register phase-specific business artifacts on phase EXIT (not entry)

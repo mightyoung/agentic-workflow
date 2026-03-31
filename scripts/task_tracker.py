@@ -53,6 +53,9 @@ def load_tracker(path: str) -> Dict:
     else:
         return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
 
+    if not isinstance(data, dict):
+        return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
+
     # 迁移旧任务数据（v4.8新增字段）
     for task in data.get("tasks", []):
         if "budget_seconds" not in task:
@@ -328,21 +331,24 @@ def add_issue(task_id: str, issue: str, solution: str = "",
 def get_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> Optional[Dict]:
     """获取任务详情"""
     tracker = load_tracker(path)
-
-    for task in tracker["tasks"]:
-        if task["id"] == task_id:
+    tasks = tracker.get("tasks", [])
+    if not isinstance(tasks, list):
+        return None
+    for task in tasks:
+        if isinstance(task, dict) and task.get("id") == task_id:
             return task
-
     return None
 
 
 def list_tasks(status: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> List[Dict]:
     """列出任务"""
     tracker = load_tracker(path)
-
+    tasks = tracker.get("tasks", [])
+    if not isinstance(tasks, list):
+        return []
     if status:
-        return [t for t in tracker["tasks"] if t["status"] == status]
-    return tracker["tasks"]
+        return [t for t in tasks if isinstance(t, dict) and t.get("status") == status]
+    return tasks
 
 
 def generate_report(path: str = DEFAULT_TRACKER_FILE) -> str:

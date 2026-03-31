@@ -112,12 +112,15 @@ def get_artifacts(
         工件列表
     """
     registry = _load_artifact_registry(workdir)
-    artifacts = registry.get("artifacts", [])
+    artifacts_raw = registry.get("artifacts", [])
+    if not isinstance(artifacts_raw, list):
+        return []
+    artifacts: List[Dict[str, Any]] = artifacts_raw
 
     if artifact_type:
-        artifacts = [a for a in artifacts if a.get("type") == artifact_type]
+        artifacts = [a for a in artifacts if isinstance(a, dict) and a.get("type") == artifact_type]
     if phase:
-        artifacts = [a for a in artifacts if a.get("phase") == phase]
+        artifacts = [a for a in artifacts if isinstance(a, dict) and a.get("phase") == phase]
 
     return artifacts
 
@@ -125,9 +128,13 @@ def get_artifacts(
 def get_artifact_by_id(workdir: str, artifact_id: str) -> Optional[Dict[str, Any]]:
     """根据ID获取工件"""
     registry = _load_artifact_registry(workdir)
-    for artifact in registry.get("artifacts", []):
-        if artifact.get("id") == artifact_id:
+    artifacts = registry.get("artifacts", [])
+    if not isinstance(artifacts, list):
+        return None
+    for artifact in artifacts:
+        if isinstance(artifact, dict) and artifact.get("id") == artifact_id:
             return artifact
+    return None
     return None
 
 
@@ -139,7 +146,10 @@ def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
 
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+            return {"artifacts": [], "created_at": datetime.now().isoformat()}
     except (json.JSONDecodeError, IOError):
         return {"artifacts": [], "created_at": datetime.now().isoformat()}
 

@@ -55,7 +55,7 @@ def call_claude(prompt: str, timeout: int = 120) -> tuple:
                     # 找到匹配的括号
                     json_output = json.loads(output)
                     return json_output, execution_time, None
-            except:
+            except (json.JSONDecodeError, ValueError):
                 pass
 
             # 如果不是 JSON，返回文本

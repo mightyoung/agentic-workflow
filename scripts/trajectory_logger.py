@@ -465,7 +465,10 @@ def load_trajectory(workdir: str, session_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        return json.loads(trajectory_file.read_text(encoding="utf-8"))
+        data = json.loads(trajectory_file.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+        return None
     except (json.JSONDecodeError, TypeError):
         return None
 

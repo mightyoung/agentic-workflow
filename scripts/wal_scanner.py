@@ -101,9 +101,11 @@ def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             # Validate structure
-            if "patterns" not in data:
-                data["patterns"] = {}
-            return data
+            if isinstance(data, dict):
+                if "patterns" not in data:
+                    data["patterns"] = {}
+                return data
+            return default
         except (json.JSONDecodeError, IOError):
             # Invalid file - return default
             return default

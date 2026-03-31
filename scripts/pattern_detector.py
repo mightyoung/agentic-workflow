@@ -43,7 +43,9 @@ def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
         return {"patterns": [], "version": "1.0"}
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
     return {"patterns": [], "version": "1.0"}
 
 
@@ -163,7 +165,11 @@ def load_run_tracker(tracker_path: str = ".run_tracker.json") -> List[Dict]:
         return []
     with open(tracker_path, 'r') as f:
         data = json.load(f)
-        return data.get("runs", [])
+        if isinstance(data, dict):
+            runs = data.get("runs", [])
+            if isinstance(runs, list):
+                return runs
+        return []
 
 
 def load_step_records(records_path: str = ".step_records.json") -> List[Dict]:
@@ -172,7 +178,11 @@ def load_step_records(records_path: str = ".step_records.json") -> List[Dict]:
         return []
     with open(records_path, 'r') as f:
         data = json.load(f)
-        return data.get("records", [])
+        if isinstance(data, dict):
+            records = data.get("records", [])
+            if isinstance(records, list):
+                return records
+        return []
 
 
 def detect_failures() -> Dict:

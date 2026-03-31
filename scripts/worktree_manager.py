@@ -64,7 +64,10 @@ def load_tracker() -> Dict:
     if not _validate_path(TRACK_FILE) or not os.path.exists(TRACK_FILE):
         return {"worktrees": [], "version": "1.0"}
     with open(TRACK_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+        if isinstance(data, dict):
+            return data
+        return {"worktrees": [], "version": "1.0"}
 
 
 def save_tracker(data: Dict) -> None:
@@ -131,14 +134,20 @@ def create_worktree(
 def list_worktrees() -> List[Dict]:
     """列出所有 worktree"""
     tracker = load_tracker()
-    return tracker.get("worktrees", [])
+    worktrees = tracker.get("worktrees", [])
+    if isinstance(worktrees, list):
+        return worktrees
+    return []
 
 
 def get_worktree(task_id: str) -> Optional[Dict]:
     """获取指定 task 的 worktree"""
     tracker = load_tracker()
-    for wt in tracker.get("worktrees", []):
-        if wt.get("task_id") == task_id:
+    worktrees: List[Dict] = tracker.get("worktrees", [])
+    if not isinstance(worktrees, list):
+        return None
+    for wt in worktrees:
+        if isinstance(wt, dict) and wt.get("task_id") == task_id:
             return wt
     return None
 

@@ -181,8 +181,9 @@ def route(text: str, use_semantic: bool = False) -> Tuple[str, str]:
         try:
             import os
             experimental_path = os.path.join(os.path.dirname(__file__), "experimental")
-            sys.path.insert(0, experimental_path)
-            from semantic_router import route_semantic as semantic_route  # type: ignore[import-not-found]
+            if experimental_path not in sys.path:
+                sys.path.insert(0, experimental_path)
+            from semantic_router import route_semantic as semantic_route
             trigger_type, phase = semantic_route(text)
             if trigger_type == "STAGE":
                 return (trigger_type, phase)
