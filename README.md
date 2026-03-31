@@ -14,26 +14,23 @@ This section describes what actually works **today** via the scripts layer.
 
 ### Phase Skills (Layer 1 - Skill Specs)
 
-| Phase | Runtime | Artifacts | Description |
-|-------|---------|-----------|-------------|
-| ROUTER | ✅ Stable | — | Keyword-based routing |
-| OFFICE-HOURS | ✅ Stable | — | Product consultation |
-| EXPLORING | ✅ Stable | — | Socratic deep exploration |
-| RESEARCH | ✅ Stable | 🔬 Growing | Web search + findings_{session}.md (generated on phase exit) |
-| THINKING | ✅ Stable | — | Expert reasoning |
-| PLANNING | ✅ Stable | ✅ Stable | Task breakdown with task_plan.md |
-| EXECUTING | ✅ Stable | — | TDD-driven implementation |
-| REVIEWING | ✅ Stable | 🔬 Growing | Code review + review_{session}.md (generated on phase exit) |
-| DEBUGGING | ✅ Stable | — | 5-step systematic debugging |
-| REFINING | ✅ Stable | — | Feedback loop iteration |
-| COMPLETE | ✅ Stable | ✅ Stable | Finalization + completion_summary_{session}.md (aggregates prior artifacts) |
+| Phase | Runtime | Output | Description |
+|-------|---------|--------|-------------|
+| ROUTER | ✅ | — | Keyword-based routing |
+| OFFICE-HOURS | ✅ | — | Product consultation |
+| EXPLORING | ✅ | — | Socratic deep exploration |
+| RESEARCH | ✅ | findings_{session}.md | Web search + findings report (🔬 Review for quality) |
+| THINKING | ✅ | — | Expert reasoning |
+| PLANNING | ✅ | task_plan.md | Task breakdown with task_plan.md |
+| EXECUTING | ✅ | — | TDD-driven implementation |
+| REVIEWING | ✅ | review_{session}.md | Code review report (🔬 Review for quality) |
+| DEBUGGING | ✅ | — | 5-step systematic debugging |
+| REFINING | ✅ | — | Feedback loop iteration |
+| COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
 
-**Artifact Quality Key:**
-- ✅ Stable (runtime) = behavior is reliable and tested
-- ✅ Stable (artifacts) = output is structured and consistent
-- 🔬 Growing = output is generated but may need human review for quality
-
-**Note:** "Stable" indicates runtime behavior is reliable, not that default artifact content is production-quality without human review.
+**Status Key:**
+- ✅ = Stable and tested
+- 🔬 Review = Output is generated; review recommended before production use
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 

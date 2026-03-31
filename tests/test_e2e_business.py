@@ -253,17 +253,15 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         trigger_type = snapshot.get("trigger_type")
         self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
 
-        # 验证 artifacts 已注册
-        artifacts = snapshot.get("artifacts", {})
-        self.assertIn("progress", artifacts, "progress artifact should be registered")
-        self.assertIn("task_tracker", artifacts, "task_tracker artifact should be registered")
+        # 验证 artifact_registry 已注册（唯一权威来源）
+        registry_entries = snapshot.get("artifact_registry", [])
+        registered_types = {entry.get("type") for entry in registry_entries}
+        self.assertIn("progress", registered_types, "progress artifact should be registered")
+        self.assertIn("tracker", registered_types, "task_tracker artifact should be registered")
 
         # 验证 .artifacts.json 存在
         artifact_registry = Path(self.workdir) / ".artifacts.json"
         self.assertTrue(artifact_registry.exists(), "Artifact registry should exist")
-
-        # 验证 artifact_registry 明细包含预期字段
-        registry_entries = snapshot.get("artifact_registry", [])
         self.assertGreater(len(registry_entries), 0, "Artifact registry should have entries")
         for entry in registry_entries:
             self.assertIn("type", entry, "Registry entry should have type field")
@@ -373,9 +371,10 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         trigger_type = snapshot.get("trigger_type")
         self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
 
-        # 验证 artifacts 已注册
-        artifacts = snapshot.get("artifacts", {})
-        self.assertIn("progress", artifacts, "progress artifact should be registered")
+        # 验证 artifact_registry 已注册（唯一权威来源）
+        registry_entries = snapshot.get("artifact_registry", [])
+        registered_types = {entry.get("type") for entry in registry_entries}
+        self.assertIn("progress", registered_types, "progress artifact should be registered")
 
         # Step 3: 获取推荐的下一个phases并推进
         recommended = snapshot.get("recommended_next_phases", [])
@@ -423,24 +422,16 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
         # Step 8: 验证业务交付物（交付验收）
-        # 研究链应该同时产生计划消费和研究产物（当RESEARCH阶段被访问时）
+        # 研究链必须产生计划消费和研究产物
         plan_consumed = self._check_plan_consumed()
         business_artifacts = self._get_business_artifact_types()
 
-        if visited_research:
-            # When RESEARCH was visited, require BOTH plan consumption and findings
-            self.assertTrue(
-                plan_consumed and len(business_artifacts) > 0,
-                "Research chain with RESEARCH phase visited should produce both plan consumption and business artifacts. "
-                f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
-            )
-        else:
-            # When RESEARCH was not visited, still allow OR condition
-            self.assertTrue(
-                plan_consumed or len(business_artifacts) > 0,
-                "Research chain should produce plan consumption or business artifacts. "
-                f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
-            )
+        # Always require BOTH plan consumption and business artifacts for research chain
+        self.assertTrue(
+            plan_consumed and len(business_artifacts) > 0,
+            "Research chain should produce both plan consumption and business artifacts. "
+            f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
+        )
 
         # Step 9: 验证研究产物（findings artifact）
         # Only verify if RESEARCH phase was actually visited
