@@ -346,8 +346,8 @@ docs/
 ## Validation
 
 ```bash
-# Core workflow tests (60 tests)
-python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py -q
+# Core workflow tests (69 tests - includes failure handling)
+python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
 
 # Task decomposition tests (14 tests)
 python3 -m pytest tests/test_task_decomposer.py -v
@@ -357,6 +357,9 @@ python3 -m pytest tests/test_artifact_registry.py -v
 
 # Trajectory tests (18 tests)
 python3 -m pytest tests/test_trajectory.py -v
+
+# Failure handling tests (9 tests)
+python3 -m pytest tests/test_failure_handling.py -v
 
 # Validate unified state
 python3 scripts/unified_state.py --op=validate --workdir .

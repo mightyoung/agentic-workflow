@@ -150,6 +150,8 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         2. 状态正确更新
         3. Trajectory记录完整轨迹
         4. 状态验证通过
+        5. trigger_type 正确（不是从 description 推断）
+        6. Artifacts 已注册到注册表
         """
         prompt = "实现一个用户认证的REST API，包括注册、登录、登出功能"
 
@@ -159,16 +161,37 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         self.assertIn("task_id", init_result)
         self.assertIn("phase", init_result)
         self.assertIn("state_file", init_result)
+        self.assertIn("trigger_type", init_result)
 
         # Step 2: 获取快照验证状态
         snapshot = self._get_snapshot()
         self.assertTrue(snapshot.get("exists", False), "State should exist")
         self.assertTrue(snapshot.get("valid", False), "State should be valid")
 
+        # 验证 trigger_type 存在且有效（不是从 description 推断的残缺字符串）
+        trigger_type = snapshot.get("trigger_type")
+        self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
+
+        # 验证 artifacts 已注册
+        artifacts = snapshot.get("artifacts", {})
+        self.assertIn("progress", artifacts, "progress artifact should be registered")
+        self.assertIn("task_tracker", artifacts, "task_tracker artifact should be registered")
+
+        # 验证 .artifacts.json 存在
+        artifact_registry = Path(self.workdir) / ".artifacts.json"
+        self.assertTrue(artifact_registry.exists(), "Artifact registry should exist")
+
+        # 验证 artifact_registry 明细包含预期字段
+        registry_entries = snapshot.get("artifact_registry", [])
+        self.assertGreater(len(registry_entries), 0, "Artifact registry should have entries")
+        for entry in registry_entries:
+            self.assertIn("type", entry, "Registry entry should have type field")
+            self.assertIn("phase", entry, "Registry entry should have phase field")
+            self.assertIn("generated_by", entry, "Registry entry should have generated_by field")
+
         current_phase = snapshot.get("current_phase", "EXECUTING")
 
         # Step 3: 推进phase直到COMPLETE
-        # 获取推荐的下一个phases
         recommended = snapshot.get("recommended_next_phases", [])
         if not recommended:
             recommended = ["EXECUTING", "REVIEWING", "COMPLETE"]
@@ -180,7 +203,6 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
                 advance_result = self._run_workflow_advance(next_phase)
                 current_phase = advance_result["phase"]
             except ValueError:
-                # 无法推进到该phase，尝试下一个
                 continue
 
         # Step 4: 如果还不是COMPLETE，尝试直接推进
@@ -196,6 +218,10 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
 
+        # Step 6: 验证轨迹已创建
+        trajectory_dir = Path(self.workdir) / "trajectories"
+        self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
+
 
 class TestResearchAnalysisChain(TestE2EBusinessChains):
     """业务链2: 调研分析链"""
@@ -209,6 +235,8 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         2. 工作流状态正确更新
         3. Trajectory记录完整轨迹
         4. 状态验证通过
+        5. trigger_type 正确
+        6. Artifacts 已注册
         """
         prompt = "研究微服务架构的最佳实践，包括服务拆分、通信模式、容错处理"
 
@@ -221,6 +249,14 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         snapshot = self._get_snapshot()
         current_phase = snapshot.get("current_phase")
         self.assertIn(current_phase, ["RESEARCH", "THINKING", "PLANNING", "EXECUTING"])
+
+        # 验证 trigger_type 存在
+        trigger_type = snapshot.get("trigger_type")
+        self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
+
+        # 验证 artifacts 已注册
+        artifacts = snapshot.get("artifacts", {})
+        self.assertIn("progress", artifacts, "progress artifact should be registered")
 
         # Step 3: 获取推荐的下一个phases并推进
         recommended = snapshot.get("recommended_next_phases", [])
@@ -248,6 +284,10 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         snapshot = self._get_snapshot()
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
+
+        # Step 6: 验证轨迹已创建
+        trajectory_dir = Path(self.workdir) / "trajectories"
+        self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
 
 class TestDebugFixChain(TestE2EBusinessChains):
@@ -302,6 +342,10 @@ class TestDebugFixChain(TestE2EBusinessChains):
         snapshot = self._get_snapshot()
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
+
+        # Step 6: 验证轨迹已创建
+        trajectory_dir = Path(self.workdir) / "trajectories"
+        self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
 
 class TestStateSchemaValidation(TestE2EBusinessChains):

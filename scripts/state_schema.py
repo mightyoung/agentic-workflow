@@ -113,9 +113,11 @@ class Decision:
     timestamp: str
     decision: str
     reason: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        return result
 
 
 @dataclass

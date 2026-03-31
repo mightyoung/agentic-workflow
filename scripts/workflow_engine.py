@@ -612,11 +612,39 @@ def resume_workflow(
     if not result:
         return {"success": False, "error": f"Failed to resume session {session_id}"}
 
-    # 重新初始化 trajectory logger
+    # 获取新的 session_id 和 next_phase
     new_session_id = result["session_id"]
+    next_phase = result["next_phase"]
+
+    # 更新 unified state - 这是关键同步步骤
+    state = load_state(workdir)
+    if state is not None:
+        # 记录恢复决策
+        from datetime import datetime
+        from state_schema import Decision
+        state.decisions.append(Decision(
+            timestamp=datetime.now().isoformat(),
+            decision=f"Resumed from {session_id}",
+            reason=f"resume_from={result['resume_from']}",
+            metadata={"original_session": session_id, "resumed_session": new_session_id},
+        ))
+
+        # 更新 session_id
+        state.session_id = new_session_id
+
+        # 更新 phase
+        state.phase["current"] = next_phase
+
+        # 更新 artifact 中的 trajectory 引用
+        state.artifacts["trajectory_session_id"] = new_session_id
+        state.artifacts["trajectory_run_id"] = result.get("run_id", "")
+
+        save_state(workdir, state)
+
+    # 重新初始化 trajectory logger
     new_logger = TrajectoryLogger(workdir, new_session_id)
     new_logger.start(f"[RESUMED from {session_id}]", "RESUMED")
-    new_logger.enter_phase(result["next_phase"])
+    new_logger.enter_phase(next_phase)
     _active_loggers[new_session_id] = new_logger
 
     return {
@@ -624,7 +652,8 @@ def resume_workflow(
         "original_session_id": session_id,
         "new_session_id": new_session_id,
         "resume_from": result["resume_from"],
-        "next_phase": result["next_phase"],
+        "next_phase": next_phase,
+        "state_synced": True,
     }
 
 
@@ -649,6 +678,9 @@ def handle_workflow_failure(
     Returns:
         处理结果
     """
+    from datetime import datetime
+    from state_schema import Decision
+
     state = load_state(workdir)
     if state is None:
         return {"success": False, "error": "workflow state not found"}
@@ -661,17 +693,32 @@ def handle_workflow_failure(
         logger.log_error(error, recoverable=(strategy != "abort"))
 
     if strategy == "retry":
-        # 重试当前 phase
-        retry_count = state.decisions[-1].to_dict().get("metadata", {}).get("retry_count", 0) if state.decisions else 0
+        # 从最后一个决策的metadata获取retry_count
+        retry_count = 0
+        if state.decisions:
+            last_decision = state.decisions[-1]
+            retry_count = last_decision.metadata.get("retry_count", 0)
+
         if retry_count >= max_retries:
+            # 超过阈值，转为debugging
             strategy = "debugging"
         else:
+            # 增加retry_count并存储到state
+            new_retry_count = retry_count + 1
+            state.decisions.append(Decision(
+                timestamp=datetime.now().isoformat(),
+                decision=f"Retry attempt {new_retry_count}",
+                reason=f"Retry after error: {error}",
+                metadata={"retry_count": new_retry_count, "error": error},
+            ))
+            save_state(workdir, state)
+
             return {
                 "success": True,
                 "action": "retry",
                 "phase": current_phase,
-                "retry_count": retry_count + 1,
-                "message": f"Retrying {current_phase} (attempt {retry_count + 1}/{max_retries})",
+                "retry_count": new_retry_count,
+                "message": f"Retrying {current_phase} (attempt {new_retry_count}/{max_retries})",
             }
 
     if strategy == "debugging":
@@ -735,6 +782,10 @@ def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
 
     current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
 
+    # Load artifact registry for full audit trail
+    from unified_state import _load_artifact_registry
+    artifact_registry = _load_artifact_registry(workdir)
+
     # Validate state
     from unified_state import validate_workflow_state
     is_valid, errors = validate_workflow_state(workdir)
@@ -753,6 +804,7 @@ def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
         "next_plan_tasks": next_tasks,
         "state_file": str(workflow_state_path(workdir)),
         "artifacts": state.artifacts,
+        "artifact_registry": artifact_registry.get("artifacts", []),
     }
 
 
