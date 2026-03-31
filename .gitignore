@@ -54,6 +54,7 @@ htmlcov/
 # Cache directories
 .mypy_cache/
 .ruff_cache/
+.semantic_cache/
 tests/__pycache__/
 
 # Test results
