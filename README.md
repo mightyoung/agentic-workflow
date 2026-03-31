@@ -6,7 +6,7 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.8.1
+**Current Version**: 5.9.0
 
 ## Current Capabilities (v5.8.1)
 
@@ -299,18 +299,20 @@ new_state = migrate_state(old_state)
 
 ## Roadmap (v5.8.1 - Completed)
 
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Schema migration mechanism | ✅ Done | P2 |
-| Artifact registry | ✅ Done | P2 |
-| Plan-driven execution | ✅ Done | P1 |
-| Executable task plan format | ✅ Done | P1 |
-| Trajectory integration | ✅ Done | P1 |
-| trigger_type in WorkflowState | ✅ Done | P0 |
-| Phase history on init | ✅ Done | P0 |
-| Resume main chain fix | ✅ Done | P0 |
-| Independent module tests | ✅ Done | P1 |
-| workflow_state.py deprecated | ✅ Done | P1 |
+> Note: "✅ Done" indicates the feature exists with minimum viable capability. "🔄" indicates mature/implemented.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Schema migration mechanism | ✅ Min Viable | Basic migration framework in place |
+| Artifact registry | ✅ Min Viable | Core registry working, business artifact coverage expanding |
+| Plan-driven execution | ✅ Min Viable | Task status updates work, affects phase recommendations |
+| Executable task plan format | ✅ Done | Task IDs, priorities, dependencies supported |
+| Trajectory integration | ✅ Done | Full persistence and resume supported |
+| trigger_type in WorkflowState | ✅ Done | Formal field in unified state schema |
+| Phase history on init | ✅ Done | Initial phase written to history on init |
+| Resume main chain fix | ✅ Done | State and trajectory sync on resume |
+| Independent module tests | ✅ Done | 68+ tests in core suite |
+| workflow_state.py removed | ✅ Done | unified_state.py is single source of truth |
 
 ## Two-Layer Architecture
 

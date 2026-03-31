@@ -191,16 +191,23 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
 
         current_phase = snapshot.get("current_phase", "EXECUTING")
 
-        # Step 3: 推进phase直到COMPLETE
+        # Step 3: 推进phase直到COMPLETE，同时验证plan-driven execution
         recommended = snapshot.get("recommended_next_phases", [])
         if not recommended:
             recommended = ["EXECUTING", "REVIEWING", "COMPLETE"]
+
+        task_status_map = {
+            "EXECUTING": "in_progress",
+            "REVIEWING": "completed",
+        }
 
         for next_phase in recommended:
             if current_phase == "COMPLETE":
                 break
             try:
-                advance_result = self._run_workflow_advance(next_phase)
+                # Pass task_status to verify plan-driven execution
+                task_status = task_status_map.get(next_phase)
+                advance_result = self._run_workflow_advance(next_phase, task_status)
                 current_phase = advance_result["phase"]
             except ValueError:
                 continue
@@ -218,7 +225,13 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
 
-        # Step 6: 验证轨迹已创建
+        # Step 6: 验证task状态已被推进（plan-driven execution验证）
+        task = snapshot.get("task")
+        if task:
+            self.assertEqual(task.get("status"), "completed",
+                "Task should be marked as completed after full flow")
+
+        # Step 7: 验证轨迹已创建
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
@@ -263,11 +276,17 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         if not recommended:
             recommended = ["THINKING", "PLANNING", "EXECUTING", "REVIEWING", "COMPLETE"]
 
+        task_status_map = {
+            "EXECUTING": "in_progress",
+            "REVIEWING": "completed",
+        }
+
         for next_phase in recommended:
             if current_phase == "COMPLETE":
                 break
             try:
-                advance_result = self._run_workflow_advance(next_phase)
+                task_status = task_status_map.get(next_phase)
+                advance_result = self._run_workflow_advance(next_phase, task_status)
                 current_phase = advance_result["phase"]
             except ValueError:
                 continue
@@ -285,7 +304,13 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
 
-        # Step 6: 验证轨迹已创建
+        # Step 6: 验证task状态已被推进（plan-driven execution验证）
+        task = snapshot.get("task")
+        if task:
+            self.assertEqual(task.get("status"), "completed",
+                "Task should be marked as completed after full flow")
+
+        # Step 7: 验证轨迹已创建
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
@@ -321,11 +346,18 @@ class TestDebugFixChain(TestE2EBusinessChains):
         if not recommended:
             recommended = ["EXECUTING", "DEBUGGING", "REVIEWING", "COMPLETE"]
 
+        task_status_map = {
+            "EXECUTING": "in_progress",
+            "DEBUGGING": "in_progress",
+            "REVIEWING": "completed",
+        }
+
         for next_phase in recommended:
             if current_phase == "COMPLETE":
                 break
             try:
-                advance_result = self._run_workflow_advance(next_phase)
+                task_status = task_status_map.get(next_phase)
+                advance_result = self._run_workflow_advance(next_phase, task_status)
                 current_phase = advance_result["phase"]
             except ValueError:
                 continue
@@ -343,7 +375,13 @@ class TestDebugFixChain(TestE2EBusinessChains):
         self.assertEqual(snapshot.get("current_phase"), "COMPLETE")
         self.assertTrue(snapshot.get("valid", False))
 
-        # Step 6: 验证轨迹已创建
+        # Step 6: 验证task状态已被推进（plan-driven execution验证）
+        task = snapshot.get("task")
+        if task:
+            self.assertEqual(task.get("status"), "completed",
+                "Task should be marked as completed after full flow")
+
+        # Step 7: 验证轨迹已创建
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
