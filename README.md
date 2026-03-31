@@ -14,19 +14,21 @@ This section describes what actually works **today** via the scripts layer.
 
 ### Phase Skills (Layer 1 - Skill Specs)
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| ROUTER | ✅ Stable | Keyword-based routing |
-| OFFICE-HOURS | ✅ Stable | Product consultation |
-| EXPLORING | ✅ Stable | Socratic deep exploration |
-| RESEARCH | ✅ Stable | Web search + findings artifact output |
-| THINKING | ✅ Stable | Expert reasoning |
-| PLANNING | ✅ Stable | Task breakdown with plan artifact |
-| EXECUTING | ✅ Stable | TDD-driven implementation |
-| REVIEWING | ✅ Stable | Code review + review artifact output |
-| DEBUGGING | ✅ Stable | 5-step systematic debugging |
-| REFINING | ✅ Stable | Feedback loop iteration |
-| COMPLETE | ✅ Stable | Finalization + completion_summary artifact |
+| Phase | Runtime | Artifacts | Description |
+|-------|---------|-----------|-------------|
+| ROUTER | ✅ Stable | — | Keyword-based routing |
+| OFFICE-HOURS | ✅ Stable | — | Product consultation |
+| EXPLORING | ✅ Stable | — | Socratic deep exploration |
+| RESEARCH | ✅ Stable | 🔬 Growing | Web search + findings.md (auto-generated on phase entry) |
+| THINKING | ✅ Stable | — | Expert reasoning |
+| PLANNING | ✅ Stable | ✅ Stable | Task breakdown with task_plan.md |
+| EXECUTING | ✅ Stable | — | TDD-driven implementation |
+| REVIEWING | ✅ Stable | 🔬 Growing | Code review + review.md (auto-generated on phase entry) |
+| DEBUGGING | ✅ Stable | — | 5-step systematic debugging |
+| REFINING | ✅ Stable | — | Feedback loop iteration |
+| COMPLETE | ✅ Stable | ✅ Stable | Finalization + completion_summary.md (aggregates prior artifacts) |
+
+**Artifact Quality Key:** ✅ Stable = mature output | 🔬 Growing = improving with usage
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 

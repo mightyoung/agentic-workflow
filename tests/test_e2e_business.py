@@ -178,14 +178,14 @@ class TestE2EBusinessChains(unittest.TestCase):
         if artifact_type == "findings":
             # 检查是否有研究问题、方法、结论、建议
             has_sections = all(s in content for s in ["Research Question", "Method", "Conclusions", "Recommendations"])
-            # 检查不是纯占位
-            no_placeholder = "Placeholder:" not in content or "Research conducted at:" in content
+            # 明确拒绝占位内容
+            no_placeholder = "Placeholder:" not in content
             return has_sections and no_placeholder
         elif artifact_type == "review":
             # 检查是否有审查范围、发现、风险、建议
             has_sections = all(s in content for s in ["Review Scope", "Findings", "Risk Level", "Recommendations"])
-            # 检查不是纯占位
-            no_placeholder = "Placeholder:" not in content or "Review Date:" in content
+            # 明确拒绝占位内容
+            no_placeholder = "Placeholder:" not in content
             return has_sections and no_placeholder
         elif artifact_type == "summary":
             # 检查是否有状态和交付物汇总
