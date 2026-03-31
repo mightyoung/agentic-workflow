@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.7.1
+version: 5.10.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,39 +12,43 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.6)
+## 单入口设计 (v5.10.0)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
-## 当前实现状态
+## 核心改进 (v5.10.0)
 
-当前仓库已经落地的主要运行面在 `scripts/`：
+- **统一状态 Schema**: `trigger_type` 字段正式写入 WorkflowState
+- **Phase History**: 初始化时初始 phase 自动写入 history
+- **Resume 增强**: 支持 init→resume、init→advance→resume、failed→resume 三种场景，状态同步
+- **Artifact Registry**: 工件自动注册到 `.artifacts.json`，支持业务产物审计
+- **Plan-driven Execution**: 任务状态更新影响 phase 推荐
+- **Failure Handling**: retry_count 持久化到 Decision.metadata
 
-- `scripts/router.py`: 轻量关键词路由，按“负面过滤 → 强制触发 → 阶段关键词 → 默认 EXECUTING”执行
-- `scripts/workflow_engine.py`: 最小 workflow runtime，负责把路由、状态、追踪串起来（已收口到 unified_state.py）
-- `scripts/memory_ops.py`: 在项目内维护 `SESSION-STATE.md`
-- `scripts/run_tracker.py`: 记录 `.run_tracker.json`
-- `scripts/step_recorder.py`: 记录 `.step_records.json`
+## 当前能力状态
 
-### Workflow Runtime Layer
+### ✅ 稳定版 (核心运行时)
 
-这几份脚本和它们依赖的项目内文件，构成了当前真正可执行的 workflow runtime layer：
+| 功能 | 脚本 | 测试 |
+|------|------|------|
+| 关键词路由 | `scripts/router.py` | 集成测试 |
+| 统一状态管理 | `scripts/unified_state.py` | ✅ 专项测试 |
+| 工作流引擎 | `scripts/workflow_engine.py` | ✅ 8 tests |
+| 任务分解 | `scripts/task_decomposer.py` | ✅ 14 tests |
+| 轨迹持久化 | `scripts/trajectory_logger.py` | ✅ 18 tests |
+| Session状态 | `scripts/memory_ops.py` | 集成测试 |
+| 任务追踪 | `scripts/task_tracker.py` | 集成测试 |
 
-- `router.py` 决定入口 phase
-- `workflow_engine.py` 负责初始化和推进最小 phase runtime
-- `workflow_engine.py` 同时提供 phase 推荐与 runtime state 校验
-- `workflow_engine.py` 还能解析 `task_plan.md` 并给出下一批待执行任务
-- `SESSION-STATE.md` 和 `progress.md` 保存会话/进度状态
-- `task_plan.md` 保存规划结果
-- `run_tracker.py` 和 `step_recorder.py` 保存轻量执行追踪
+### 🔬 实验版 (未接入主线)
 
-它是一个文件驱动的最小 runtime，不是完整 orchestration engine。后续更复杂的 phase 描述、trajectory 设计和并行编排，都应视为在这个 runtime 之上的演进目标。
-
-以下内容仍应视为目标设计或文档规范，而不是全部已经实现的运行时能力：
-
-- 多层语义路由
-- 完整 phase orchestration API
-- trajectory 文件体系 `./trajectories/<task_id>_<timestamp>.json`
+| 功能 | 脚本 |
+|------|------|
+| 语义路由 | `scripts/semantic_router.py` |
+| 并行执行 | `scripts/parallel_executor.py` |
+| 多Agent编排 | `scripts/agent_spawner.py` |
+| 执行循环 | `scripts/execution_loop.py` |
+| Generator-Evaluator | `scripts/evaluator.py` |
+| 上下文管理 | `scripts/context_manager.py` |
 
 ## 状态机
 
@@ -54,92 +58,49 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
         OFFICE-HOURS → EXPLORING → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
 ```
 
-## 并行执行 (v5.6)
+## 状态管理架构
 
-默认启用并行优先，独立任务自动并行执行。详见: `skills/_shared/parallel-execution.md`
+**统一状态** (.workflow_state.json):
+- `session_id`, `task`, `phase`, `trigger_type`, `artifacts`, `decisions`, `file_changes`
+- `phase.history` 包含所有 phase 条目（含 entered_at/exited_at）
 
-### 并行 Band 设计
+**轨迹** (./trajectories/):
+- 完整执行过程记录
+- 支持断点恢复
 
-| Band | Phase | 说明 |
-|------|-------|------|
-| Band 1 | RESEARCH \|\| THINKING | 并行 |
-| Band 4 | REVIEWING \|\| DEBUGGING | 部分并行 |
+**工件注册** (.artifacts.json):
+- progress.md, task_plan.md, SESSION-STATE.md, .task_tracker.json
 
 ## 快速开始
 
 | 场景 | 触发 | 阶段 |
 |------|------|------|
-| 仅需结果 | "给我..."/"直接给..."/..."就行" | **SUBAGENT** (跳过所有PHASE) |
-| 完整流程 | /agentic-workflow | OFFICE-HOURS→EXPLORING→THINKING→PLANNING→EXECUTING→REVIEWING |
+| 仅需结果 | "给我..."/"直接给..."/..."就行" | **SUBAGENT** |
+| 完整流程 | /agentic-workflow | PLANNING→EXECUTING→REVIEWING |
 | Bug修复 | bug/错误/调试 | DEBUGGING |
 | 项目规划 | 计划/规划/拆分 | PLANNING |
 | 技术调研 | 最佳实践/怎么做 | RESEARCH→THINKING |
 | 代码审查 | 审查/review | REVIEWING |
 | 产品咨询 | 产品想法/需求不明确 | OFFICE-HOURS |
 | **深度探索** | "实验"/"想法"/"深层"/"本质" | **EXPLORING** |
-| 迭代精炼 | 迭代/优化/精炼/发现问题/反馈循环 | REFINING |
+| 迭代精炼 | 迭代/优化/精炼 | REFINING |
 | 简单任务 | 其他 | EXECUTING |
-
-## 路由逻辑
-
-详见: `skills/router/skill.md`
 
 ## Phase Skills
 
 | Phase | Skill | 核心职责 |
 |-------|-------|----------|
-| ROUTER | `skills/router/skill.md` | 智能路由选择 |
-| OFFICE-HOURS | `skills/office-hours/skill.md` | 产品咨询（重构产品想法） |
-| **EXPLORING** | `skills/exploring/skill.md` | 苏格拉底式深度追问 |
+| ROUTER | `skills/router/skill.md` | 关键词路由 |
+| OFFICE-HOURS | `skills/office-hours/skill.md` | 产品咨询 |
+| **EXPLORING** | `skills/exploring/skill.md` | 苏格拉底追问 |
 | RESEARCH | `skills/research/skill.md` | 搜索最佳实践 |
-| THINKING | `skills/thinking/skill.md` | 专家视角分析 |
+| THINKING | `skills/thinking/skill.md` | 专家分析 |
 | PLANNING | `skills/planning/skill.md` | 任务规划 |
-| **EXECUTING** | `skills/executing/skill.md` | TDD驱动实现 + Trajectory持久化 |
+| **EXECUTING** | `skills/executing/skill.md` | TDD实现 |
 | REVIEWING | `skills/reviewing/skill.md` | 代码审查 |
-| DEBUGGING | `skills/debugging/skill.md` | 5步调试法 |
-| COMPLETE | `skills/complete/skill.md` | 验证与复盘 |
-| RETRO | `skills/gstack/commands/retro.md` | 独立回顾（可选） |
-
-### v5.7 执行增强
-
-**Trajectory 持久化**（目标设计，当前未完整实现）：
-- 目标是记录每个任务的完整执行过程（步骤、决策、挑战）
-- 当前仓库中已实现的是 `run_tracker.py` 和 `step_recorder.py`
-- `./trajectories/<task_id>_<timestamp>.json` 仍应视为 roadmap
-
-**快速模式**：
-- 跳过状态跟踪，不创建 task_plan.md
-- 使用简化 Trajectory（内存中记录）
-- 适用于低复杂度任务
-
-## Utility Skills
-
-| Skill | 核心职责 |
-|-------|----------|
-| `skills/baidu-search/skill.md` | 百度AI搜索（tavily降级方案） |
-
-## Shared Modules
-
-| Module | 用途 |
-|--------|------|
-| `skills/_shared/preamble.md` | 标准化 preamble |
-| `skills/_shared/ask-user-question.md` | 提问格式 |
-| `skills/_shared/boil-the-lake.md` | 完整性原则 |
-| `skills/_shared/telemetry.md` | 遥测（已禁用）|
-| `skills/_shared/contributor-mode.md` | 贡献者模式 |
-| `skills/_shared/parallel-execution.md` | 并行执行（默认启用）|
-
-## Evaluation Scripts (v5.7)
-
-基于 OpenYoung 评估机制增强的轻量化追踪系统：
-
-| Script | 用途 |
-|--------|------|
-| `run_tracker.py` | 追踪执行统计 (steps, tokens, duration) |
-| `step_recorder.py` | 记录每个 phase 的执行情况 |
-| `reward_calculator.py` | 多维度奖励计算 |
-| `experience_store.py` | 经验存储与查询 |
-| `pattern_detector.py` | 失败模式检测与建议 |
+| DEBUGGING | `skills/debugging/skill.md` | 5步调试 |
+| REFINING | `skills/refining/skill.md` | 迭代精炼 |
+| COMPLETE | `skills/complete/skill.md` | 验证复盘 |
 
 ## 核心原则
 
@@ -154,6 +115,44 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 - **先做后问**：遇到问题先自行搜索、读源码、验证，再提问
 - **主动出击**：端到端交付，不只是"刚好够用"
 
-## Subagent 集成
+## CLI 快速参考
 
-详见: `agents/README.md`
+```bash
+# 工作流初始化
+python3 scripts/workflow_engine.py --op init --prompt "实现REST API"
+
+# 推进phase
+python3 scripts/workflow_engine.py --op advance --phase EXECUTING
+
+# 获取快照
+python3 scripts/workflow_engine.py --op snapshot
+
+# 恢复工作流
+python3 scripts/workflow_engine.py --op resume
+
+# 验证状态
+python3 scripts/unified_state.py --op validate --workdir .
+
+# 轨迹列表
+python3 scripts/trajectory_logger.py --op list --workdir .
+```
+
+## 测试命令
+
+```bash
+# 核心测试 (69 tests)
+python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
+
+# 任务分解测试
+python3 -m pytest tests/test_task_decomposer.py -v
+
+# 工件注册测试
+python3 -m pytest tests/test_artifact_registry.py -v
+
+# 轨迹测试
+python3 -m pytest tests/test_trajectory.py -v
+```
+
+## 废弃说明
+
+- `scripts/workflow_state.py` 已废弃，功能已合并到 `unified_state.py`
