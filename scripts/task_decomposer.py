@@ -124,8 +124,8 @@ def suggest_verification(task: DecomposedTask) -> str:
     if any(k in combined for k in ["config", "配置"]):
         return f"cat {task.owned_files[0] if task.owned_files else 'config.json'} | python3 -m json.tool"
 
-    # 默认验证
-    return f"# TODO: Add verification for {task.task_id}"
+    # 无法推断验证方式 - 标记为需要人工指定
+    return "NOT_SPECIFIED"
 
 
 def generate_task_id(counter: int, base_timestamp: Optional[str] = None) -> str:

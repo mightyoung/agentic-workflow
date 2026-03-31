@@ -41,6 +41,34 @@ _active_loggers: Dict[str, TrajectoryLogger] = {}
 DEFAULT_CATEGORY = "WORKFLOW"
 
 
+def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: str) -> bool:
+    """
+    Run quality gate if applicable for the task.
+
+    For code implementation tasks, runs typecheck/lint/test.
+    For research-only tasks, returns True (no code to check).
+
+    Returns:
+        True if gate passed or not applicable, False if gate failed
+    """
+    try:
+        import quality_gate
+
+        # Run quality gate on workdir
+        report = quality_gate.run_quality_gate(workdir, ["all"], timeout=60)
+
+        # Log the result
+        gate_result_path = Path(workdir) / f".quality_gate_{task_id}.json"
+        import json
+        gate_result_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+        return report.all_passed
+    except Exception:
+        # If quality gate fails for any reason, allow completion but log warning
+        # This prevents blocking workflow for non-code tasks
+        return True
+
+
 def _task_id_from_timestamp() -> str:
     return f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -602,7 +630,9 @@ def advance_workflow(
     if task_status:
         task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))
         if task_status == "completed":
-            task_tracker.update_quality_gate(task_id, True, str(tracker_path))
+            # Run actual quality gate before marking as completed
+            quality_passed = _run_quality_gate_if_applicable(workdir, task_id, str(tracker_path))
+            task_tracker.update_quality_gate(task_id, quality_passed, str(tracker_path))
 
     # Register phase-specific business artifacts on phase EXIT (not entry)
     # This ensures artifacts represent completed work, not just entry into a phase

@@ -109,104 +109,6 @@ python3 scripts/unified_state.py --op=list-trajectories --workdir .
 python3 scripts/task_decomposer.py --prompt "实现用户认证模块：注册、登录、登出"
 ```
 
-### Parallel Execution Bands (NEW)
-
-```bash
-# List all bands
-python3 scripts/parallel_executor.py --op list-bands
-
-# Execute a specific band (Band 1: RESEARCH||THINKING)
-python3 scripts/parallel_executor.py --op execute-band --band 1
-
-# Execute full workflow with band scheduling
-python3 scripts/parallel_executor.py --op execute-workflow --phases ROUTER RESEARCH THINKING PLANNING EXECUTING COMPLETE
-```
-
-### Multi-Agent Orchestration (NEW)
-
-```bash
-# List available agents
-python3 scripts/agent_spawner.py --op list
-
-# Domain-based routing
-python3 scripts/agent_spawner.py --op spawn-domain --domain research --task "搜索..."
-
-# Full orchestration with consensus
-python3 scripts/agent_spawner.py --op orchestrate --task "研究并实现REST API"
-
-# Health monitoring
-python3 scripts/agent_spawner.py --op health
-```
-
-### Semantic Routing (NEW)
-
-```bash
-# Semantic routing with similarity matching
-python3 scripts/semantic_router.py --text "帮我搜索微服务最佳实践"
-
-# Show all phase scores
-python3 scripts/semantic_router.py --text "帮我搜索微服务最佳实践" --scores --verbose
-
-# Router with semantic fallback
-python3 scripts/router.py --semantic "帮我搜索微服务最佳实践"
-```
-
-### Execution Loop (NEW)
-
-```bash
-# Iterative mode (ReAct): Thought -> Action -> Observation
-python3 scripts/execution_loop.py --task "实现REST API" --mode iterative
-
-# Plan-and-Execute mode: Plan first, then execute
-python3 scripts/execution_loop.py --task "实现REST API" --mode plan_and_execute
-
-# Reflexion mode: Self-reflection with improvement
-python3 scripts/execution_loop.py --task "实现REST API" --mode reflexion
-
-# Adaptive mode: Auto-select based on task complexity
-python3 scripts/execution_loop.py --task "实现REST API" --mode adaptive
-```
-
-### Generator-Evaluator Pattern (NEW)
-
-借鉴 Anthropic Harness Design 最佳实践：
-
-```bash
-# 评估输出
-python3 scripts/evaluator.py --output output.json --threshold 0.7
-
-# 协商 Sprint Contract
-python3 scripts/evaluator.py --negotiate --task-description "实现REST API"
-```
-
-**核心组件：**
-- `SprintContract`: Generator 和 Evaluator 之间的预协商协议
-- `WorkflowEvaluator`: 基于 Grading Rubrics 的严格评估
-- `ContractNegotiator`: 自动协商成功标准
-
-### Context Manager (NEW)
-
-借鉴 Anthropic Harness Design 最佳实践：
-
-```bash
-# 检查是否需要重置上下文
-python3 scripts/context_manager.py --op check --trajectory trajectory.json --context context.txt
-
-# 创建检查点
-python3 scripts/context_manager.py --op checkpoint --phase EXECUTING --session-id xxx --trajectory trajectory.json --context context.txt
-
-# 列出所有检查点
-python3 scripts/context_manager.py --op list
-
-# 重置并恢复
-python3 scripts/context_manager.py --op reset --checkpoint-id cp_xxx --next-phase EXECUTING
-```
-
-**核心功能：**
-- `ContextCheckpoint`: 上下文检查点数据结构
-- `HandoffDocument`: 交接文档 (Markdown 格式)
-- `ContextManager`: 检查点创建、保存、恢复
-
 ### Plan-Driven Execution (NEW)
 
 任务计划现在支持可执行格式：
@@ -278,6 +180,43 @@ Layer 2: Workflow Runtime (scripts/*.py)
 - Multi-agent orchestration
 - Generator-Evaluator pattern
 - Context manager
+
+### Experimental Features (🔬 Not in Main Runtime)
+
+The following features are available but NOT integrated into the main workflow. They are documented here for reference only and should not be relied upon for production workflows.
+
+**Parallel Execution:**
+```bash
+python3 scripts/parallel_executor.py --op list-bands
+python3 scripts/parallel_executor.py --op execute-band --band 1
+```
+
+**Multi-Agent Orchestration:**
+```bash
+python3 scripts/agent_spawner.py --op list
+python3 scripts/agent_spawner.py --op orchestrate --task "..."
+```
+
+**Semantic Routing:**
+```bash
+python3 scripts/semantic_router.py --text "..."
+python3 scripts/router.py --semantic "..."
+```
+
+**Execution Loops:**
+```bash
+python3 scripts/execution_loop.py --task "..." --mode iterative
+```
+
+**Generator-Evaluator:**
+```bash
+python3 scripts/evaluator.py --output output.json --threshold 0.7
+```
+
+**Context Manager:**
+```bash
+python3 scripts/context_manager.py --op checkpoint --phase EXECUTING --session-id xxx
+```
 
 ### P2 New Features
 
