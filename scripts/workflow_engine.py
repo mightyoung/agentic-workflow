@@ -495,12 +495,8 @@ def initialize_workflow(
     logger.enter_phase(current_phase)
     _active_loggers[state.session_id] = logger
 
-    # Only write minimal trajectory refs to state.artifacts (minimal compatibility index)
+    # Trajectory info tracked in _active_loggers and saved to trajectory files
     # All artifact tracking goes through artifact_registry (authoritative source)
-    state.artifacts = {
-        "trajectory_session_id": state.session_id,
-        "trajectory_run_id": run_id,
-    }
 
     memory_ops.update_task_info(str(session_path), prompt, current_phase)
     memory_ops.update_resume_point(str(session_path), current_phase, 0)
@@ -937,12 +933,6 @@ def resume_workflow(
 
         # 更新 phase
         state.phase["current"] = next_phase
-
-        # 更新 minimal artifacts index (trajectory refs only)
-        state.artifacts = {
-            "trajectory_session_id": new_session_id,
-            "trajectory_run_id": result.get("run_id", ""),
-        }
 
         save_state(workdir, state)
 
