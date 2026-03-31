@@ -137,6 +137,29 @@ class TestE2EBusinessChains(unittest.TestCase):
                     return (session_dir / "trajectory.json").exists()
         return False
 
+    def _check_plan_consumed(self) -> bool:
+        """检查任务计划是否被消费（是否有任务状态变化）"""
+        import json
+        tracker_path = Path(self.workdir) / ".task_tracker.json"
+        if not tracker_path.exists():
+            return False
+
+        try:
+            tracker = json.loads(tracker_path.read_text(encoding="utf-8"))
+            tasks = tracker.get("tasks", [])
+            # 检查是否有任务状态不是 backlog 的
+            return any(t.get("status") != "backlog" for t in tasks)
+        except (json.JSONDecodeError, IOError):
+            return False
+
+    def _get_business_artifact_types(self) -> set:
+        """获取已注册的业务工件类型"""
+        snapshot = self._get_snapshot()
+        registry = snapshot.get("artifact_registry", [])
+        business_types = {"findings", "review", "summary", "plan"}
+        registered_types = {entry.get("type") for entry in registry}
+        return registered_types & business_types
+
 
 class TestCodeImplementationChain(TestE2EBusinessChains):
     """业务链1: 代码实现链"""
@@ -235,6 +258,12 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
+        # Step 8: 验证业务交付物（交付验收）
+        # 代码实现链应该消费计划并推进任务状态
+        plan_consumed = self._check_plan_consumed()
+        self.assertTrue(plan_consumed,
+            "Code implementation should consume plan - task status should change")
+
 
 class TestResearchAnalysisChain(TestE2EBusinessChains):
     """业务链2: 调研分析链"""
@@ -314,6 +343,16 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
+        # Step 8: 验证业务交付物（交付验收）
+        # 研究链应该产生计划消费或研究产物
+        plan_consumed = self._check_plan_consumed()
+        business_artifacts = self._get_business_artifact_types()
+        self.assertTrue(
+            plan_consumed or len(business_artifacts) > 0,
+            "Research chain should produce plan consumption or business artifacts. "
+            f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
+        )
+
 
 class TestDebugFixChain(TestE2EBusinessChains):
     """业务链3: 调试修复链"""
@@ -384,6 +423,12 @@ class TestDebugFixChain(TestE2EBusinessChains):
         # Step 7: 验证轨迹已创建
         trajectory_dir = Path(self.workdir) / "trajectories"
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
+
+        # Step 8: 验证业务交付物（交付验收）
+        # Debug链应该解决问题并推进任务状态
+        plan_consumed = self._check_plan_consumed()
+        self.assertTrue(plan_consumed,
+            "Debug workflow should consume plan - task status should change")
 
 
 class TestStateSchemaValidation(TestE2EBusinessChains):
