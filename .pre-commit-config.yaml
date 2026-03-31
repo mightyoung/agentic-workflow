@@ -1,0 +1,43 @@
+# Pre-commit hooks for agentic-workflow
+# Install: pip install pre-commit && pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check scripts/
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format (check only)
+        entry: ruff format --check scripts/
+        language: system
+        types: [python]
+
+      - id: mypy-check
+        name: mypy type check
+        entry: mypy scripts/
+        language: system
+        types: [python]
+        pass_frozen: true
+
+      - id: pytest-fast
+        name: pytest (fast mode)
+        entry: python -m pytest tests/ -q --tb=no
+        language: system
+        pass_frozen: true
+        stages: [push]
+
+      - id: no-debug
+        name: no debug statements
+        entry: grep -rn "import pdb\|import ipdb\|breakpoint()" scripts/ --include="*.py"
+        language: system
+        types: [python]
+        exclude: "^tests/"
+
+      - id: no-commit-to-main
+        name: no direct commit to main
+        entry: git rev-parse --abbrev-ref HEAD | grep -q main && echo "Commit to main via PR only" && exit 1 || exit 0
+        language: system
+        stages: [commit]
