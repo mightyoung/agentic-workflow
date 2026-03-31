@@ -6,9 +6,9 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.9.0
+**Current Version**: 5.10.0
 
-## Current Capabilities (v5.8.1)
+## Current Capabilities (v5.10.0)
 
 This section describes what actually works **today** via the scripts layer.
 
@@ -16,17 +16,17 @@ This section describes what actually works **today** via the scripts layer.
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| ROUTER | ✅ implemented | Keyword-based routing |
-| OFFICE-HOURS | ✅ implemented | Product consultation |
-| EXPLORING | ✅ implemented | Socratic deep exploration |
-| RESEARCH | ✅ implemented | Web search and findings |
-| THINKING | ✅ implemented | Expert reasoning |
-| PLANNING | ✅ implemented | Task breakdown |
-| EXECUTING | ✅ implemented | TDD-driven implementation |
-| REVIEWING | ✅ implemented | Code quality review |
-| DEBUGGING | ✅ implemented | 5-step systematic debugging |
-| REFINING | ✅ implemented | Feedback loop iteration |
-| COMPLETE | ✅ implemented | Finalization and summary |
+| ROUTER | ✅ Stable | Keyword-based routing |
+| OFFICE-HOURS | ✅ Stable | Product consultation |
+| EXPLORING | ✅ Stable | Socratic deep exploration |
+| RESEARCH | ✅ Stable | Web search + findings artifact output |
+| THINKING | ✅ Stable | Expert reasoning |
+| PLANNING | ✅ Stable | Task breakdown with plan artifact |
+| EXECUTING | ✅ Stable | TDD-driven implementation |
+| REVIEWING | ✅ Stable | Code review + review artifact output |
+| DEBUGGING | ✅ Stable | 5-step systematic debugging |
+| REFINING | ✅ Stable | Feedback loop iteration |
+| COMPLETE | ✅ Stable | Finalization + completion_summary artifact |
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 
