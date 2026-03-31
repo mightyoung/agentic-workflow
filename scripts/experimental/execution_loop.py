@@ -39,7 +39,6 @@ Execution Loop - 执行循环机制
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -47,7 +46,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from state_schema import WorkflowState
 
 
 # ============================================================================
@@ -774,14 +772,14 @@ def main():
 
     result = loop.run(task)
 
-    print(f"\n结果:")
+    print("\n结果:")
     print(f"  Status: {result.status}")
     print(f"  Final Phase: {result.final_phase}")
     print(f"  Iterations: {result.total_iterations}")
     print(f"  Duration: {result.total_duration:.2f}s")
     print(f"  Steps: {len(result.steps)}")
 
-    print(f"\n执行轨迹:")
+    print("\n执行轨迹:")
     for step in result.steps:
         status_icon = {
             StepStatus.COMPLETED: "✅",

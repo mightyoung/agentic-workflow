@@ -45,7 +45,7 @@ class PhaseBand(Enum):
 
 
 # Band 配置
-BAND_CONFIG = {
+BAND_CONFIG: Dict[PhaseBand, Dict[str, Any]] = {
     PhaseBand.BAND_0_ROUTER: {
         "name": "ROUTER",
         "phases": ["ROUTER"],
@@ -322,7 +322,7 @@ class ParallelExecutor:
         phases: List[str],
         context: Optional[Dict[str, Any]] = None,
         stop_on_failure: bool = True,
-    ) -> Dict[str, BandResult]:
+    ) -> Dict[PhaseBand, BandResult]:
         """
         执行完整工作流（自动处理 band 依赖）
 

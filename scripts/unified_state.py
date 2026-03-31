@@ -9,14 +9,12 @@ Unified State Management - 统一状态管理
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
+from safe_io import safe_write_json
 from state_schema import (
-    ALLOWED_PHASES,
-    SCHEMA_VERSION,
     Decision,
     FileChange,
     PhaseEntry,
@@ -24,9 +22,7 @@ from state_schema import (
     Trajectory,
     TrajectoryPhase,
     WorkflowState,
-    validate_phase,
     validate_state,
-    validate_task,
 )
 
 
@@ -151,9 +147,7 @@ def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
 def _save_artifact_registry(workdir: str, registry: Dict[str, Any]) -> Path:
     """保存工件注册表"""
     path = Path(workdir) / ARTIFACT_REGISTRY_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(registry, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, registry)
     return path
 
 
@@ -266,11 +260,8 @@ def save_state(workdir: str, state: WorkflowState) -> Path:
         保存的文件路径
     """
     path = workflow_state_path(workdir)
-    path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
     state.updated_at = datetime.now().isoformat()
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
+    safe_write_json(path, state)
 
     return path
 
@@ -396,11 +387,12 @@ def update_task_status(
     """更新任务状态"""
     if state.task and state.task.task_id == task_id:
         new_state = WorkflowState.from_dict(state.to_dict())
-        new_state.task.status = status
+        task = cast(Task, new_state.task)
+        task.status = status
         if progress is not None:
-            new_state.task.progress = progress
+            task.progress = progress
         if status == "completed":
-            new_state.task.completed_at = datetime.now().isoformat()
+            task.completed_at = datetime.now().isoformat()
         return new_state
 
     # 如果不匹配，尝试在tasks列表中查找
@@ -437,9 +429,7 @@ def _get_trajectory_path(workdir: str, run_id: str) -> Path:
 def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     """保存轨迹"""
     path = _get_trajectory_path(workdir, trajectory.run_id)
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(trajectory.to_dict(), f, ensure_ascii=False, indent=2)
+    safe_write_json(path, trajectory)
 
     return path
 

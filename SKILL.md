@@ -43,12 +43,12 @@ requires:
 
 | 功能 | 脚本 |
 |------|------|
-| 语义路由 | `scripts/semantic_router.py` |
-| 并行执行 | `scripts/parallel_executor.py` |
-| 多Agent编排 | `scripts/agent_spawner.py` |
-| 执行循环 | `scripts/execution_loop.py` |
-| Generator-Evaluator | `scripts/evaluator.py` |
-| 上下文管理 | `scripts/context_manager.py` |
+| 语义路由 | `scripts/experimental/semantic_router.py` |
+| 并行执行 | `scripts/experimental/parallel_executor.py` |
+| 多Agent编排 | `scripts/experimental/agent_spawner.py` |
+| 执行循环 | `scripts/experimental/execution_loop.py` |
+| Generator-Evaluator | `scripts/experimental/evaluator.py` |
+| 上下文管理 | `scripts/experimental/context_manager.py` |
 
 ## 状态机
 

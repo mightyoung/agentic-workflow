@@ -29,6 +29,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -542,6 +543,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-from pathlib import Path

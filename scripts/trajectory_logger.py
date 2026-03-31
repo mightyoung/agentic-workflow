@@ -18,12 +18,13 @@ Trajectory Logger - 轨迹记录器
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TextIO
+
+from safe_io import safe_write_json
 
 
 TRAJECTORY_DIR = "trajectories"
@@ -257,7 +258,7 @@ class TrajectoryLogger:
             try:
                 data = json.loads(self._trajectory_file.read_text(encoding="utf-8"))
                 data["current_phase"] = phase
-                self._trajectory_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                safe_write_json(self._trajectory_file, data)
             except (json.JSONDecodeError, IOError):
                 pass
 
@@ -272,7 +273,7 @@ class TrajectoryLogger:
         # 记录phase
         phase_record = PhaseRecord(
             phase=phase,
-            entered_at=self._phase_start,
+            entered_at=self._phase_start or exited_at,
             exited_at=exited_at,
             actions=self._current_actions.copy(),
             decisions=self._current_decisions.copy(),
@@ -284,25 +285,27 @@ class TrajectoryLogger:
         self._update_trajectory_phases(phase_record)
 
         # 追加到JSONL文件
-        for decision in self._current_decisions:
-            rec = DecisionRecord(
-                timestamp=exited_at,
-                decision=decision["decision"],
-                reason=decision.get("reason", ""),
-                phase=phase,
-            )
-            self._decisions_file.write(rec.to_jsonl() + "\n")
+        if self._decisions_file:
+            for decision in self._current_decisions:
+                decision_rec = DecisionRecord(
+                    timestamp=exited_at,
+                    decision=decision["decision"],
+                    reason=decision.get("reason", ""),
+                    phase=phase,
+                )
+                self._decisions_file.write(decision_rec.to_jsonl() + "\n")
 
-        for fc in self._current_file_changes:
-            rec = FileChangeRecord(
-                timestamp=exited_at,
-                path=fc["path"],
-                action=fc["action"],
-                phase=phase,
-            )
-            self._file_changes_file.write(rec.to_jsonl() + "\n")
+        if self._file_changes_file:
+            for fc in self._current_file_changes:
+                fc_rec = FileChangeRecord(
+                    timestamp=exited_at,
+                    path=fc["path"],
+                    action=fc["action"],
+                    phase=phase,
+                )
+                self._file_changes_file.write(fc_rec.to_jsonl() + "\n")
 
-        if error:
+        if error and self._errors_file:
             err_rec = ErrorRecord(
                 timestamp=exited_at,
                 error=error,
@@ -400,6 +403,8 @@ class TrajectoryLogger:
 
     def _update_trajectory_phases(self, new_phase: PhaseRecord):
         """更新轨迹文件中的phases"""
+        if not self._trajectory_file:
+            return
         phases = self._load_phases()
         phases.append(new_phase)
 
@@ -414,20 +419,19 @@ class TrajectoryLogger:
         existing["phases"] = [p.to_dict() for p in phases]
         existing["current_phase"] = new_phase.phase
 
-        self._trajectory_file.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        safe_write_json(self._trajectory_file, existing)
 
     def _save_trajectory(self, trajectory: Trajectory):
         """保存完整轨迹"""
-        self._trajectory_file.write_text(
-            json.dumps(trajectory.to_dict(), ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
+        if not self._trajectory_file:
+            return
+        safe_write_json(self._trajectory_file, trajectory.to_dict())
 
     def get_summary(self) -> Dict[str, Any]:
         """获取轨迹摘要"""
         phases = self._load_phases()
 
-        total_duration = 0
+        total_duration = 0.0
         phase_durations = {}
         for p in phases:
             if p.exited_at and p.entered_at:

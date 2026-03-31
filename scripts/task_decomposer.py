@@ -13,12 +13,13 @@ Task Decomposer - 任务分解器
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+
+from safe_io import safe_write_json
 
 
 @dataclass
@@ -375,15 +376,15 @@ def render_task_plan(tasks: List[DecomposedTask], prompt: str) -> str:
     lines = [
         "# Task Plan",
         "",
-        f"## Summary",
+        "## Summary",
         "",
         f"{prompt}",
         "",
-        f"## Goals",
+        "## Goals",
         "",
         "- [ ] 完成所有分解任务",
         "",
-        f"## Task Breakdown",
+        "## Task Breakdown",
         "",
     ]
 
@@ -435,8 +436,7 @@ def save_tasks_json(tasks: List[DecomposedTask], workdir: str, session_id: str) 
         "tasks": [t.to_dict() for t in tasks],
     }
 
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
     return path
 

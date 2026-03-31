@@ -46,12 +46,12 @@ The actual executable surface:
 | `scripts/memory_ops.py` | ✅ Stable | SESSION-STATE.md operations |
 | `scripts/task_tracker.py` | ✅ Stable | Task progress tracking |
 | `scripts/search_adapter.py` | ✅ Stable | Web search adapter for RESEARCH (Exa/DuckDuckGo) |
-| `scripts/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
-| `scripts/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration |
-| `scripts/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
-| `scripts/execution_loop.py` | 🔬 Experimental | Execution loop patterns |
-| `scripts/evaluator.py` | 🔬 Experimental | Generator-Evaluator pattern |
-| `scripts/context_manager.py` | 🔬 Experimental | Context reset + checkpoints |
+| `scripts/experimental/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
+| `scripts/experimental/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration |
+| `scripts/experimental/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
+| `scripts/experimental/execution_loop.py` | 🔬 Experimental | Execution loop patterns |
+| `scripts/experimental/evaluator.py` | 🔬 Experimental | Generator-Evaluator pattern |
+| `scripts/experimental/context_manager.py` | 🔬 Experimental | Context reset + checkpoints |
 
 ### State Files
 

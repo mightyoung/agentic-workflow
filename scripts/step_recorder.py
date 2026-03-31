@@ -19,8 +19,9 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Dict, List
-from pathlib import Path
+from typing import Optional, Dict
+
+from safe_io import safe_write_json
 
 # 默认记录文件
 DEFAULT_STEP_FILE = ".step_records.json"
@@ -52,8 +53,7 @@ def save_records(path: str, data: Dict) -> None:
     """保存记录数据"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
 
 # Phase 持续时间基准（秒）

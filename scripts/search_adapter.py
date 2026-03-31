@@ -8,7 +8,7 @@ to template-based findings when search is unavailable.
 
 import subprocess
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
@@ -164,7 +164,7 @@ def search(query: str, num_results: int = 5) -> SearchResponse:
     return exa_response if exa_response.error else ddg_response
 
 
-def search_with_fallback(query: str, num_results: int = 5, fallback_content: str = None) -> tuple:
+def search_with_fallback(query: str, num_results: int = 5, fallback_content: Optional[str] = None) -> tuple:
     """
     Perform search with fallback to template content.
 

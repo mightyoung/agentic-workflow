@@ -113,7 +113,7 @@ def _validate_command(command: str) -> bool:
     return True
 
 
-def run_command(command: str, timeout: int = 60, cwd: str = None) -> tuple:
+def run_command(command: str, timeout: int = 60, cwd: Optional[str] = None) -> tuple:
     """执行命令并返回 (returncode, stdout, stderr, duration_ms)"""
     # 安全验证
     if not _validate_command(command):

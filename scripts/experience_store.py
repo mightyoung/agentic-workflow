@@ -27,7 +27,8 @@ import os
 import sys
 from datetime import datetime
 from typing import Optional, Dict, List
-from pathlib import Path
+
+from safe_io import safe_write_json
 
 # 默认经验文件
 DEFAULT_EXPERIENCE_FILE = ".experience_store.json"
@@ -72,8 +73,7 @@ def save_store(path: str, data: Dict) -> None:
     """保存经验存储"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
 
 def add_experience(
@@ -310,8 +310,8 @@ def analyze_category_improvement(
     cat_success = len([e for e in cat_exp if e.get("success")]) / len(cat_exp)
 
     # 计算其他类别统计
-    other_reward = 0
-    other_success = 0
+    other_reward = 0.0
+    other_success = 0.0
     if other_exp:
         other_reward = sum(e.get("reward_total", 0) for e in other_exp) / len(other_exp)
         other_success = len([e for e in other_exp if e.get("success")]) / len(other_exp)

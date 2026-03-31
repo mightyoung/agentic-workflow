@@ -21,7 +21,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Dict, Optional, Any
 
 # 默认 SESSION-STATE 路径
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
@@ -294,7 +294,7 @@ def get_info(path: str, key: str) -> Optional[str]:
     return None
 
 
-def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> dict:
+def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> Dict[str, Any]:
     """
     检查会话空闲状态
 
@@ -310,7 +310,7 @@ def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> dict:
             "task_info": {"phase": "...", "progress": N}
         }
     """
-    result = {
+    result: Dict[str, Any] = {
         "is_idle": False,
         "idle_minutes": 0,
         "last_active": None,
@@ -522,7 +522,7 @@ def main():
             return 1
         lessons = []
         if args.lessons:
-            lessons = [l.strip() for l in args.lessons.split(',') if l.strip()]
+            lessons = [lesson.strip() for lesson in args.lessons.split(',') if lesson.strip()]
         next_actions = []
         if args.next_actions:
             next_actions = [a.strip() for a in args.next_actions.split(',') if a.strip()]

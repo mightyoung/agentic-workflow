@@ -28,8 +28,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import threading
 import time
 from collections import defaultdict
@@ -38,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 
 # ============================================================================
@@ -257,7 +255,7 @@ class AgentRegistry:
         if not candidates:
             return None
 
-        best_score = -1
+        best_score = -1.0
         best_agent = None
 
         for name in candidates:
@@ -763,7 +761,7 @@ class QueenCoordinator:
         Returns:
             分解后的任务列表
         """
-        tasks = []
+        tasks: List[OrchestratedTask] = []
 
         # 简单的基于关键词的分解
         task_lower = task.lower()
@@ -856,12 +854,12 @@ class QueenCoordinator:
 
     def get_bottlenecks(self) -> List[str]:
         """检测瓶颈 (某domain任务堆积)"""
-        domain_counts = defaultdict(int)
+        domain_counts: Dict[Domain, int] = defaultdict(int)
         for task in self.orchestrator._tasks.values():
             if task.state == TaskState.IN_PROGRESS:
                 domain_counts[task.domain] += 1
 
-        bottlenecks = []
+        bottlenecks: List[str] = []
         for domain, count in domain_counts.items():
             if count > 3:  # 阈值
                 bottlenecks.append(f"{domain.value}: {count} tasks")
@@ -937,8 +935,8 @@ class AgentDefinition:
         description = ""
         responsibility = ""
         phase = ""
-        triggers = []
-        tools = []
+        triggers: List[str] = []
+        tools: List[str] = []
 
         import re
         desc_match = re.search(r'description:\s*\|?\s*\n((?:[ \t]+.+\n?)+)', content)
@@ -1095,7 +1093,7 @@ class AgentSpawner:
         4. 回滚机制
         """
         # 1. 分解
-        tasks = self.coordinator.decompose_task(task_description)
+        _ = self.coordinator.decompose_task(task_description)
 
         # 2. 拓扑排序
         try:
@@ -1108,7 +1106,7 @@ class AgentSpawner:
             }
 
         # 3. 执行
-        results = {}
+        results: Dict[str, Dict[str, Any]] = {}
         for task_id in exec_order:
             task = self.coordinator.orchestrator._tasks[task_id]
 

@@ -22,8 +22,7 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Dict, List
 
 # 默认长期记忆文件
 DEFAULT_MEMORY_FILE = "MEMORY.md"
@@ -308,7 +307,7 @@ def generate_weekly_report(days: int = 7, output_format: str = "text") -> str:
                 lessons.append(lesson)
 
     # 统计常见模式
-    status_counts = {}
+    status_counts: Dict[str, int] = {}
     for r in recent_records:
         status = r.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1

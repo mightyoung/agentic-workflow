@@ -9,7 +9,7 @@ LRU Cache 实现 - 基于 OrderedDict 的 O(1) 实现
 """
 
 from collections import OrderedDict
-from typing import Any, Optional, Tuple, List
+from typing import Any, Optional, Tuple, List, cast
 
 
 class LRUCache:
@@ -162,14 +162,16 @@ class LRUCacheManual:
 
     def _remove(self, node: _Node) -> None:
         """从双向链表中移除节点"""
-        node.prev.next = node.next
-        node.next.prev = node.prev
+        # Sentinel pattern guarantees prev/next are never None here
+        cast(_Node, node.prev).next = node.next
+        cast(_Node, node.next).prev = node.prev
 
     def _add_to_tail(self, node: _Node) -> None:
         """将节点添加到链表尾部（最近使用）"""
-        node.prev = self._tail.prev
+        # Sentinel pattern guarantees _tail.prev is never None
+        node.prev = cast(_Node, self._tail.prev)
         node.next = self._tail
-        self._tail.prev.next = node
+        cast(_Node, self._tail.prev).next = node
         self._tail.prev = node
 
     def get(self, key: int) -> int | Any:
@@ -190,7 +192,7 @@ class LRUCacheManual:
         else:
             if len(self._map) >= self._capacity:
                 # 淘汰最久未使用（头部哨兵后的节点）
-                removed = self._head.next
+                removed = cast(_Node, self._head.next)
                 self._remove(removed)
                 del self._map[removed.key]
             new_node = _Node(key, value)
@@ -206,10 +208,10 @@ class LRUCacheManual:
     def keys(self) -> List[int]:
         """返回所有 key 列表（按最近使用顺序）"""
         result = []
-        curr = self._head.next
+        curr: _Node = cast(_Node, self._head.next)
         while curr != self._tail:
             result.append(curr.key)
-            curr = curr.next
+            curr = cast(_Node, curr.next)
         return result
 
     def __len__(self) -> int:
@@ -217,8 +219,8 @@ class LRUCacheManual:
 
     def __repr__(self) -> str:
         items = []
-        curr = self._head.next
+        curr: _Node = cast(_Node, self._head.next)
         while curr != self._tail:
             items.append(f"{curr.key}: {curr.value!r}")
-            curr = curr.next
+            curr = cast(_Node, curr.next)
         return f"LRUCacheManual(capacity={self._capacity}, items=[{', '.join(items)}])"

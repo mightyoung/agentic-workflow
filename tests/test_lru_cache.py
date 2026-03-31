@@ -17,7 +17,7 @@ import sys
 import unittest
 from typing import Any
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "utils"))
 from lru_cache import LRUCache, LRUCacheManual
 
 

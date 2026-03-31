@@ -26,6 +26,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Tuple, Any
 
+from safe_io import safe_write_json
+
 # 默认模式存储文件
 DEFAULT_PATTERNS_FILE = ".wal_patterns.json"
 
@@ -112,8 +114,7 @@ def save_patterns(patterns: Dict, path: str = DEFAULT_PATTERNS_FILE) -> None:
     """保存模式数据"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(patterns, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, patterns)
 
 
 def increment_pattern_count(trigger_type: str, match: str, path: str = DEFAULT_PATTERNS_FILE) -> Tuple[int, bool]:

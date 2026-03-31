@@ -338,7 +338,7 @@ class ContextManager:
         current_context: str,
     ) -> str:
         """生成上下文摘要"""
-        phases_completed = [e.get("phase") for e in trajectory if e.get("status") == "completed"]
+        phases_completed: List[str] = [e.get("phase", "") for e in trajectory if e.get("status") == "completed" and e.get("phase")]
 
         summary_parts = [
             f"当前 Phase: {phase}",

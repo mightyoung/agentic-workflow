@@ -18,8 +18,9 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Dict, List
-from pathlib import Path
+from typing import Dict, Optional
+
+from safe_io import safe_write_json
 
 # 默认追踪文件
 DEFAULT_TRACKER_FILE = ".run_tracker.json"
@@ -51,8 +52,7 @@ def save_tracker(path: str, data: Dict) -> None:
     """保存追踪数据"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
 
 def start_run(run_id: str, task_category: str, description: str = "",
@@ -149,7 +149,7 @@ def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> 
     return {}
 
 
-def get_run_stats(run_id: str = None, path: str = DEFAULT_TRACKER_FILE) -> Dict:
+def get_run_stats(run_id: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> Dict:
     """获取执行统计"""
     tracker = load_tracker(path)
 

@@ -18,9 +18,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import memory_ops
 import router
 import task_tracker
-import unified_state
-import trajectory_logger
 import search_adapter
+from safe_io import safe_write_json
 from trajectory_logger import TrajectoryLogger
 from unified_state import (
     create_initial_state,
@@ -34,7 +33,6 @@ from unified_state import (
     register_artifact,
     ArtifactType,
 )
-from state_schema import ALLOWED_PHASES
 
 # 存储当前活跃的 TrajectoryLogger 实例
 _active_loggers: Dict[str, TrajectoryLogger] = {}
@@ -60,8 +58,7 @@ def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: st
 
         # Log the result
         gate_result_path = Path(workdir) / f".quality_gate_{task_id}.json"
-        import json
-        gate_result_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+        safe_write_json(gate_result_path, report.to_dict())
 
         return report.all_passed
     except Exception:
@@ -173,7 +170,7 @@ def _generate_and_register_summary(
             task_info += "## Execution Summary\n"
             task_info += "- Task plan was created and executed\n"
 
-    task_info += f"## Delivered Artifacts\n"
+    task_info += "## Delivered Artifacts\n"
     for atype in set(artifact_types):
         task_info += f"- {atype}\n"
 
@@ -184,7 +181,7 @@ def _generate_and_register_summary(
             tracker_data = json.loads(tracker_path.read_text(encoding="utf-8"))
             tasks_with_qg = [t for t in tracker_data.get("tasks", []) if "quality_gates_passed" in t]
             if tasks_with_qg:
-                task_info += f"\n## Quality Gate\n"
+                task_info += "\n## Quality Gate\n"
                 for t in tasks_with_qg[:5]:  # Limit to first 5
                     qg_passed = t.get("quality_gates_passed")
                     task_info += f"- {t.get('id')}: {'Passed' if qg_passed else 'Failed'}\n"
@@ -506,7 +503,7 @@ def initialize_workflow(
 
     # Start trajectory logging
     logger = TrajectoryLogger(workdir, state.session_id)
-    run_id = logger.start(prompt, trigger_type)
+    logger.start(prompt, trigger_type)
     logger.enter_phase(current_phase)
     _active_loggers[state.session_id] = logger
 
@@ -536,15 +533,18 @@ def initialize_workflow(
 
     created_task = False
     if trigger_type in ("FULL_WORKFLOW", "STAGE"):
-        if task_tracker.get_task(state.task.task_id, str(tracker_path)) is None:
+        task_id = state.task.task_id if state.task else None
+        if task_id is None:
+            raise ValueError("state.task is None, cannot create task")
+        if task_tracker.get_task(task_id, str(tracker_path)) is None:
             created_task = task_tracker.create_task(
-                state.task.task_id,
+                task_id,
                 prompt,
                 priority="P1" if current_phase in ("PLANNING", "DEBUGGING", "REVIEWING") else "P2",
                 path=str(tracker_path),
             )
-        task_tracker.start_task(state.task.task_id, str(tracker_path))
-        task_tracker.update_status(state.task.task_id, "in_progress", progress=0, path=str(tracker_path))
+        task_tracker.start_task(task_id, str(tracker_path))
+        task_tracker.update_status(task_id, "in_progress", progress=0, path=str(tracker_path))
 
     plan_path: Optional[Path] = None
     if auto_create_plan and current_phase == "PLANNING":
@@ -797,7 +797,7 @@ def advance_workflow(
         # Try to read actual code files from workdir
         workdir_path = Path(workdir)
         code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
-        code_files = []
+        code_files: List[Path] = []
         for ext in code_extensions:
             code_files.extend(workdir_path.rglob(f'*{ext}'))
 
@@ -832,7 +832,7 @@ def advance_workflow(
         # 2. Try to get files from state.file_changes
         if not target_files and state.file_changes:
             for fc in state.file_changes[:10]:  # Limit to first 10 changes
-                fp = Path(workdir) / fc.get("path", "")
+                fp = Path(workdir) / fc.path
                 if fp.exists() and fp.suffix in {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}:
                     target_files.append(fp)
             if target_files:
@@ -1042,13 +1042,12 @@ def advance_workflow(
                     task_data = t
                     break
 
-            quality_passed = task_data.get("quality_gates_passed") if task_data else None
-            task_status_val = task_data.get("status") if task_data else None
+            quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
             task_priority = task_data.get("priority") if task_data else None
             task_verification = task_data.get("verification") if task_data else None
 
             # If quality gates were run and failed, block COMPLETE
-            if quality_passed is False:
+            if quality_gate_passed is False:
                 raise ValueError(
                     f"Cannot transition to COMPLETE: quality gate failed for task {task_id}. "
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
@@ -1106,7 +1105,7 @@ def complete_workflow(
 
     if is_code_task and final_state == "completed":
         # Get task_id from state
-        task_id = state.task.id if state.task else None
+        task_id = state.task.task_id if state.task else None
         if task_id:
             tracker_path = Path(workdir) / ".task_tracker.json"
             tracker_data = task_tracker.load_tracker(str(tracker_path))
@@ -1116,12 +1115,12 @@ def complete_workflow(
                     task_data = t
                     break
 
-            quality_passed = task_data.get("quality_gates_passed") if task_data else None
+            quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
             task_priority = task_data.get("priority") if task_data else None
             task_verification = task_data.get("verification") if task_data else None
 
             # If quality gates were run and failed, block COMPLETE
-            if quality_passed is False:
+            if quality_gate_passed is False:
                 raise ValueError(
                     f"Cannot complete workflow: quality gate failed for task {task_id}. "
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."

@@ -24,18 +24,13 @@ import json
 import math
 import os
 import re
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-# Optional: Try to import numpy for vector operations
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
+# Optional: numpy can be used for vector operations if available
+HAS_NUMPY = False
 
 
 # ============================================================================
@@ -145,7 +140,7 @@ class EmbeddingResult:
     tokens: int = 0
 
 
-class EmbeddingProvider:
+class EmbeddingGenerator:
     """
     嵌入向量生成器
 
@@ -185,7 +180,7 @@ class EmbeddingProvider:
             )
             with urllib.request.urlopen(req, timeout=2) as resp:
                 return resp.status == 200
-        except:
+        except Exception:
             return False
 
     def embed(self, text: str, model: str = "nomic-embed-text") -> EmbeddingResult:
@@ -281,7 +276,7 @@ class EmbeddingProvider:
         words = [w for w in text if len(w) > 1 and w not in stop_words]
 
         # 统计词频
-        freq = {}
+        freq: Dict[str, int] = {}
         for w in words:
             freq[w] = freq.get(w, 0) + 1
 
@@ -383,7 +378,7 @@ class SemanticRouter:
         cache_dir: str = ".semantic_cache",
         confidence_threshold: float = 0.3,
     ):
-        self.embedding_provider = EmbeddingProvider(embedding_provider)
+        self.embedding_provider = EmbeddingGenerator(embedding_provider)
         self.cache_dir = Path(cache_dir)
         self.confidence_threshold = confidence_threshold
         self._phase_embeddings: Dict[str, EmbeddingResult] = {}
@@ -410,7 +405,7 @@ class SemanticRouter:
                         model=data["model"],
                     )
                     continue
-                except:
+                except Exception:
                     pass
 
             # 生成嵌入
@@ -425,7 +420,7 @@ class SemanticRouter:
                     "provider": result.provider.value,
                     "model": result.model,
                 }))
-            except:
+            except Exception:
                 pass
 
     def _preprocess_text(self, text: str) -> str:
@@ -465,7 +460,7 @@ class SemanticRouter:
         scores = {}
 
         for name, phase in PHASES.items():
-            score = 0
+            score = 0.0
             matched_keywords = []
 
             for keyword in phase.keywords:
@@ -513,13 +508,13 @@ class SemanticRouter:
 
         # 降级到关键词匹配如果语义置信度太低
         keyword_scores = self._compute_keyword_scores(text)
-        max_keyword = max(keyword_scores.items(), key=lambda x: x[1]) if keyword_scores else (None, 0)
+        max_keyword = max(keyword_scores.items(), key=lambda x: x[1]) if keyword_scores else ("", 0)
 
         # 如果关键词匹配更好，使用关键词结果
         if max_keyword[1] > best_conf * 0.5 and max_keyword[1] > 0.1:
             return RouteResult(
                 trigger_type="STAGE",
-                phase=max_keyword[0],
+                phase=max_keyword[0] or "EXECUTING",
                 confidence=max_keyword[1],
                 all_scores={**scores, **keyword_scores},
                 provider=user_embedding.provider.value,
@@ -671,7 +666,7 @@ def main():
     result = router.route(text)
 
     if args.verbose or args.scores:
-        print(f"\n路由结果:")
+        print("\n路由结果:")
         print(f"  触发类型: {result.trigger_type}")
         print(f"  Phase: {result.phase}")
         print(f"  置信度: {result.confidence:.3f}")
@@ -679,7 +674,7 @@ def main():
         print(f"  Provider: {result.provider}")
 
         if args.scores:
-            print(f"\n所有 Phase 得分:")
+            print("\n所有 Phase 得分:")
             sorted_scores = sorted(result.all_scores.items(), key=lambda x: x[1], reverse=True)
             for phase, score in sorted_scores[:10]:
                 bar = "█" * int(score * 20)

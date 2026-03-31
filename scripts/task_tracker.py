@@ -21,6 +21,8 @@ import sys
 from datetime import datetime
 from typing import Optional, Dict, List
 
+from safe_io import safe_write_json
+
 # 默认任务状态文件
 DEFAULT_TRACKER_FILE = ".task_tracker.json"
 
@@ -71,8 +73,7 @@ def save_tracker(path: str, data: Dict) -> None:
     """保存任务追踪数据"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
 
 def create_task(task_id: str, description: str, priority: str = "P2",
@@ -208,17 +209,17 @@ def record_step_failure(task_id: str, step_name: str, threshold: int = 3,
             tripped = new_count >= threshold
 
             if tripped:
-                print(f"╔══════════════════════════════════════╗")
-                print(f"║ ⚠️  断路器触发                        ║")
-                print(f"╠══════════════════════════════════════╣")
+                print("╔══════════════════════════════════════╗")
+                print("║ ⚠️  断路器触发                        ║")
+                print("╠══════════════════════════════════════╣")
                 print(f"║ 任务: {task_id:<32} ║")
                 print(f"║ 步骤: {step_name:<32} ║")
                 print(f"║ 失败次数: {new_count:<27} ║")
-                print(f"╠══════════════════════════════════════╣")
-                print(f"║ [1] 换方案继续                       ║")
-                print(f"║ [2] 寻求帮助                         ║")
-                print(f"║ [3] 中止任务                         ║")
-                print(f"╚══════════════════════════════════════╝")
+                print("╠══════════════════════════════════════╣")
+                print("║ [1] 换方案继续                       ║")
+                print("║ [2] 寻求帮助                         ║")
+                print("║ [3] 中止任务                         ║")
+                print("╚══════════════════════════════════════╝")
             else:
                 print(f"记录失败: {task_id}/{step_name} (当前: {new_count}/{threshold})")
 
@@ -227,7 +228,7 @@ def record_step_failure(task_id: str, step_name: str, threshold: int = 3,
     return {"tripped": False, "count": 0, "step": step_name, "error": f"任务未找到: {task_id}"}
 
 
-def check_circuit_state(task_id: str, step_name: str = None,
+def check_circuit_state(task_id: str, step_name: Optional[str] = None,
                         path: str = DEFAULT_TRACKER_FILE) -> dict:
     """检查指定步骤的断路器状态"""
     tracker = load_tracker(path)
@@ -254,7 +255,7 @@ def check_circuit_state(task_id: str, step_name: str = None,
     return {"error": f"任务未找到: {task_id}"}
 
 
-def reset_circuit(task_id: str, step_name: str = None,
+def reset_circuit(task_id: str, step_name: Optional[str] = None,
                   path: str = DEFAULT_TRACKER_FILE) -> bool:
     """重置断路器。可指定步骤或全部重置"""
     tracker = load_tracker(path)

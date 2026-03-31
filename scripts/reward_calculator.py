@@ -132,7 +132,7 @@ def print_reward_breakdown(reward: Dict) -> None:
 
     details = reward.get("details", {})
     if details:
-        print(f"\n详情:")
+        print("\n详情:")
         print(f"  成功: {details.get('success')}")
         print(f"  Steps: {details.get('steps')} / {details.get('max_steps')}")
         print(f"  Tokens: {details.get('tokens')} / {details.get('max_tokens')}")

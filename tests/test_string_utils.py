@@ -4,7 +4,7 @@ TestStringUtils - 字符串处理工具测试套件
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "utils"))
 
 import unittest
 from string_utils import string_reverse, string_compress, string_permutation

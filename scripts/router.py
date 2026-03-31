@@ -179,7 +179,10 @@ def route(text: str, use_semantic: bool = False) -> Tuple[str, str]:
     # Step 3: 尝试语义路由 (如果启用)
     if use_semantic:
         try:
-            from semantic_router import route_semantic as semantic_route
+            import os
+            experimental_path = os.path.join(os.path.dirname(__file__), "experimental")
+            sys.path.insert(0, experimental_path)
+            from semantic_router import route_semantic as semantic_route  # type: ignore[import-not-found]
             trigger_type, phase = semantic_route(text)
             if trigger_type == "STAGE":
                 return (trigger_type, phase)
@@ -208,9 +211,9 @@ def format_output(result: Tuple[str, str], text: str, format: str = 'simple') ->
 
     elif format == 'simple':
         if trigger_type == "DIRECT_ANSWER":
-            return f"DIRECT_ANSWER | 闲聊 | NO_WORKFLOW"
+            return "DIRECT_ANSWER | 闲聊 | NO_WORKFLOW"
         elif trigger_type == "FULL_WORKFLOW":
-            return f"FULL_WORKFLOW | 完整流程 | WORKFLOW"
+            return "FULL_WORKFLOW | 完整流程 | WORKFLOW"
         else:
             return f"STAGE | {stage} | WORKFLOW"
 

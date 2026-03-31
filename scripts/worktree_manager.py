@@ -20,10 +20,10 @@ import json
 import os
 import subprocess
 import sys
-import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, List, Optional
+
+from safe_io import safe_write_json
 
 # 默认 worktree 根目录
 DEFAULT_WORKTREE_ROOT = ".worktrees"
@@ -71,8 +71,7 @@ def save_tracker(data: Dict) -> None:
     """保存 worktree 追踪数据"""
     if not _validate_path(TRACK_FILE):
         return
-    with open(TRACK_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(TRACK_FILE, data)
 
 
 def create_worktree(
@@ -279,7 +278,7 @@ def main():
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             if result["success"]:
-                print(f"✅ Worktree 创建成功")
+                print("✅ Worktree 创建成功")
                 print(f"   任务ID: {result['task_id']}")
                 print(f"   路径: {result['worktree_path']}")
                 print(f"   分支: {result['branch_name']}")
@@ -336,7 +335,7 @@ def main():
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print(f"\n清理完成:")
+            print("\n清理完成:")
             print(f"  已清理: {len(result['cleaned'])}")
             print(f"  剩余: {result['remaining']}")
             if result['errors']:

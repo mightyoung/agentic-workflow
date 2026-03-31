@@ -36,7 +36,7 @@ class TestWorkflowChain(unittest.TestCase):
             self.assertEqual(router_result[1], "PLANNING")
 
             create_plan = subprocess.run(
-                ["bash", str(REPO_ROOT / "scripts" / "create_plan.sh"), "登录功能", "."],
+                ["bash", str(REPO_ROOT / "scripts" / "tools" / "create_plan.sh"), "登录功能", "."],
                 cwd=workdir,
                 check=True,
                 capture_output=True,
@@ -52,7 +52,7 @@ class TestWorkflowChain(unittest.TestCase):
             self.assertIn("## Verification", plan_text)
 
             init_session = subprocess.run(
-                ["bash", str(REPO_ROOT / "scripts" / "init_session.sh"), "."],
+                ["bash", str(REPO_ROOT / "scripts" / "tools" / "init_session.sh"), "."],
                 cwd=workdir,
                 check=True,
                 capture_output=True,

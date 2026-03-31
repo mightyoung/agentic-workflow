@@ -16,9 +16,10 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List
 from collections import Counter
+
+from safe_io import safe_write_json
 
 # 默认模式文件
 DEFAULT_PATTERNS_FILE = ".failure_patterns.json"
@@ -50,8 +51,7 @@ def save_patterns(path: str, data: Dict) -> None:
     """保存失败模式数据"""
     if not _validate_path(path):
         return
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    safe_write_json(path, data)
 
 
 def detect_error_pattern(errors: List[str]) -> Dict:
@@ -98,14 +98,14 @@ def _generate_recommendation(repeated_errors: Dict[str, int]) -> str:
     return recommendations["default"]
 
 
-def analyze_run(run_data: Dict) -> Dict:
+def analyze_run(run_data: Dict[str, Any]) -> Dict[str, Any]:
     """分析单个 run 的数据，生成建议"""
     errors = run_data.get("errors", [])
     steps = run_data.get("steps", [])
     tokens = run_data.get("total_tokens", 0)
     duration_ms = run_data.get("duration_ms", 0)
 
-    analysis = {
+    analysis: Dict[str, Any] = {
         "run_id": run_data.get("run_id"),
         "error_pattern": detect_error_pattern(errors),
         "performance": _analyze_performance(steps, tokens, duration_ms),
@@ -138,7 +138,7 @@ def analyze_run(run_data: Dict) -> Dict:
     return analysis
 
 
-def _analyze_performance(steps: List[Dict], tokens: int, duration_ms: int) -> Dict:
+def _analyze_performance(steps: List[Dict[str, Any]], tokens: int, duration_ms: int) -> Dict[str, Any]:
     """分析性能"""
     if not steps:
         return {"slow_phases": [], "avg_step_duration_ms": 0}
@@ -198,7 +198,7 @@ def detect_failures() -> Dict:
         analysis_results.append(analysis)
 
     # 统计失败模式
-    pattern_counter = Counter()
+    pattern_counter: Counter[str] = Counter()
     for a in analysis_results:
         if a["error_pattern"]["repeated_errors"]:
             pattern_counter.update(a["error_pattern"]["repeated_errors"].keys())
