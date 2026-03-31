@@ -539,8 +539,8 @@ def advance_workflow(
         for atype in set(artifact_types):
             task_info += f"- {atype}\n"
         summary_path.write_text(task_info, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
-                         metadata={"final_state": "completed", "deliverable": "completion_summary",
+        register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
+                         metadata={"final_state": "completed",
                                  "aggregated_types": list(set(artifact_types))})
 
     return {
@@ -595,8 +595,8 @@ def complete_workflow(
 
     summary_path.write_text(task_info or "# Workflow Completed\n", encoding="utf-8")
     from unified_state import register_artifact, ArtifactType
-    register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
-                     metadata={"final_state": final_state, "deliverable": "completion_summary"})
+    register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
+                     metadata={"final_state": final_state})
 
     # Transition to COMPLETE if not already there
     if current_phase != "COMPLETE":

@@ -48,6 +48,7 @@ class ArtifactType:
     PLAN = "plan"
     FINDINGS = "findings"
     REVIEW = "review"
+    SUMMARY = "summary"
     PROGRESS = "progress"
     SESSION = "session"
     TRACKER = "tracker"
