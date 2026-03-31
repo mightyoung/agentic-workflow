@@ -2,19 +2,22 @@
 
 This directory contains planned features and capabilities.
 
-## Phase 1: Foundation (Current State)
+## Phase 1: Foundation (Completed v5.11.0)
 
 ### Completed
 - [x] Basic workflow engine (`scripts/workflow_engine.py`)
 - [x] State management (`scripts/unified_state.py`) - 统一状态，单一真相来源
 - [x] Task decomposition (`scripts/task_decomposer.py`)
-- [x] Trajectory logging (`scripts/trajectory_logger.py`)
+- [x] Trajectory logging (`scripts/trajectory_logger.py`) - with resume support
 - [x] Router with keyword matching (`scripts/router.py`)
 - [x] Status markers on all skill specs
-
-### In Progress
-- [ ] README cleanup and restructuring
-- [ ] End-to-end business chain tests
+- [x] README cleanup and restructuring
+- [x] End-to-end business chain tests
+- [x] Quality gate integration with fail-closed strategy
+- [x] Real web search for RESEARCH phase (DuckDuckGo/Exa)
+- [x] Task-directed REVIEWING (owned_files > file_changes > workdir_scan)
+- [x] CI/CD integration (GitHub Actions + pre-commit)
+- [x] Project restructuring (experimental/, utils/, tools/ directories)
 
 ## Phase 2: Control Plane (Planned)
 
@@ -32,7 +35,7 @@ This directory contains planned features and capabilities.
 #### Semantic Router (L3)
 - [ ] Current: keyword-based routing in `router.py`
 - [ ] Planned: complexity assessment + semantic understanding
-- [ ] Need: `scripts/router_v2.py` with complexity analyzer
+- [ ] Need: `scripts/semantic_router.py` integration (in experimental/)
 
 ### Dependencies
 - Phase 2 requires Phase 1 complete
@@ -42,9 +45,9 @@ This directory contains planned features and capabilities.
 ### Planned Features
 
 #### Trajectory-based Learning
-- [ ] `./trajectories/` directory for persistence
+- [x] `./trajectories/` directory for persistence (done)
 - [ ] Pattern detection from past runs
-- [ ] Experience store integration
+- [ ] Experience store integration (`scripts/experience_store.py`)
 
 #### Auto Task Decomposition with LLM
 - [ ] Current: keyword-based decomposition in `task_decomposer.py`
@@ -77,14 +80,17 @@ Layer 1: Skill Specs (skills/*.md)
 
 Layer 2: Workflow Runtime (scripts/*.py)
 ├── Current: workflow_engine.py, router.py, state management
-├── Planned: agent_spawner.py, parallel orchestrator
+├── Experimental: agent_spawner.py, parallel_executor.py, semantic_router.py
 └── Describes HOW to execute
 
 Runtime Surface:
 ├── scripts/router.py - lightweight routing
 ├── scripts/workflow_engine.py - phase orchestration
-├── scripts/unified_state.py - state management (NEW)
-├── scripts/task_decomposer.py - task breakdown (NEW)
-├── scripts/trajectory_logger.py - trajectory persistence (NEW)
-└── scripts/memory_ops.py - SESSION-STATE.md operations
+├── scripts/unified_state.py - state management
+├── scripts/task_decomposer.py - task breakdown
+├── scripts/trajectory_logger.py - trajectory persistence
+├── scripts/memory_ops.py - SESSION-STATE.md operations
+├── scripts/quality_gate.py - quality enforcement
+├── scripts/search_adapter.py - web search with metadata validation
+└── scripts/experimental/ - experimental features (semantic_router, parallel_executor, etc.)
 ```
