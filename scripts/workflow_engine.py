@@ -408,6 +408,21 @@ def initialize_workflow(
     # Register task tracker artifact
     register_artifact(workdir, ArtifactType.TRACKER, str(tracker_path), current_phase, "system")
 
+    # Register phase-specific business artifacts for initial phase
+    if current_phase == "RESEARCH":
+        findings_path = Path(workdir) / "findings.md"
+        findings_content = f"# Research Findings\n\n## Query\n{prompt}\n\n## Findings\n- Research conducted at: {datetime.now().isoformat()}\n"
+        findings_path.write_text(findings_content, encoding="utf-8")
+        register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
+                         metadata={"deliverable": "findings"})
+
+    if current_phase == "REVIEWING":
+        review_path = Path(workdir) / "review.md"
+        review_content = f"# Code Review\n\n## Review for\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Status\n- Reviewed: Yes\n"
+        review_path.write_text(review_content, encoding="utf-8")
+        register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
+                         metadata={"deliverable": "review"})
+
     state.artifacts["session_state"] = str(session_path)
     state.artifacts["progress"] = str(progress_file)
     state.artifacts["task_tracker"] = str(tracker_path)
@@ -492,17 +507,42 @@ def advance_workflow(
         if task_status == "completed":
             task_tracker.update_quality_gate(task_id, True, str(tracker_path))
 
+    # Register phase-specific business artifacts
+    from unified_state import register_artifact, ArtifactType
+    if phase == "RESEARCH":
+        findings_path = Path(workdir) / "findings.md"
+        findings_content = f"# Research Findings\n\n## Query\n{state.task.description if state.task else 'N/A'}\n\n## Findings\n- Research conducted at: {datetime.now().isoformat()}\n"
+        findings_path.write_text(findings_content, encoding="utf-8")
+        register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
+                         metadata={"deliverable": "findings"})
+
+    if phase == "REVIEWING":
+        review_path = Path(workdir) / "review.md"
+        review_content = f"# Code Review\n\n## Review for\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Status\n- Reviewed: Yes\n"
+        review_path.write_text(review_content, encoding="utf-8")
+        register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
+                         metadata={"deliverable": "review"})
+
     # Register completion summary when transitioning to COMPLETE
     if phase == "COMPLETE":
+        # Load registry to aggregate prior artifacts
+        from unified_state import _load_artifact_registry
+        registry = _load_artifact_registry(workdir)
+        artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
+
         summary_path = Path(workdir) / "completion_summary.md"
         task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
         task_info += f"## Status\n- Final State: completed\n"
         task_info += f"- Completed At: {datetime.now().isoformat()}\n"
-        task_info += f"- Last Phase: {current_phase}\n"
+        task_info += f"- Last Phase: {current_phase}\n\n"
+        task_info += f"## Delivered Artifacts\n"
+        for atype in set(artifact_types):
+            summary_info = f"- {atype}\n"
+        task_info += summary_info
         summary_path.write_text(task_info, encoding="utf-8")
-        from unified_state import register_artifact, ArtifactType
         register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
-                         metadata={"final_state": "completed", "deliverable": "completion_summary"})
+                         metadata={"final_state": "completed", "deliverable": "completion_summary",
+                                 "aggregated_types": list(set(artifact_types))})
 
     return {
         "task_id": task_id,

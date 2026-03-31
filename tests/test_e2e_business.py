@@ -304,6 +304,9 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         current_phase = snapshot.get("current_phase")
         self.assertIn(current_phase, ["RESEARCH", "THINKING", "PLANNING", "EXECUTING"])
 
+        # Track if RESEARCH phase was visited
+        visited_research = current_phase == "RESEARCH"
+
         # 验证 trigger_type 存在
         trigger_type = snapshot.get("trigger_type")
         self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
@@ -329,6 +332,8 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
                 task_status = task_status_map.get(next_phase)
                 advance_result = self._run_workflow_advance(next_phase, task_status)
                 current_phase = advance_result["phase"]
+                if current_phase == "RESEARCH":
+                    visited_research = True
             except ValueError:
                 continue
 
@@ -364,6 +369,17 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
             "Research chain should produce plan consumption or business artifacts. "
             f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
         )
+
+        # Step 9: 验证研究产物（findings artifact）
+        # Only verify if RESEARCH phase was actually visited
+        if visited_research:
+            registry = snapshot.get("artifact_registry", [])
+            findings_artifacts = [a for a in registry if a.get("type") == "findings"]
+            self.assertGreater(len(findings_artifacts), 0,
+                "RESEARCH phase should register findings artifact")
+            if findings_artifacts:
+                self.assertEqual(findings_artifacts[0].get("phase"), "RESEARCH",
+                    "Findings artifact should belong to RESEARCH phase")
 
 
 class TestDebugFixChain(TestE2EBusinessChains):
