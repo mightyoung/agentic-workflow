@@ -1,6 +1,7 @@
 ---
 name: refining
 version: 1.0.0
+status: implemented
 description: |
   迭代精炼阶段 - 固化"发现问题→分析问题→修改错误"的反馈循环
   用于检测、诊断和修复工作流中的问题和错误

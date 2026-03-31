@@ -1,6 +1,7 @@
 ---
 name: thinking
 version: 1.1.0
+status: implemented
 description: |
   专家推理阶段 - 模拟专家视角分析问题
   谁最懂？TA会怎么说？添加安全专家、性能专家视角

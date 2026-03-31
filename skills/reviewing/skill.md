@@ -1,6 +1,7 @@
 ---
 name: reviewing
 version: 1.1.0
+status: implemented
 description: |
   审查阶段 - 代码质量、安全和性能审查
   当前版本对齐项目内 task_plan.md 与真实审查输出

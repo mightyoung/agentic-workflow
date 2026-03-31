@@ -1,6 +1,7 @@
 ---
 name: complete
 version: 1.1.0
+status: implemented
 description: |
   完成阶段 - 收尾工作、自反思和状态更新
   当前版本对齐项目内 SESSION-STATE.md 与真实脚本

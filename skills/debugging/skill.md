@@ -1,6 +1,7 @@
 ---
 name: debugging
 version: 1.0.0
+status: implemented
 description: |
   调试阶段 - 系统化问题定位和修复
   5步调试法：闻味道 → 揪头发 → 照镜子 → 执行 → 复盘

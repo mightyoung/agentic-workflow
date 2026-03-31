@@ -1,6 +1,7 @@
 ---
 name: exploring
 version: 1.0.0
+status: implemented
 description: |
   深度探索阶段 - 苏格拉底式追问挖掘用户深层想法
   通过迭代追问发现谬误、局限、潜能和潜意识中的构思

@@ -1,0 +1,889 @@
+#!/usr/bin/env python3
+"""
+Minimal workflow runtime for agentic-workflow.
+
+This bridges the existing scripts into a concrete runtime chain:
+prompt -> route -> local state -> task tracker -> optional plan scaffold
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import memory_ops
+import router
+import task_tracker
+import unified_state
+import trajectory_logger
+from trajectory_logger import TrajectoryLogger
+from unified_state import (
+    create_initial_state,
+    load_state,
+    save_state,
+    transition_phase,
+    can_transition,
+    get_allowed_transitions,
+    workflow_state_path,
+    trajectory_dir_path,
+    register_artifact,
+    ArtifactType,
+)
+from state_schema import ALLOWED_PHASES
+
+# 存储当前活跃的 TrajectoryLogger 实例
+_active_loggers: Dict[str, TrajectoryLogger] = {}
+
+DEFAULT_CATEGORY = "WORKFLOW"
+
+
+def _task_id_from_timestamp() -> str:
+    return f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+
+def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
+    destination = Path(workdir) / "task_plan.md"
+    if destination.exists():
+        return destination
+
+    # Try to find template in references/templates/
+    template_dir = Path(workdir) / "references" / "templates"
+    template_path = template_dir / "task_plan.md" if template_dir.exists() else None
+
+    if template_path and template_path.exists():
+        content = template_path.read_text(encoding="utf-8")
+        content = content.replace("{{TASK_NAME}}", task_name)
+        content = content.replace("{{CREATED_AT}}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        destination.write_text(content, encoding="utf-8")
+        return destination
+    else:
+        # Create minimal plan file if no template
+        content = f"""# Task Plan - {task_name}
+
+## Overview
+- Task: {task_name}
+- Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Tasks
+
+### P1 Tasks
+- [ ] TASK-1: Initial task
+
+## Status
+- Overall: Not Started
+"""
+        destination.write_text(content, encoding="utf-8")
+        return destination
+
+
+def _phase_display_name(trigger_type: str, phase: str) -> str:
+    if trigger_type == "DIRECT_ANSWER":
+        return "DIRECT_ANSWER"
+    if trigger_type == "FULL_WORKFLOW":
+        return "PLANNING"
+    return phase
+
+
+def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
+    """
+    解析 task_plan.md 为结构化任务列表
+
+    支持的字段:
+    - id, title, done (从 checkbox 解析)
+    - status: backlog | in_progress | completed | blocked
+    - priority: P0 | P1 | P2 | P3
+    - description: 任务描述
+    - owned_files: 逗号分隔的文件列表
+    - dependencies: 逗号分隔的任务ID列表
+    - verification: 验证命令或方法
+    - acceptance: 验收标准
+    """
+    plan_path = Path(workdir) / "task_plan.md"
+    if not plan_path.exists():
+        return []
+
+    tasks: List[Dict[str, Any]] = []
+    current_priority = None
+    current_task: Optional[Dict[str, Any]] = None
+    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
+    field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+): (?P<value>.+)$")
+
+    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.rstrip()
+
+        if line.startswith("### P"):
+            current_priority = line.replace("###", "").strip()
+            continue
+
+        task_match = task_pattern.match(line)
+        if task_match:
+            is_done = task_match.group("done").lower() == "x"
+            current_task = {
+                "id": task_match.group("id"),
+                "title": task_match.group("title"),
+                "done": is_done,
+                "priority": current_priority,
+                "status": "completed" if is_done else "backlog",
+            }
+            tasks.append(current_task)
+            continue
+
+        field_match = field_pattern.match(line)
+        if field_match and current_task is not None:
+            key = field_match.group("key")
+            value = field_match.group("value")
+            # Only set status if checkbox and status disagree, prefer checkbox
+            if key == "status" and not current_task.get("done"):
+                current_task[key] = value
+            elif key == "dependencies":
+                current_task[key] = [d.strip() for d in value.split(",") if d.strip()]
+            elif key == "owned_files":
+                current_task[key] = [f.strip() for f in value.split(",") if f.strip()]
+            elif key != "status":  # Skip status if from checkbox
+                current_task[key] = value
+
+    return tasks
+
+
+def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
+    """
+    获取下一个应该执行的任务列表
+
+    考虑:
+    - 优先级 (P0 > P1 > P2 > P3)
+    - 依赖关系 (只有依赖都完成才能开始)
+    - 状态 (只选 backlog 的)
+    """
+    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, None: 9}
+    all_tasks = parse_task_plan(workdir)
+    completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
+
+    candidates = []
+    for task in all_tasks:
+        if task.get("status") in ("completed", "in_progress", "blocked"):
+            continue
+
+        # 检查依赖是否都满足
+        deps = task.get("dependencies", [])
+        if deps and not all(d in completed_ids for d in deps):
+            continue
+
+        candidates.append(task)
+
+    candidates.sort(key=lambda item: (priority_order.get(item.get("priority"), 9), item.get("id", "")))
+    return candidates[:limit]
+
+
+def validate_task_plan(workdir: str = ".") -> Tuple[bool, List[str]]:
+    """
+    验证任务计划的合法性
+
+    检查:
+    - 循环依赖
+    - 缺失的依赖
+    - 非法的任务ID引用
+
+    Returns:
+        (is_valid, error_list)
+    """
+    tasks = parse_task_plan(workdir)
+    if not tasks:
+        return True, []
+
+    errors = []
+    task_ids = {t["id"] for t in tasks}
+    task_map = {t["id"]: t for t in tasks}
+
+    for task in tasks:
+        deps = task.get("dependencies", [])
+        for dep in deps:
+            if dep not in task_ids:
+                errors.append(f"Task {task['id']} depends on non-existent task {dep}")
+
+    # 检查循环依赖 (简单的 DFS)
+    def has_cycle(task_id: str, visited: set, rec_stack: set) -> bool:
+        visited.add(task_id)
+        rec_stack.add(task_id)
+        for dep in task_map.get(task_id, {}).get("dependencies", []):
+            if dep not in visited:
+                if has_cycle(dep, visited, rec_stack):
+                    return True
+            elif dep in rec_stack:
+                return True
+        rec_stack.remove(task_id)
+        return False
+
+    for task in tasks:
+        if task["id"] not in task_ids:
+            continue
+        if has_cycle(task["id"], set(), set()):
+            errors.append(f"Circular dependency detected involving {task['id']}")
+
+    return len(errors) == 0, errors
+
+
+def update_task_status_in_plan(
+    workdir: str,
+    task_id: str,
+    status: str,
+) -> Dict[str, Any]:
+    """
+    更新 task_plan.md 中任务的状态
+
+    Args:
+        workdir: 工作目录
+        task_id: 任务ID (如 "TASK-001")
+        status: 新状态 (backlog | in_progress | completed | blocked)
+
+    Returns:
+        更新结果
+    """
+    plan_path = Path(workdir) / "task_plan.md"
+    if not plan_path.exists():
+        return {"success": False, "error": "task_plan.md not found"}
+
+    if status not in ("backlog", "in_progress", "completed", "blocked"):
+        return {"success": False, "error": f"Invalid status: {status}"}
+
+    content = plan_path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+    new_lines = []
+    task_found = False
+    in_target_task = False
+
+    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+):")
+    field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+):")
+
+    for line in lines:
+        task_match = task_pattern.match(line.rstrip())
+        if task_match:
+            in_target_task = task_match.group("id") == task_id
+            if in_target_task:
+                task_found = True
+                # Update checkbox
+                done_marker = "x" if status == "completed" else " "
+                new_lines.append(f"- [{done_marker}] {task_match.group('id')}:" + line.split(":", 1)[1])
+                continue
+
+        if in_target_task:
+            field_match = field_pattern.match(line)
+            if field_match:
+                key = field_match.group("key")
+                if key == "status":
+                    new_lines.append(f"  - status: {status}")
+                    continue
+
+        new_lines.append(line)
+
+    if not task_found:
+        return {"success": False, "error": f"Task {task_id} not found"}
+
+    plan_path.write_text("\n".join(new_lines), encoding="utf-8")
+    return {"success": True, "task_id": task_id, "status": status}
+
+
+def allowed_next_phases(phase: str) -> List[str]:
+    return sorted(get_allowed_transitions(phase))
+
+
+def recommend_next_phases(current_phase: str, trigger_type: Optional[str] = None) -> List[str]:
+    if current_phase == "DIRECT_ANSWER":
+        return ["COMPLETE"]
+    if current_phase == "PLANNING":
+        return ["EXECUTING", "RESEARCH", "THINKING"]
+    if current_phase == "RESEARCH":
+        return ["THINKING", "PLANNING"]
+    if current_phase == "THINKING":
+        return ["PLANNING", "EXECUTING"]
+    if current_phase == "EXECUTING":
+        return ["REVIEWING", "COMPLETE", "DEBUGGING"]
+    if current_phase == "REVIEWING":
+        return ["COMPLETE", "DEBUGGING"]
+    if current_phase == "DEBUGGING":
+        return ["EXECUTING", "REVIEWING"]
+    if current_phase == "COMPLETE":
+        return []
+    if trigger_type == "FULL_WORKFLOW":
+        return ["PLANNING"]
+    return allowed_next_phases(current_phase)
+
+
+def validate_transition(current_phase: str, next_phase: str) -> None:
+    if not can_transition(current_phase, next_phase):
+        raise ValueError(f"illegal phase transition: {current_phase} -> {next_phase}")
+
+
+def initialize_workflow(
+    prompt: str,
+    workdir: str = ".",
+    task_id: Optional[str] = None,
+    auto_create_plan: bool = True,
+) -> Dict[str, Any]:
+    workdir_path = Path(workdir)
+    workdir_path.mkdir(parents=True, exist_ok=True)
+
+    session_path = workdir_path / memory_ops.DEFAULT_SESSION_STATE
+    tracker_path = workdir_path / task_tracker.DEFAULT_TRACKER_FILE
+
+    memory_ops.ensure_session_state_exists(str(session_path))
+    task_tracker.save_tracker(str(tracker_path), task_tracker.load_tracker(str(tracker_path)))
+
+    trigger_type, routed_phase = router.route(prompt)
+    current_phase = _phase_display_name(trigger_type, routed_phase)
+
+    # Create unified state
+    state = create_initial_state(
+        prompt=prompt,
+        task_id=task_id or _task_id_from_timestamp(),
+        trigger_type=trigger_type,
+        initial_phase=current_phase,
+    )
+
+    # NOTE: create_initial_state already sets the phase to initial_phase
+    # Don't call transition_phase here as it would try to transition to the same phase
+
+    # Ensure trajectory directory exists
+    traj_dir = trajectory_dir_path(workdir)
+    traj_dir.mkdir(parents=True, exist_ok=True)
+
+    # Start trajectory logging
+    logger = TrajectoryLogger(workdir, state.session_id)
+    run_id = logger.start(prompt, trigger_type)
+    logger.enter_phase(current_phase)
+    _active_loggers[state.session_id] = logger
+
+    # Record trajectory info in state
+    state.artifacts["trajectory_session_id"] = state.session_id
+    state.artifacts["trajectory_run_id"] = run_id
+
+    memory_ops.update_task_info(str(session_path), prompt, current_phase)
+    memory_ops.update_resume_point(str(session_path), current_phase, 0)
+
+    # Create progress.md
+    progress_file = workdir_path / "progress.md"
+    progress_content = f"""# Progress
+
+## Current Phase
+- phase: {current_phase}
+- status: active
+- updated: {datetime.now().isoformat()}
+
+## Session
+- session_id: {state.session_id}
+- task_id: {state.task.task_id if state.task else 'N/A'}
+"""
+    progress_file.write_text(progress_content, encoding="utf-8")
+    state.artifacts["progress"] = str(progress_file)
+
+    # Register progress.md artifact
+    register_artifact(workdir, ArtifactType.PROGRESS, str(progress_file), current_phase, "system")
+
+    created_task = False
+    if trigger_type in ("FULL_WORKFLOW", "STAGE"):
+        if task_tracker.get_task(state.task.task_id, str(tracker_path)) is None:
+            created_task = task_tracker.create_task(
+                state.task.task_id,
+                prompt,
+                priority="P1" if current_phase in ("PLANNING", "DEBUGGING", "REVIEWING") else "P2",
+                path=str(tracker_path),
+            )
+        task_tracker.start_task(state.task.task_id, str(tracker_path))
+        task_tracker.update_status(state.task.task_id, "in_progress", progress=0, path=str(tracker_path))
+
+    plan_path: Optional[Path] = None
+    if auto_create_plan and current_phase == "PLANNING":
+        plan_path = _create_plan_from_template(prompt, workdir)
+        if plan_path is not None:
+            state.artifacts["task_plan"] = str(plan_path)
+            # Register plan artifact
+            register_artifact(workdir, ArtifactType.PLAN, str(plan_path), current_phase, "system")
+
+    # Register session state artifact
+    register_artifact(workdir, ArtifactType.SESSION, str(session_path), current_phase, "system")
+
+    # Register task tracker artifact
+    register_artifact(workdir, ArtifactType.TRACKER, str(tracker_path), current_phase, "system")
+
+    state.artifacts["session_state"] = str(session_path)
+    state.artifacts["progress"] = str(progress_file)
+    state.artifacts["task_tracker"] = str(tracker_path)
+
+    # Save unified state
+    save_state(workdir, state)
+
+    return {
+        "task_id": state.task.task_id if state.task else None,
+        "session_id": state.session_id,
+        "trigger_type": trigger_type,
+        "phase": current_phase,
+        "created_task": created_task,
+        "plan_created": plan_path is not None,
+        "recommended_next_phases": recommend_next_phases(current_phase, trigger_type),
+        "state_file": str(workflow_state_path(workdir)),
+        "trajectory_session_id": state.session_id,
+    }
+
+
+def advance_workflow(
+    phase: str,
+    workdir: str = ".",
+    progress: int = 0,
+    task_status: Optional[str] = None,
+    note: str = "",
+) -> Dict[str, Any]:
+    state = load_state(workdir)
+    if state is None:
+        raise ValueError("workflow state not found, please run init first")
+    if not state.task or not state.task.task_id:
+        raise ValueError("workflow runtime has not been initialized properly")
+
+    task_id = state.task.task_id
+    tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
+    session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+
+    current_phase = state.phase.get("current", "IDLE")
+    validate_transition(current_phase, phase)
+
+    # Log phase transition in trajectory
+    if state.session_id in _active_loggers:
+        logger = _active_loggers[state.session_id]
+        logger.exit_phase(current_phase)
+        if note:
+            logger.log_decision(f"Transition: {current_phase} -> {phase}", note)
+        logger.enter_phase(phase)
+
+    # Transition phase using unified_state
+    state = transition_phase(state, phase, reason=note or "advance_workflow")
+
+    # Update progress.md
+    progress_file = Path(workdir) / "progress.md"
+    if progress_file.exists():
+        content = progress_file.read_text(encoding="utf-8")
+        # Simple update of phase and status
+        lines = content.split("\n")
+        new_lines = []
+        in_phase_section = False
+        for line in lines:
+            if "## Current Phase" in line:
+                in_phase_section = True
+            if in_phase_section and line.startswith("- phase:"):
+                new_lines.append(f"- phase: {phase}")
+                in_phase_section = False
+                continue
+            if in_phase_section and line.startswith("- status:"):
+                new_lines.append(f"- status: {task_status or 'active'}")
+                in_phase_section = False
+                continue
+            new_lines.append(line)
+        progress_file.write_text("\n".join(new_lines), encoding="utf-8")
+
+    # Save updated state
+    save_state(workdir, state)
+
+    memory_ops.update_task_info(str(session_path), state.task.description if state.task else "(未设置)", phase)
+    memory_ops.update_resume_point(str(session_path), phase, progress)
+
+    if task_status:
+        task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))
+        if task_status == "completed":
+            task_tracker.update_quality_gate(task_id, True, str(tracker_path))
+
+    return {
+        "task_id": task_id,
+        "session_id": state.session_id,
+        "phase": phase,
+        "progress": progress,
+        "task_status": task_status,
+        "recommended_next_phases": recommend_next_phases(phase, state.trigger_type),
+        "state_file": str(workflow_state_path(workdir)),
+    }
+
+
+def complete_workflow(
+    workdir: str = ".",
+    final_state: str = "completed",
+    failure_reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    完成工作流并结束 trajectory 记录
+
+    Args:
+        workdir: 工作目录
+        final_state: 最终状态 (completed/failed/aborted)
+        failure_reason: 失败原因（如果失败）
+
+    Returns:
+        完成结果
+    """
+    state = load_state(workdir)
+    if state is None:
+        raise ValueError("workflow state not found, please run init first")
+
+    current_phase = state.phase.get("current", "IDLE")
+
+    # Complete trajectory logging
+    if state.session_id in _active_loggers:
+        logger = _active_loggers[state.session_id]
+        logger.exit_phase(current_phase)
+        logger.complete(final_state, failure_reason)
+        del _active_loggers[state.session_id]
+
+    # Transition to COMPLETE if not already there
+    if current_phase != "COMPLETE":
+        state = transition_phase(state, "COMPLETE", reason=f"Workflow {final_state}")
+        save_state(workdir, state)
+
+    return {
+        "session_id": state.session_id,
+        "final_state": final_state,
+        "failure_reason": failure_reason,
+    }
+
+
+def log_workflow_decision(
+    workdir: str,
+    decision: str,
+    reason: str = "",
+) -> Dict[str, Any]:
+    """记录工作流决策到 trajectory"""
+    state = load_state(workdir)
+    if state is None:
+        raise ValueError("workflow state not found")
+
+    if state.session_id in _active_loggers:
+        logger = _active_loggers[state.session_id]
+        logger.log_decision(decision, reason)
+        return {"status": "logged", "decision": decision}
+
+    return {"status": "no_active_logger", "decision": decision}
+
+
+def log_workflow_file_change(
+    workdir: str,
+    file_path: str,
+    action: str,
+) -> Dict[str, Any]:
+    """记录文件变更到 trajectory"""
+    state = load_state(workdir)
+    if state is None:
+        raise ValueError("workflow state not found")
+
+    if state.session_id in _active_loggers:
+        logger = _active_loggers[state.session_id]
+        logger.log_file_change(file_path, action)
+        return {"status": "logged", "file_path": file_path, "action": action}
+
+    return {"status": "no_active_logger", "file_path": file_path, "action": action}
+
+
+def resume_workflow(
+    workdir: str,
+    session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    从中断点恢复工作流
+
+    Args:
+        workdir: 工作目录
+        session_id: 可选的 session ID，默认从 trajectory 获取最新中断的
+
+    Returns:
+        恢复结果
+    """
+    from trajectory_logger import resume_from_point, list_trajectories
+
+    # 如果没有指定 session_id，找到最新的中断工作流
+    if session_id is None:
+        trajectories = list_trajectories(workdir)
+        for traj in trajectories:
+            if traj.get("final_state") == "running":
+                session_id = traj.get("session_id")
+                break
+
+        if session_id is None:
+            return {"success": False, "error": "No interrupted workflow found to resume"}
+
+    # 获取恢复点
+    result = resume_from_point(workdir, session_id)
+    if not result:
+        return {"success": False, "error": f"Failed to resume session {session_id}"}
+
+    # 重新初始化 trajectory logger
+    new_session_id = result["session_id"]
+    new_logger = TrajectoryLogger(workdir, new_session_id)
+    new_logger.start(f"[RESUMED from {session_id}]", "RESUMED")
+    new_logger.enter_phase(result["next_phase"])
+    _active_loggers[new_session_id] = new_logger
+
+    return {
+        "success": True,
+        "original_session_id": session_id,
+        "new_session_id": new_session_id,
+        "resume_from": result["resume_from"],
+        "next_phase": result["next_phase"],
+    }
+
+
+def handle_workflow_failure(
+    workdir: str,
+    error: str,
+    strategy: str = "retry",
+    max_retries: int = 3,
+) -> Dict[str, Any]:
+    """
+    处理工作流失败
+
+    Args:
+        workdir: 工作目录
+        error: 错误信息
+        strategy: 失败策略
+            - "retry": 重试当前 phase
+            - "debugging": 转换到 DEBUGGING phase
+            - "abort": 中止工作流
+        max_retries: 最大重试次数
+
+    Returns:
+        处理结果
+    """
+    state = load_state(workdir)
+    if state is None:
+        return {"success": False, "error": "workflow state not found"}
+
+    current_phase = state.phase.get("current", "IDLE")
+
+    # 记录失败到 trajectory
+    if state.session_id in _active_loggers:
+        logger = _active_loggers[state.session_id]
+        logger.log_error(error, recoverable=(strategy != "abort"))
+
+    if strategy == "retry":
+        # 重试当前 phase
+        retry_count = state.decisions[-1].to_dict().get("metadata", {}).get("retry_count", 0) if state.decisions else 0
+        if retry_count >= max_retries:
+            strategy = "debugging"
+        else:
+            return {
+                "success": True,
+                "action": "retry",
+                "phase": current_phase,
+                "retry_count": retry_count + 1,
+                "message": f"Retrying {current_phase} (attempt {retry_count + 1}/{max_retries})",
+            }
+
+    if strategy == "debugging":
+        # 转换到 DEBUGGING phase
+        if can_transition(current_phase, "DEBUGGING"):
+            state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")
+            save_state(workdir, state)
+
+            # 记录到 trajectory
+            if state.session_id in _active_loggers:
+                logger = _active_loggers[state.session_id]
+                logger.exit_phase(current_phase)
+                logger.enter_phase("DEBUGGING")
+
+            return {
+                "success": True,
+                "action": "debugging",
+                "previous_phase": current_phase,
+                "new_phase": "DEBUGGING",
+                "error": error,
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Cannot transition from {current_phase} to DEBUGGING",
+            }
+
+    if strategy == "abort":
+        # 中止工作流
+        complete_workflow(workdir, "failed", error)
+        return {
+            "success": True,
+            "action": "aborted",
+            "final_state": "failed",
+            "error": error,
+        }
+
+    return {"success": False, "error": f"Unknown strategy: {strategy}"}
+
+
+def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
+    state = load_state(workdir)
+    tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
+    task = None
+
+    if state is None:
+        return {
+            "exists": False,
+            "valid": False,
+            "errors": ["state file does not exist"],
+            "recommended_next_phases": [],
+            "plan_tasks": [],
+            "next_plan_tasks": [],
+        }
+
+    if state.task and state.task.task_id:
+        task = task_tracker.get_task(state.task.task_id, str(tracker_path))
+
+    plan_tasks = parse_task_plan(workdir)
+    next_tasks = next_plan_tasks(workdir)
+
+    current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
+
+    # Validate state
+    from unified_state import validate_workflow_state
+    is_valid, errors = validate_workflow_state(workdir)
+
+    return {
+        "exists": True,
+        "valid": is_valid,
+        "errors": errors,
+        "session_id": state.session_id,
+        "task_id": state.task.task_id if state.task else None,
+        "current_phase": current_phase,
+        "trigger_type": state.trigger_type,
+        "task": task,
+        "recommended_next_phases": recommend_next_phases(current_phase, None),
+        "plan_tasks": plan_tasks,
+        "next_plan_tasks": next_tasks,
+        "state_file": str(workflow_state_path(workdir)),
+        "artifacts": state.artifacts,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Workflow runtime engine")
+    parser.add_argument("--workdir", default=".", help="workspace directory")
+    parser.add_argument("--op", choices=["init", "advance", "snapshot", "recommend", "validate", "plan", "complete", "log-decision", "log-file", "validate-plan", "update-task", "resume", "handle-failure"], required=True)
+    parser.add_argument("--prompt", help="user prompt for workflow initialization")
+    parser.add_argument("--task-id", help="optional task id")
+    parser.add_argument("--phase", help="target phase for advance")
+    parser.add_argument("--progress", type=int, default=0, help="progress percent for advance")
+    parser.add_argument("--task-status", help="task status for advance")
+    parser.add_argument("--note", default="", help="note for phase advance")
+    parser.add_argument("--no-auto-plan", action="store_true", help="disable auto task plan creation")
+    parser.add_argument("--final-state", default="completed", help="final state for complete")
+    parser.add_argument("--failure-reason", help="failure reason for complete")
+    parser.add_argument("--decision", help="decision text for log-decision")
+    parser.add_argument("--reason", default="", help="decision reason for log-decision")
+    parser.add_argument("--path", help="file path for log-file")
+    parser.add_argument("--action", default="modify", help="file action for log-file (create/modify/delete)")
+    parser.add_argument("--status", help="task status for update-task (backlog/in_progress/completed/blocked)")
+    parser.add_argument("--session-id", help="session id for resume")
+    parser.add_argument("--error", help="error message for handle-failure")
+    parser.add_argument("--strategy", default="retry", choices=["retry", "debugging", "abort"], help="failure handling strategy")
+    parser.add_argument("--max-retries", type=int, default=3, help="max retry count")
+    args = parser.parse_args()
+
+    if args.op == "init":
+        if not args.prompt:
+            print("错误: --prompt 必须指定")
+            return 1
+        result = initialize_workflow(
+            args.prompt,
+            workdir=args.workdir,
+            task_id=args.task_id,
+            auto_create_plan=not args.no_auto_plan,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "advance":
+        if not args.phase:
+            print("错误: --phase 必须指定")
+            return 1
+        result = advance_workflow(
+            args.phase,
+            workdir=args.workdir,
+            progress=args.progress,
+            task_status=args.task_status,
+            note=args.note,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "recommend":
+        snapshot = get_workflow_snapshot(args.workdir)
+        print(json.dumps({"recommended_next_phases": snapshot["recommended_next_phases"]}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "validate":
+        from unified_state import validate_workflow_state
+        is_valid, errors = validate_workflow_state(args.workdir)
+        print(json.dumps({"valid": is_valid, "errors": errors}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "plan":
+        print(json.dumps({"tasks": parse_task_plan(args.workdir), "next_tasks": next_plan_tasks(args.workdir)}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "validate-plan":
+        is_valid, errors = validate_task_plan(args.workdir)
+        print(json.dumps({"valid": is_valid, "errors": errors}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "update-task":
+        if not args.task_id:
+            print("错误: --task-id required for update-task")
+            return 1
+        if not args.status:
+            print("错误: --status required for update-task")
+            return 1
+        result = update_task_status_in_plan(args.workdir, args.task_id, args.status)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "complete":
+        result = complete_workflow(
+            args.workdir,
+            final_state=args.final_state,
+            failure_reason=args.failure_reason,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "log-decision":
+        if not args.decision:
+            print("错误: --decision required for log-decision")
+            return 1
+        result = log_workflow_decision(args.workdir, args.decision, args.reason)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "log-file":
+        if not args.path:
+            print("错误: --path required for log-file")
+            return 1
+        result = log_workflow_file_change(args.workdir, args.path, args.action)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "resume":
+        result = resume_workflow(args.workdir, args.session_id)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "handle-failure":
+        if not args.error:
+            print("错误: --error required for handle-failure")
+            return 1
+        result = handle_workflow_failure(
+            args.workdir,
+            error=args.error,
+            strategy=args.strategy,
+            max_retries=args.max_retries,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    print(json.dumps(get_workflow_snapshot(args.workdir), ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,9 +1,11 @@
 ---
 name: planning
 version: 1.1.0
+status: implemented
 description: |
   规划阶段 - 任务拆分和计划制定
   当前版本对齐项目内 task_plan.md 与真实脚本 create_plan.sh
+  注意: 自动任务分解(ID/依赖/优先级)能力在 task_decomposer.py 中实现
 tags: [phase, planning]
 requires:
   tools: [Bash, Read, Write, Grep, Glob]

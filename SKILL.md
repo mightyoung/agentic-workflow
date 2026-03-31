@@ -21,9 +21,24 @@ requires:
 当前仓库已经落地的主要运行面在 `scripts/`：
 
 - `scripts/router.py`: 轻量关键词路由，按“负面过滤 → 强制触发 → 阶段关键词 → 默认 EXECUTING”执行
+- `scripts/workflow_engine.py`: 最小 workflow runtime，负责把路由、状态、追踪串起来（已收口到 unified_state.py）
 - `scripts/memory_ops.py`: 在项目内维护 `SESSION-STATE.md`
 - `scripts/run_tracker.py`: 记录 `.run_tracker.json`
 - `scripts/step_recorder.py`: 记录 `.step_records.json`
+
+### Workflow Runtime Layer
+
+这几份脚本和它们依赖的项目内文件，构成了当前真正可执行的 workflow runtime layer：
+
+- `router.py` 决定入口 phase
+- `workflow_engine.py` 负责初始化和推进最小 phase runtime
+- `workflow_engine.py` 同时提供 phase 推荐与 runtime state 校验
+- `workflow_engine.py` 还能解析 `task_plan.md` 并给出下一批待执行任务
+- `SESSION-STATE.md` 和 `progress.md` 保存会话/进度状态
+- `task_plan.md` 保存规划结果
+- `run_tracker.py` 和 `step_recorder.py` 保存轻量执行追踪
+
+它是一个文件驱动的最小 runtime，不是完整 orchestration engine。后续更复杂的 phase 描述、trajectory 设计和并行编排，都应视为在这个 runtime 之上的演进目标。
 
 以下内容仍应视为目标设计或文档规范，而不是全部已经实现的运行时能力：
 

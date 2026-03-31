@@ -4,7 +4,9 @@
 测试用例: t09-t16 (8个测试)
 """
 
-import json
+from router_helpers import load_router_module
+
+router_module = load_router_module()
 
 # 测试用例
 TESTS = [
@@ -18,42 +20,14 @@ TESTS = [
     {"id": "t16", "prompt": "你好", "expected": None},  # 不触发
 ]
 
-# 路由逻辑实现（根据 SKILL.md）
-def should_not_trigger(prompt: str) -> bool:
-    """检查是否不应该触发"""
-    # 简单闲聊问题
-    if any(kw in prompt.lower() for kw in ["天气", "笑话", "你好", "hi", "hello", "bye", "谢谢", "ok", "yes", "no", "maybe"]):
-        if not any(kw in prompt for kw in ["开发", "代码", "实现", "调试", "bug", "错误"]):
-            return True
-    return False
-
 def route(prompt: str) -> str:
     """路由到对应模块"""
-    if should_not_trigger(prompt):
+    trigger_type, phase = router_module.route(prompt)
+    if trigger_type == "DIRECT_ANSWER":
         return None
-
-    # RESEARCH 触发
-    if any(kw in prompt for kw in ["怎么做", "如何实现", "最佳实践", "有什么", "有哪些", "参考", "案例"]):
-        return "RESEARCH"
-
-    # THINKING 触发
-    if any(kw in prompt for kw in ["谁最懂", "专家", "顶级", "best minds", "优化", "分析"]):
-        return "THINKING"
-
-    # PLANNING 触发
-    if any(kw in prompt for kw in ["计划", "规划", "拆分任务", "安排", "制定"]):
-        return "PLANNING"
-
-    # DEBUGGING 触发
-    if any(kw in prompt for kw in ["bug", "错误", "调试", "修复", "报错", "崩溃", "异常", "解决"]):
-        return "DEBUGGING"
-
-    # REVIEWING 触发
-    if any(kw in prompt for kw in ["审查", "review", "检查"]):
-        return "REVIEWING"
-
-    # EXECUTING 默认触发
-    return "EXECUTING"
+    if trigger_type == "FULL_WORKFLOW":
+        return "EXECUTING"
+    return phase
 
 # 执行测试
 def run_tests():

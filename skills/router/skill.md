@@ -1,6 +1,7 @@
 ---
 name: router
 version: 1.6.0
+status: implemented
 description: |
   轻量路由 - 基于当前脚本实现选择工作流阶段
   顺序：负面过滤 → 强制触发 → 阶段关键词匹配

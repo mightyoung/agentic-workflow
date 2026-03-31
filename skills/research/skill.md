@@ -1,6 +1,7 @@
 ---
 name: research
 version: 1.0.0
+status: implemented
 description: |
   研究调研阶段 - 搜索最佳实践和技术方案
   将研究结果存入 findings.md

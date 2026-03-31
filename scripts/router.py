@@ -2,18 +2,23 @@
 """
 Router - 路由决策辅助工具
 
-当前实现是一个轻量级关键词路由器，不是多层语义编排器。
+支持两种路由模式:
+1. 语义路由 (Semantic Router) - 使用嵌入向量相似度
+2. 关键词路由 (Keyword Router) - 轻量级关键词匹配
 
 行为顺序：
 1. 负面触发过滤，直接走 DIRECT_ANSWER
 2. 强制触发词，直接走 FULL_WORKFLOW
-3. 按阶段关键词顺序匹配
-4. 无匹配时默认 EXECUTING
+3. 语义路由 (如果可用且置信度足够)
+4. 关键词路由作为降级方案
+5. 无匹配时默认 EXECUTING
 
 用法:
     python3 router.py "用户消息"
+    python3 router.py --semantic "用户消息"  # 强制使用语义路由
 """
 
+import re
 import sys
 from typing import Optional, Tuple
 
@@ -31,7 +36,8 @@ ROUTE_KEYWORDS = {
         "谁最懂", "专家", "分析", "理解", "看看", "分析一下",
         "这个怎么实现", "那个行不行", "哪个好", "建议", "看法",
         "思路", "怎么选", "哪个更", "有什么区别", "帮我看看",
-        "给点意见", "顶级", "怎么看"
+        "给点意见", "顶级", "怎么看", "优化", "怎么优化",
+        "best minds", "会怎么做", "顶级安全专家"
     ],
     "PLANNING": [
         "计划", "规划", "拆分", "设计", "安排", "整理一下",
@@ -44,11 +50,12 @@ ROUTE_KEYWORDS = {
         "失败", "回报", "卡住", "挂起", "响应很慢", "太慢了",
         "跑不通", "不能用", "失效", "超时", "卡死", "无响应",
         "不动了", "没有反应", "卡住了", "运行出错", "启动失败",
-        "连接失败", "nameerror", "定位", "定位问题"
+        "连接失败", "nameerror", "定位", "定位问题", "报错",
+        "运行报错", "崩溃了", "程序崩溃了", "崩溃了帮我看看"
     ],
     "REVIEWING": [
         "代码审查", "帮我review", "审查这段代码", "审计", "审查",
-        "review", "检查"
+        "review", "检查", "审查一下", "代码审查建议"
     ],
     "EXECUTING": [
         "写一个", "帮我写", "实现", "开发", "创建", "编写"
@@ -70,8 +77,18 @@ FORCE_TRIGGERS = {
 
 # 负面触发关键词（不触发工作流）
 NEGATIVE_TRIGGERS = [
-    "天气", "笑话", "你好", "谢谢", " hi", "hello", "嗨",
+    "天气", "笑话", "你好", "谢谢", "嗨",
     "嘿", "干嘛呢", "最近怎样"
+]
+
+NEGATIVE_REGEX_TRIGGERS = [
+    r"\bhi\b",
+    r"\bhello\b",
+    r"\bbye\b",
+    r"\bok\b",
+    r"\byes\b",
+    r"\bno\b",
+    r"\bmaybe\b",
 ]
 
 # 负面触发上下文（如果有开发相关词则不算负面）
@@ -84,6 +101,8 @@ def check_negative_trigger(text: str) -> bool:
 
     # 检查是否包含负面关键词
     has_negative = any(neg in text_lower for neg in NEGATIVE_TRIGGERS)
+    if not has_negative:
+        has_negative = any(re.search(pattern, text_lower) for pattern in NEGATIVE_REGEX_TRIGGERS)
     if not has_negative:
         return False
 
@@ -114,22 +133,35 @@ def check_force_trigger(text: str) -> Optional[str]:
 def detect_stage(text: str) -> str:
     """检测应该触发的阶段"""
     text_lower = text.lower()
+    stage_priority = {
+        "DEBUGGING": 6,
+        "REVIEWING": 5,
+        "THINKING": 4,
+        "PLANNING": 3,
+        "RESEARCH": 2,
+        "EXECUTING": 1,
+    }
+    matches = []
 
-    # 按优先级检查
     for stage, keywords in ROUTE_KEYWORDS.items():
         for keyword in keywords:
             if keyword in text_lower:
-                return stage
+                matches.append((len(keyword), stage_priority.get(stage, 0), stage))
+
+    if matches:
+        matches.sort(reverse=True)
+        return matches[0][2]
 
     return "EXECUTING"  # 默认
 
 
-def route(text: str) -> Tuple[str, str]:
+def route(text: str, use_semantic: bool = False) -> Tuple[str, str]:
     """
     执行路由决策
 
     Args:
         text: 用户消息
+        use_semantic: 是否优先使用语义路由
 
     Returns:
         (触发类型, 阶段)
@@ -144,7 +176,19 @@ def route(text: str) -> Tuple[str, str]:
     if force:
         return ("FULL_WORKFLOW", "完整流程")
 
-    # Step 3: 检测阶段
+    # Step 3: 尝试语义路由 (如果启用)
+    if use_semantic:
+        try:
+            from semantic_router import route_semantic as semantic_route
+            trigger_type, phase = semantic_route(text)
+            if trigger_type == "STAGE":
+                return (trigger_type, phase)
+        except ImportError:
+            pass  # 降级到关键词
+        except Exception:
+            pass  # 降级到关键词
+
+    # Step 4: 检测阶段
     stage = detect_stage(text)
     return ("STAGE", stage)
 
@@ -184,28 +228,38 @@ def format_output(result: Tuple[str, str], text: str, format: str = 'simple') ->
 
 
 def main():
-    if len(sys.argv) > 1:
-        text = sys.argv[1]
-        result = route(text)
-        print(format_output(result, text, 'simple'))
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Router - 路由决策辅助工具")
+    parser.add_argument("text", nargs="?", help="要路由的文本")
+    parser.add_argument("--semantic", action="store_true", help="使用语义路由")
+    parser.add_argument("--verbose", "-v", action="store_true")
+    args = parser.parse_args()
+
+    if args.text:
+        text = args.text
+    elif not sys.stdin.isatty():
+        text = sys.stdin.read().strip()
+    else:
+        print("Router - 路由决策辅助工具")
+        print("输入消息进行路由判断 (Ctrl+C 退出)")
+        print("-" * 50)
+
+        while True:
+            try:
+                text = input("\n> ")
+                if not text.strip():
+                    continue
+
+                result = route(text)
+                print(format_output(result, text, 'verbose'))
+            except KeyboardInterrupt:
+                print("\n退出")
+                break
         return 0
 
-    print("Router - 路由决策辅助工具")
-    print("输入消息进行路由判断 (Ctrl+C 退出)")
-    print("-" * 50)
-
-    while True:
-        try:
-            text = input("\n> ")
-            if not text.strip():
-                continue
-
-            result = route(text)
-            print(format_output(result, text, 'verbose'))
-        except KeyboardInterrupt:
-            print("\n退出")
-            break
-
+    result = route(text)
+    print(format_output(result, text, 'simple'))
     return 0
 
 

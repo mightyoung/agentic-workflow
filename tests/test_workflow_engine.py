@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""
+Workflow engine integration tests.
+"""
+
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import workflow_engine  # noqa: E402
+import unified_state  # noqa: E402
+
+
+class TestWorkflowEngine(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        refs = Path(self.temp_dir) / "references" / "templates"
+        refs.mkdir(parents=True, exist_ok=True)
+        (refs / "task_plan.md").write_text(
+            "# Task Plan: {{TASK_NAME}}\n\n> Created at: {{CREATED_AT}}\n",
+            encoding="utf-8",
+        )
+        (refs / "progress.md").write_text(
+            "# Progress\n\n## Current Phase\n\n- phase: initialization\n- status: pending\n",
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_initialize_planning_workflow_creates_runtime_files(self):
+        result = workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+
+        self.assertEqual(result["phase"], "PLANNING")
+        self.assertTrue(result["plan_created"])
+        self.assertTrue((Path(self.temp_dir) / "SESSION-STATE.md").exists())
+        self.assertTrue((Path(self.temp_dir) / "progress.md").exists())
+        self.assertTrue((Path(self.temp_dir) / "task_plan.md").exists())
+        self.assertTrue((Path(self.temp_dir) / ".workflow_state.json").exists())
+        self.assertTrue((Path(self.temp_dir) / ".task_tracker.json").exists())
+
+        # Use unified state
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "PLANNING")
+
+    def test_initialize_direct_answer_does_not_create_task_tracker_entry(self):
+        result = workflow_engine.initialize_workflow("hello", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "DIRECT_ANSWER")
+
+        tracker = json.loads((Path(self.temp_dir) / ".task_tracker.json").read_text(encoding="utf-8"))
+        self.assertEqual(tracker["tasks"], [])
+
+    def test_advance_workflow_updates_runtime_and_tracker(self):
+        init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
+        self.assertEqual(init_result["phase"], "DEBUGGING")
+
+        result = workflow_engine.advance_workflow(
+            "REVIEWING",
+            workdir=self.temp_dir,
+            progress=80,
+            task_status="completed",
+            note="ready for review",
+        )
+
+        self.assertEqual(result["phase"], "REVIEWING")
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["current_phase"], "REVIEWING")
+        self.assertEqual(snapshot["task"]["status"], "completed")
+        self.assertEqual(snapshot["task"]["progress"], 80)
+        self.assertTrue(snapshot["task"]["quality_gates_passed"])
+
+    def test_illegal_transition_is_rejected(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+
+        with self.assertRaises(ValueError):
+            workflow_engine.advance_workflow("DEBUGGING", workdir=self.temp_dir)
+
+    def test_snapshot_reports_recommended_next_phases(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertTrue(snapshot["valid"])
+        self.assertIn("EXECUTING", snapshot["recommended_next_phases"])
+
+    def test_validate_runtime_state_detects_invalid_phase(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        state_path = Path(self.temp_dir) / ".workflow_state.json"
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        data["phase"]["current"] = "NOT_A_PHASE"
+        state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        is_valid, errors = unified_state.validate_workflow_state(self.temp_dir)
+        self.assertFalse(is_valid)
+        self.assertTrue(any("NOT_A_PHASE" in e for e in errors))
+
+    def test_parse_task_plan_and_recommend_next_tasks(self):
+        plan_path = Path(self.temp_dir) / "task_plan.md"
+        plan_path.write_text(
+            """# Task Plan: Demo
+
+## Task Breakdown
+
+### P1
+- [ ] TASK-002: 次要任务
+  - status: backlog
+  - verification: pytest
+
+### P0
+- [ ] TASK-001: 核心任务
+  - status: backlog
+  - verification: pytest
+
+- [x] TASK-003: 已完成任务
+  - status: done
+  - verification: pytest
+""",
+            encoding="utf-8",
+        )
+
+        tasks = workflow_engine.parse_task_plan(self.temp_dir)
+        next_tasks = workflow_engine.next_plan_tasks(self.temp_dir)
+
+        self.assertEqual(len(tasks), 3)
+        self.assertEqual(next_tasks[0]["id"], "TASK-001")
+        self.assertEqual(next_tasks[1]["id"], "TASK-002")
+
+    def test_snapshot_includes_plan_tasks(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        plan_path = Path(self.temp_dir) / "task_plan.md"
+        plan_path.write_text(
+            """# Task Plan: Demo
+
+## Task Breakdown
+
+### P0
+- [ ] TASK-001: 核心任务
+  - status: backlog
+""",
+            encoding="utf-8",
+        )
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["next_plan_tasks"][0]["id"], "TASK-001")

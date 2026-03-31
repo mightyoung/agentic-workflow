@@ -1,9 +1,11 @@
 ---
 name: executing
 version: 1.1.0
+status: implemented
 description: |
   执行阶段 - TDD 开发循环和代码实现
   当前版本对齐 task_plan.md、run_tracker.py 和 step_recorder.py
+  注意: Trajectory持久化在 trajectory_logger.py 中实现
 tags: [phase, executing, tdd]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]

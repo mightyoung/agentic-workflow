@@ -1,6 +1,7 @@
 ---
 name: baidu-search
 version: 1.0.0
+status: implemented
 description: |
   百度AI搜索 - 基于千帆平台的智能搜索服务
   提供AI增强的搜索结果，包含引用来源标注

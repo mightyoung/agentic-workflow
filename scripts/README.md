@@ -1,20 +1,34 @@
-# Scripts 目录 (v4.7更新)
+# Scripts 目录 (v5.8更新)
 
 > 可执行的脚本，用于自动化任务执行和环境操作。支持跨平台运行。
 
 ## 当前真实运行面
 
+### ✅ 稳定版 (核心运行时)
+
 如果你只想知道仓库现在实际能跑什么，先看这几个脚本：
 
 - `router.py`: 轻量关键词路由
+- `workflow_engine.py`: workflow runtime，串联 router、state、task tracker、plan
+- `unified_state.py`: 统一状态管理（单一真相来源）
+- `task_decomposer.py`: 任务分解（带唯一ID）
+- `trajectory_logger.py`: 轨迹持久化 + 断点恢复
 - `memory_ops.py`: 维护项目内 `SESSION-STATE.md`
 - `task_tracker.py`: 任务状态追踪
-- `run_tracker.py`: 执行统计，输出 `.run_tracker.json`
-- `step_recorder.py`: phase 记录，输出 `.step_records.json`
-- `create_plan.sh`: 基于 `references/templates/task_plan.md` 生成项目内 `task_plan.md`
+
+这组脚本加上 `.workflow_state.json`、`SESSION-STATE.md`、`progress.md`、`task_plan.md` 这些状态文件，就是当前的 workflow runtime layer。
+
+### 🔬 实验版 (未纳入主线)
+
+- `semantic_router.py`: 语义路由（基于嵌入向量）
+- `execution_loop.py`: 执行循环模式 (ReAct/Plan-and-Execute/Reflexion)
+- `parallel_executor.py`: 并行执行 Band
+- `agent_spawner.py`: 多Agent编排
+- `evaluator.py`: Generator-Evaluator 模式
+- `context_manager.py`: 上下文管理与检查点
 
 说明：
-- 文档中提到的更完整 orchestration 能力并不都已在脚本层落地
+- 实验版模块尚未接入主流程
 - 命令示例以本目录脚本的真实 CLI 为准
 - 如果环境没有 `python` 命令，请使用 `python3`
 
@@ -105,6 +119,12 @@ python3 scripts/memory_longterm.py --op=refine --days=7  # 从7天日志提炼
 python3 scripts/memory_longterm.py --op=search --query="关键词"
 python3 scripts/task_tracker.py --op=create --task-id=T001 --desc="开发功能X"
 python3 scripts/router.py "帮我搜索最佳实践"
+python3 scripts/workflow_engine.py --op=init --prompt "帮我制定一个开发计划" --workdir .
+python3 scripts/workflow_engine.py --op=advance --phase=EXECUTING --progress=30 --task-status=in_progress --workdir .
+python3 scripts/workflow_engine.py --op=snapshot --workdir .
+python3 scripts/workflow_engine.py --op=recommend --workdir .
+python3 scripts/workflow_engine.py --op=validate --workdir .
+python3 scripts/workflow_engine.py --op=plan --workdir .
 
 # 评估与追踪 (v5.7)
 python3 scripts/run_tracker.py --op=start --run-id=R001 --category=DEBUGGING

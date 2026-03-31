@@ -1,6 +1,7 @@
 ---
 name: office-hours
 version: 1.0.0
+status: implemented
 description: |
   产品咨询阶段 - 在开始编码前重构产品想法
   问正确的问题，确保理解用户真正想要什么
