@@ -152,8 +152,8 @@ class TestE2EBusinessChains(unittest.TestCase):
         except (json.JSONDecodeError, IOError):
             return False
 
-    def _check_artifact_content(self, artifact_type: str) -> bool:
-        """检查特定类型工件的内容是否符合最小结构"""
+    def _check_artifact_content(self, artifact_type: str, task_desc: str = None) -> bool:
+        """检查特定类型工件的内容是否符合最小结构和质量标准"""
         artifact_path = Path(self.workdir)
         if artifact_type == "findings":
             # Look for session-aware naming first, fallback to legacy naming
@@ -196,7 +196,21 @@ class TestE2EBusinessChains(unittest.TestCase):
             has_sections = all(s in content for s in ["Research Question", "Method", "Conclusions", "Recommendations"])
             # 明确拒绝占位内容
             no_placeholder = "Placeholder:" not in content
-            return has_sections and no_placeholder
+            if not (has_sections and no_placeholder):
+                return False
+            # 检查内容不是全generic - 至少有具体术语或领域关键词
+            if task_desc:
+                # 检查task描述中的关键词是否出现在内容中（语义相关）
+                task_keywords = set(task_desc.split())
+                content_lower = content.lower()
+                # 过滤停用词
+                stop_words = {"的", "了", "和", "是", "在", "我", "有", "个", "等", "以", "对", "为", "与", "或", "及", "包括", "什么", "如何", "怎么", "哪些", "一个", "可以", "需要", "应该", "the", "a", "an", "of", "and", "in", "on", "for", "to", "is", "this", "that", "with", "as"}
+                meaningful_keywords = [w for w in task_keywords if w.lower() not in stop_words and len(w) > 2]
+                # 至少有一个有意义的关键词出现在内容中
+                has_semantic_match = any(kw.lower() in content_lower for kw in meaningful_keywords[:10])
+                if not has_semantic_match:
+                    return False
+            return True
         elif artifact_type == "review":
             # 检查是否有审查范围、发现、风险、建议
             has_sections = all(s in content for s in ["Review Scope", "Findings", "Risk Level", "Recommendations"])
@@ -364,9 +378,6 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         current_phase = snapshot.get("current_phase")
         self.assertIn(current_phase, ["RESEARCH", "THINKING", "PLANNING", "EXECUTING"])
 
-        # Track if RESEARCH phase was visited
-        visited_research = current_phase == "RESEARCH"
-
         # 验证 trigger_type 存在
         trigger_type = snapshot.get("trigger_type")
         self.assertIn(trigger_type, ["FULL_WORKFLOW", "STAGE", "DIRECT_ANSWER"])
@@ -393,8 +404,6 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
                 task_status = task_status_map.get(next_phase)
                 advance_result = self._run_workflow_advance(next_phase, task_status)
                 current_phase = advance_result["phase"]
-                if current_phase == "RESEARCH":
-                    visited_research = True
             except ValueError:
                 continue
 
@@ -434,19 +443,18 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         )
 
         # Step 9: 验证研究产物（findings artifact）
-        # Only verify if RESEARCH phase was actually visited
-        if visited_research:
-            registry = snapshot.get("artifact_registry", [])
-            findings_artifacts = [a for a in registry if a.get("type") == "findings"]
-            self.assertGreater(len(findings_artifacts), 0,
-                "RESEARCH phase should register findings artifact")
-            if findings_artifacts:
-                self.assertEqual(findings_artifacts[0].get("phase"), "RESEARCH",
-                    "Findings artifact should belong to RESEARCH phase")
-            # Verify findings content structure
-            has_valid_content = self._check_artifact_content("findings")
-            self.assertTrue(has_valid_content,
-                "findings.md should have valid content structure (title + body)")
+        # Research chain always requires findings artifact
+        registry = snapshot.get("artifact_registry", [])
+        findings_artifacts = [a for a in registry if a.get("type") == "findings"]
+        self.assertGreater(len(findings_artifacts), 0,
+            "Research chain should produce findings artifact")
+        if findings_artifacts:
+            self.assertEqual(findings_artifacts[0].get("phase"), "RESEARCH",
+                "Findings artifact should belong to RESEARCH phase")
+        # Verify findings content structure and semantic relevance to prompt
+        has_valid_content = self._check_artifact_content("findings", prompt)
+        self.assertTrue(has_valid_content,
+            "findings.md should have valid content structure and semantic relevance")
 
 
 class TestDebugFixChain(TestE2EBusinessChains):
