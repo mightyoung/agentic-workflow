@@ -19,14 +19,14 @@ This section describes what actually works **today** via the scripts layer.
 | ROUTER | ✅ Stable | — | Keyword-based routing |
 | OFFICE-HOURS | ✅ Stable | — | Product consultation |
 | EXPLORING | ✅ Stable | — | Socratic deep exploration |
-| RESEARCH | ✅ Stable | 🔬 Growing | Web search + findings.md (auto-generated on phase entry) |
+| RESEARCH | ✅ Stable | 🔬 Growing | Web search + findings_{session}.md (generated on phase exit) |
 | THINKING | ✅ Stable | — | Expert reasoning |
 | PLANNING | ✅ Stable | ✅ Stable | Task breakdown with task_plan.md |
 | EXECUTING | ✅ Stable | — | TDD-driven implementation |
-| REVIEWING | ✅ Stable | 🔬 Growing | Code review + review.md (auto-generated on phase entry) |
+| REVIEWING | ✅ Stable | 🔬 Growing | Code review + review_{session}.md (generated on phase exit) |
 | DEBUGGING | ✅ Stable | — | 5-step systematic debugging |
 | REFINING | ✅ Stable | — | Feedback loop iteration |
-| COMPLETE | ✅ Stable | ✅ Stable | Finalization + completion_summary.md (aggregates prior artifacts) |
+| COMPLETE | ✅ Stable | ✅ Stable | Finalization + completion_summary_{session}.md (aggregates prior artifacts) |
 
 **Artifact Quality Key:**
 - ✅ Stable (runtime) = behavior is reliable and tested

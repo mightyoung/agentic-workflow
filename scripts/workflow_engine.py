@@ -45,6 +45,87 @@ def _task_id_from_timestamp() -> str:
     return f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 
+def _generate_and_register_summary(
+    workdir: str,
+    state,
+    current_phase: str,
+    final_state: str,
+    session_id: str,
+    failure_reason: Optional[str] = None,
+) -> str:
+    """
+    Generate completion summary content and register artifact.
+    Used by both advance_workflow (COMPLETE) and complete_workflow.
+
+    Returns:
+        Path to the summary file
+    """
+    from unified_state import _load_artifact_registry, register_artifact, ArtifactType
+    registry = _load_artifact_registry(workdir)
+    artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
+
+    summary_path = Path(workdir) / f"completion_summary_{session_id}.md"
+    task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
+    task_info += f"## Status\n- Final State: {final_state}\n"
+    task_info += f"- Completed At: {datetime.now().isoformat()}\n"
+    task_info += f"- Last Phase: {current_phase}\n\n"
+
+    if failure_reason:
+        task_info += f"- Reason: {failure_reason}\n\n"
+
+    # Aggregate actual content from session-specific findings if available
+    findings_session_path = Path(workdir) / f"findings_{session_id}.md"
+    if findings_session_path.exists():
+        findings_content = findings_session_path.read_text(encoding="utf-8")
+        if "## Research Question" in findings_content:
+            lines = findings_content.split("\n")
+            for i, line in enumerate(lines):
+                if "## Research Question" in line and i + 1 < len(lines):
+                    task_info += f"## Research Summary\n{lines[i+1].strip()}\n\n"
+                    break
+
+    # Aggregate review summary if available (session-specific)
+    review_session_path = Path(workdir) / f"review_{session_id}.md"
+    if review_session_path.exists():
+        review_content = review_session_path.read_text(encoding="utf-8")
+        if "## Review Scope" in review_content:
+            lines = review_content.split("\n")
+            for i, line in enumerate(lines):
+                if "## Review Scope" in line and i + 1 < len(lines):
+                    task_info += f"## Review Summary\nScope: {lines[i+1].strip()}\n"
+                    break
+            for i, line in enumerate(lines):
+                if "## Risk Level" in line and i + 1 < len(lines):
+                    risk_lines = []
+                    for j in range(i + 1, min(i + 4, len(lines))):
+                        if lines[j].startswith("## "):
+                            break
+                        if lines[j].strip():
+                            risk_lines.append(lines[j].strip())
+                    if risk_lines:
+                        task_info += f"Risk: {risk_lines[0]}\n\n"
+                    break
+
+    # Include task plan summary if available
+    plan_path = Path(workdir) / "task_plan.md"
+    if plan_path.exists():
+        plan_content = plan_path.read_text(encoding="utf-8")
+        if "## Task Breakdown" in plan_content or "# Task Plan" in plan_content:
+            task_info += "## Execution Summary\n"
+            task_info += "- Task plan was created and executed\n"
+
+    task_info += f"## Delivered Artifacts\n"
+    for atype in set(artifact_types):
+        task_info += f"- {atype}\n"
+
+    summary_path.write_text(task_info, encoding="utf-8")
+    register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
+                     metadata={"final_state": final_state,
+                             "aggregated_types": list(set(artifact_types)),
+                             "session_id": session_id})
+    return str(summary_path)
+
+
 def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
     destination = Path(workdir) / "task_plan.md"
     if destination.exists():
@@ -566,65 +647,7 @@ def advance_workflow(
 
     # Register completion summary when transitioning to COMPLETE
     if phase == "COMPLETE":
-        # Load registry to aggregate prior artifacts
-        from unified_state import _load_artifact_registry
-        registry = _load_artifact_registry(workdir)
-        artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
-
-        summary_path = Path(workdir) / f"completion_summary_{session_id}.md"
-        task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
-        task_info += f"## Status\n- Final State: completed\n"
-        task_info += f"- Completed At: {datetime.now().isoformat()}\n"
-        task_info += f"- Last Phase: {current_phase}\n\n"
-
-        # Aggregate actual content from session-specific findings if available
-        findings_session_path = Path(workdir) / f"findings_{session_id}.md"
-        if findings_session_path.exists():
-            findings_content = findings_session_path.read_text(encoding="utf-8")
-            if "## Research Question" in findings_content:
-                lines = findings_content.split("\n")
-                for i, line in enumerate(lines):
-                    if "## Research Question" in line and i + 1 < len(lines):
-                        task_info += f"## Research Summary\n{lines[i+1].strip()}\n\n"
-                        break
-
-        # Aggregate review summary if available (session-specific)
-        review_session_path = Path(workdir) / f"review_{session_id}.md"
-        if review_session_path.exists():
-            review_content = review_session_path.read_text(encoding="utf-8")
-            if "## Review Scope" in review_content:
-                lines = review_content.split("\n")
-                for i, line in enumerate(lines):
-                    if "## Review Scope" in line and i + 1 < len(lines):
-                        task_info += f"## Review Summary\nScope: {lines[i+1].strip()}\n"
-                        break
-                for i, line in enumerate(lines):
-                    if "## Risk Level" in line and i + 1 < len(lines):
-                        risk_lines = []
-                        for j in range(i + 1, min(i + 4, len(lines))):
-                            if lines[j].startswith("## "):
-                                break
-                            if lines[j].strip():
-                                risk_lines.append(lines[j].strip())
-                        if risk_lines:
-                            task_info += f"Risk: {risk_lines[0]}\n\n"
-                        break
-
-        # Include task plan summary if available
-        plan_path = Path(workdir) / "task_plan.md"
-        if plan_path.exists():
-            plan_content = plan_path.read_text(encoding="utf-8")
-            if "## Task Breakdown" in plan_content or "# Task Plan" in plan_content:
-                task_info += "## Execution Summary\n"
-                task_info += "- Task plan was created and executed\n"
-
-        task_info += f"## Delivered Artifacts\n"
-        for atype in set(artifact_types):
-            task_info += f"- {atype}\n"
-        summary_path.write_text(task_info, encoding="utf-8")
-        register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
-                         metadata={"final_state": "completed",
-                                 "aggregated_types": list(set(artifact_types))})
+        _generate_and_register_summary(workdir, state, current_phase, "completed", session_id)
 
     return {
         "task_id": task_id,
@@ -666,69 +689,9 @@ def complete_workflow(
         logger.complete(final_state, failure_reason)
         del _active_loggers[state.session_id]
 
-    # Register completion summary artifact - use same aggregation as advance_workflow COMPLETE
-    from unified_state import _load_artifact_registry, register_artifact, ArtifactType
-    registry = _load_artifact_registry(workdir)
-    artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
+    # Register completion summary artifact using shared helper
     session_id = state.session_id or "unknown"
-
-    summary_path = Path(workdir) / "completion_summary.md"
-    task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
-    task_info += f"## Status\n- Final State: {final_state}\n"
-    task_info += f"- Completed At: {datetime.now().isoformat()}\n"
-    task_info += f"- Last Phase: {current_phase}\n\n"
-
-    if failure_reason:
-        task_info += f"- Reason: {failure_reason}\n\n"
-
-    # Aggregate actual content from session-specific findings if available
-    findings_session_path = Path(workdir) / f"findings_{session_id}.md"
-    if findings_session_path.exists():
-        findings_content = findings_session_path.read_text(encoding="utf-8")
-        if "## Research Question" in findings_content:
-            lines = findings_content.split("\n")
-            for i, line in enumerate(lines):
-                if "## Research Question" in line and i + 1 < len(lines):
-                    task_info += f"## Research Summary\n{lines[i+1].strip()}\n\n"
-                    break
-
-    # Aggregate review summary if available (session-specific)
-    review_session_path = Path(workdir) / f"review_{session_id}.md"
-    if review_session_path.exists():
-        review_content = review_session_path.read_text(encoding="utf-8")
-        if "## Review Scope" in review_content:
-            lines = review_content.split("\n")
-            for i, line in enumerate(lines):
-                if "## Review Scope" in line and i + 1 < len(lines):
-                    task_info += f"## Review Summary\nScope: {lines[i+1].strip()}\n"
-                    break
-            for i, line in enumerate(lines):
-                if "## Risk Level" in line and i + 1 < len(lines):
-                    risk_lines = []
-                    for j in range(i + 1, min(i + 4, len(lines))):
-                        if lines[j].startswith("## "):
-                            break
-                        if lines[j].strip():
-                            risk_lines.append(lines[j].strip())
-                    if risk_lines:
-                        task_info += f"Risk: {risk_lines[0]}\n\n"
-                    break
-
-    # Include task plan summary if available
-    plan_path = Path(workdir) / "task_plan.md"
-    if plan_path.exists():
-        plan_content = plan_path.read_text(encoding="utf-8")
-        if "## Task Breakdown" in plan_content or "# Task Plan" in plan_content:
-            task_info += "## Execution Summary\n"
-            task_info += "- Task plan was created and executed\n"
-
-    task_info += f"## Delivered Artifacts\n"
-    for atype in set(artifact_types):
-        task_info += f"- {atype}\n"
-    summary_path.write_text(task_info, encoding="utf-8")
-    register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
-                     metadata={"final_state": final_state,
-                             "aggregated_types": list(set(artifact_types))})
+    _generate_and_register_summary(workdir, state, current_phase, final_state, session_id, failure_reason)
 
     # Transition to COMPLETE if not already there
     if current_phase != "COMPLETE":
@@ -1001,10 +964,9 @@ def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
         "plan_tasks": plan_tasks,
         "next_plan_tasks": next_tasks,
         "state_file": str(workflow_state_path(workdir)),
-        # Note: state.artifacts is a quick index of known artifact paths
-        # artifact_registry is the authoritative audit trail with full metadata
-        # For business artifacts (findings, review, summary), use artifact_registry
-        "artifacts": state.artifacts,
+        # artifact_registry is the authoritative source for all artifact information
+        # state.artifacts is deprecated (internal quick index only)
+        "artifacts": state.artifacts,  # deprecated: use artifact_registry instead
         "artifact_registry": artifact_registry.get("artifacts", []),
     }
 
