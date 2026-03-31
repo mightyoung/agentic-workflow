@@ -15,11 +15,14 @@ from urllib.parse import quote_plus
 
 @dataclass
 class SearchResult:
-    """Single search result"""
+    """Single search result with metadata"""
     title: str
     url: str
     snippet: str
     source: str
+    reliability: str = "C"  # A/B/C/D reliability grade
+    url_validated: bool = False
+    response_time_ms: int = 0
 
 
 @dataclass
@@ -30,10 +33,104 @@ class SearchResponse:
     total_results: int
     search_engine: str
     error: Optional[str] = None
+    metadata: dict = None  # Additional search metadata
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
 
     @property
     def has_results(self) -> bool:
         return len(self.results) > 0 and self.error is None
+
+    def get_high_confidence_results(self, min_reliability: str = "B") -> List[SearchResult]:
+        """Return results with reliability >= min_reliability"""
+        reliability_order = {"A": 4, "B": 3, "C": 2, "D": 1}
+        min_level = reliability_order.get(min_reliability, 0)
+        return [r for r in self.results
+                if reliability_order.get(r.reliability, 0) >= min_level]
+
+
+# Source reliability classification
+_RELIABILITY_PATTERNS = {
+    "A": [
+        r"github\.com/(?:tensorflow|pytorch|react|vue|angular|node|vercel|framer)/",
+        r"docs\.(?:python|typescript|javascript|rust|golang)\.",
+        r"developer\.(?:mozilla|apple|microsoft)\.",
+        r"cloud\.google\.com/docs",
+        r"aws\.amazon\.com/documentation",
+    ],
+    "B": [
+        r"github\.com/(?!.*(?:tutorial|example|sample))",
+        r"stackoverflow\.com/questions/\d+",
+        r"medium\.com/@",
+        r"dev\.to/",
+        r"hackernoon\.com",
+    ],
+    "C": [
+        r"github\.com/.*(?:tutorial|example|sample|demo)",
+        r"stackoverflow\.com/(?!questions)",
+        r"reddit\.com/r/",
+        r"zhihu\.com/",
+    ],
+    "D": [
+        r".*",  # Default fallback
+    ]
+}
+
+
+def classify_source_reliability(url: str) -> str:
+    """
+    Classify search result source reliability.
+
+    Returns:
+        A: Official docs, major project repos
+        B: Quality blogs, Stack Overflow answers
+        C: Tutorials, examples, discussions
+        D: Low-quality or unverified sources
+    """
+    import re
+    for grade, patterns in _RELIABILITY_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, url, re.IGNORECASE):
+                return grade
+    return "D"
+
+
+def _get_reliability_dist(results: List[SearchResult]) -> dict:
+    """Get distribution of reliability grades in results"""
+    dist = {"A": 0, "B": 0, "C": 0, "D": 0}
+    for r in results:
+        dist[r.reliability] = dist.get(r.reliability, 0) + 1
+    return dist
+
+
+def validate_url(url: str, timeout: float = 3.0) -> bool:
+    """
+    Validate that URL is reachable.
+
+    Args:
+        url: URL to validate
+        timeout: Timeout in seconds
+
+    Returns:
+        True if URL returns 200-299 status code
+    """
+    import re
+    # Only validate http/https URLs
+    if not re.match(r'^https?://', url):
+        return False
+
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+             "--max-time", str(timeout), url],
+            capture_output=True, text=True, timeout=timeout + 1
+        )
+        status_code = result.stdout.strip()
+        return status_code.startswith("2")
+    except Exception:
+        return False
 
 
 def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
@@ -89,11 +186,19 @@ def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
                     import re
                     title = re.sub(r'<[^>]+>', '', title)
                     snippet = re.sub(r'<[^>]+>', '', snippet)
-                    results.append(SearchResult(title=title, url=url, snippet=snippet, source="web"))
+                    reliability = classify_source_reliability(url)
+                    results.append(SearchResult(
+                        title=title, url=url, snippet=snippet,
+                        source="web", reliability=reliability
+                    ))
                     if len(results) >= num_results:
                         break
 
-        return SearchResponse(query=query, results=results, total_results=len(results), search_engine="duckduckgo")
+        return SearchResponse(
+            query=query, results=results, total_results=len(results),
+            search_engine="duckduckgo",
+            metadata={"reliability_distribution": _get_reliability_dist(results)}
+        )
     except subprocess.TimeoutExpired:
         return SearchResponse(query=query, results=[], total_results=0, search_engine="duckduckgo",
                            error="Search timeout")
@@ -126,13 +231,19 @@ def _search_exa(query: str, num_results: int = 5) -> SearchResponse:
         data = json.loads(result.stdout)
         results = []
         for item in data.get("results", []):
+            url = item.get("url", "")
             results.append(SearchResult(
                 title=item.get("title", ""),
-                url=item.get("url", ""),
+                url=url,
                 snippet=item.get("snippet", ""),
-                source=item.get("source", "web")
+                source=item.get("source", "web"),
+                reliability=classify_source_reliability(url)
             ))
-        return SearchResponse(query=query, results=results, total_results=len(results), search_engine="exa")
+        return SearchResponse(
+            query=query, results=results, total_results=len(results),
+            search_engine="exa",
+            metadata={"reliability_distribution": _get_reliability_dist(results)}
+        )
     except Exception as e:
         return SearchResponse(query=query, results=[], total_results=0, search_engine="exa", error=str(e))
 
