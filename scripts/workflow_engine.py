@@ -409,8 +409,9 @@ def initialize_workflow(
     register_artifact(workdir, ArtifactType.TRACKER, str(tracker_path), current_phase, "system")
 
     # Register phase-specific business artifacts for initial phase
+    # Use session-aware naming to avoid overwriting previous runs
     if current_phase == "RESEARCH":
-        findings_path = Path(workdir) / "findings.md"
+        findings_path = Path(workdir) / f"findings_{state.session_id}.md"
         findings_content = f"""# Research Findings
 
 ## Research Question
@@ -430,10 +431,11 @@ def initialize_workflow(
 """
         findings_path.write_text(findings_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings", "has_method": True, "has_conclusions": True})
+                         metadata={"deliverable": "findings", "session_id": state.session_id,
+                                 "has_method": True, "has_conclusions": True})
 
     if current_phase == "REVIEWING":
-        review_path = Path(workdir) / "review.md"
+        review_path = Path(workdir) / f"review_{state.session_id}.md"
         review_content = f"""# Code Review
 
 ## Review Scope
@@ -456,7 +458,8 @@ def initialize_workflow(
 """
         review_path.write_text(review_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review", "has_findings": True, "has_risk_level": True})
+                         metadata={"deliverable": "review", "session_id": state.session_id,
+                                 "has_findings": True, "has_risk_level": True})
 
     state.artifacts["session_state"] = str(session_path)
     state.artifacts["progress"] = str(progress_file)
@@ -543,9 +546,11 @@ def advance_workflow(
             task_tracker.update_quality_gate(task_id, True, str(tracker_path))
 
     # Register phase-specific business artifacts
+    # Use session-aware naming to avoid overwriting previous runs
     from unified_state import register_artifact, ArtifactType
+    session_id = state.session_id or "unknown"
     if phase == "RESEARCH":
-        findings_path = Path(workdir) / "findings.md"
+        findings_path = Path(workdir) / f"findings_{session_id}.md"
         findings_content = f"""# Research Findings
 
 ## Research Question
@@ -565,10 +570,11 @@ def advance_workflow(
 """
         findings_path.write_text(findings_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings", "has_method": True, "has_conclusions": True})
+                         metadata={"deliverable": "findings", "session_id": session_id,
+                                 "has_method": True, "has_conclusions": True})
 
     if phase == "REVIEWING":
-        review_path = Path(workdir) / "review.md"
+        review_path = Path(workdir) / f"review_{session_id}.md"
         review_content = f"""# Code Review
 
 ## Review Scope
@@ -591,7 +597,8 @@ def advance_workflow(
 """
         review_path.write_text(review_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review", "has_findings": True, "has_risk_level": True})
+                         metadata={"deliverable": "review", "session_id": session_id,
+                                 "has_findings": True, "has_risk_level": True})
 
     # Register completion summary when transitioning to COMPLETE
     if phase == "COMPLETE":
@@ -606,11 +613,10 @@ def advance_workflow(
         task_info += f"- Completed At: {datetime.now().isoformat()}\n"
         task_info += f"- Last Phase: {current_phase}\n\n"
 
-        # Aggregate actual content from findings if available
-        findings_path = Path(workdir) / "findings.md"
-        if findings_path.exists():
-            findings_content = findings_path.read_text(encoding="utf-8")
-            # Extract research question if available
+        # Aggregate actual content from session-specific findings if available
+        findings_session_path = Path(workdir) / f"findings_{session_id}.md"
+        if findings_session_path.exists():
+            findings_content = findings_session_path.read_text(encoding="utf-8")
             if "## Research Question" in findings_content:
                 lines = findings_content.split("\n")
                 for i, line in enumerate(lines):
@@ -618,11 +624,10 @@ def advance_workflow(
                         task_info += f"## Research Summary\n{lines[i+1].strip()}\n\n"
                         break
 
-        # Aggregate review summary if available
-        review_path = Path(workdir) / "review.md"
-        if review_path.exists():
-            review_content = review_path.read_text(encoding="utf-8")
-            # Extract review scope and risk level if available
+        # Aggregate review summary if available (session-specific)
+        review_session_path = Path(workdir) / f"review_{session_id}.md"
+        if review_session_path.exists():
+            review_content = review_session_path.read_text(encoding="utf-8")
             if "## Review Scope" in review_content:
                 lines = review_content.split("\n")
                 for i, line in enumerate(lines):
@@ -631,7 +636,6 @@ def advance_workflow(
                         break
                 for i, line in enumerate(lines):
                     if "## Risk Level" in line and i + 1 < len(lines):
-                        # Get the next non-empty lines until next section
                         risk_lines = []
                         for j in range(i + 1, min(i + 4, len(lines))):
                             if lines[j].startswith("## "):
@@ -698,20 +702,69 @@ def complete_workflow(
         logger.complete(final_state, failure_reason)
         del _active_loggers[state.session_id]
 
-    # Register completion summary artifact
-    summary_path = Path(workdir) / "completion_summary.md"
-    task_info = ""
-    if state.task:
-        task_info = f"# {state.task.title}\n\n"
-        task_info += f"## Status\n- Final State: {final_state}\n"
-        task_info += f"- Completed At: {datetime.now().isoformat()}\n"
-        if failure_reason:
-            task_info += f"- Reason: {failure_reason}\n"
+    # Register completion summary artifact - use same aggregation as advance_workflow COMPLETE
+    from unified_state import _load_artifact_registry, register_artifact, ArtifactType
+    registry = _load_artifact_registry(workdir)
+    artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
+    session_id = state.session_id or "unknown"
 
-    summary_path.write_text(task_info or "# Workflow Completed\n", encoding="utf-8")
-    from unified_state import register_artifact, ArtifactType
+    summary_path = Path(workdir) / "completion_summary.md"
+    task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
+    task_info += f"## Status\n- Final State: {final_state}\n"
+    task_info += f"- Completed At: {datetime.now().isoformat()}\n"
+    task_info += f"- Last Phase: {current_phase}\n\n"
+
+    if failure_reason:
+        task_info += f"- Reason: {failure_reason}\n\n"
+
+    # Aggregate actual content from session-specific findings if available
+    findings_session_path = Path(workdir) / f"findings_{session_id}.md"
+    if findings_session_path.exists():
+        findings_content = findings_session_path.read_text(encoding="utf-8")
+        if "## Research Question" in findings_content:
+            lines = findings_content.split("\n")
+            for i, line in enumerate(lines):
+                if "## Research Question" in line and i + 1 < len(lines):
+                    task_info += f"## Research Summary\n{lines[i+1].strip()}\n\n"
+                    break
+
+    # Aggregate review summary if available (session-specific)
+    review_session_path = Path(workdir) / f"review_{session_id}.md"
+    if review_session_path.exists():
+        review_content = review_session_path.read_text(encoding="utf-8")
+        if "## Review Scope" in review_content:
+            lines = review_content.split("\n")
+            for i, line in enumerate(lines):
+                if "## Review Scope" in line and i + 1 < len(lines):
+                    task_info += f"## Review Summary\nScope: {lines[i+1].strip()}\n"
+                    break
+            for i, line in enumerate(lines):
+                if "## Risk Level" in line and i + 1 < len(lines):
+                    risk_lines = []
+                    for j in range(i + 1, min(i + 4, len(lines))):
+                        if lines[j].startswith("## "):
+                            break
+                        if lines[j].strip():
+                            risk_lines.append(lines[j].strip())
+                    if risk_lines:
+                        task_info += f"Risk: {risk_lines[0]}\n\n"
+                    break
+
+    # Include task plan summary if available
+    plan_path = Path(workdir) / "task_plan.md"
+    if plan_path.exists():
+        plan_content = plan_path.read_text(encoding="utf-8")
+        if "## Task Breakdown" in plan_content or "# Task Plan" in plan_content:
+            task_info += "## Execution Summary\n"
+            task_info += "- Task plan was created and executed\n"
+
+    task_info += f"## Delivered Artifacts\n"
+    for atype in set(artifact_types):
+        task_info += f"- {atype}\n"
+    summary_path.write_text(task_info, encoding="utf-8")
     register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
-                     metadata={"final_state": final_state})
+                     metadata={"final_state": final_state,
+                             "aggregated_types": list(set(artifact_types))})
 
     # Transition to COMPLETE if not already there
     if current_phase != "COMPLETE":

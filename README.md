@@ -28,7 +28,12 @@ This section describes what actually works **today** via the scripts layer.
 | REFINING | ✅ Stable | — | Feedback loop iteration |
 | COMPLETE | ✅ Stable | ✅ Stable | Finalization + completion_summary.md (aggregates prior artifacts) |
 
-**Artifact Quality Key:** ✅ Stable = mature output | 🔬 Growing = improving with usage
+**Artifact Quality Key:**
+- ✅ Stable (runtime) = behavior is reliable and tested
+- ✅ Stable (artifacts) = output is structured and consistent
+- 🔬 Growing = output is generated but may need human review for quality
+
+**Note:** "Stable" indicates runtime behavior is reliable, not that default artifact content is production-quality without human review.
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 

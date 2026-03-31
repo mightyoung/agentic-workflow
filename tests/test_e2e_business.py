@@ -156,9 +156,20 @@ class TestE2EBusinessChains(unittest.TestCase):
         """检查特定类型工件的内容是否符合最小结构"""
         artifact_path = Path(self.workdir)
         if artifact_type == "findings":
-            artifact_path = artifact_path / "findings.md"
+            # Look for session-aware naming first, fallback to legacy naming
+            candidates = list(artifact_path.glob("findings_*.md")) + list(artifact_path.glob("findings.md"))
+            if candidates:
+                # Use most recently modified
+                artifact_path = max(candidates, key=lambda p: p.stat().st_mtime)
+            else:
+                artifact_path = artifact_path / "findings.md"
         elif artifact_type == "review":
-            artifact_path = artifact_path / "review.md"
+            # Look for session-aware naming first, fallback to legacy naming
+            candidates = list(artifact_path.glob("review_*.md")) + list(artifact_path.glob("review.md"))
+            if candidates:
+                artifact_path = max(candidates, key=lambda p: p.stat().st_mtime)
+            else:
+                artifact_path = artifact_path / "review.md"
         elif artifact_type in ("summary", "completion_summary"):
             artifact_path = artifact_path / "completion_summary.md"
         else:
@@ -407,14 +418,24 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         self.assertTrue(trajectory_dir.exists(), "Trajectory directory should exist")
 
         # Step 8: 验证业务交付物（交付验收）
-        # 研究链应该产生计划消费或研究产物
+        # 研究链应该同时产生计划消费和研究产物（当RESEARCH阶段被访问时）
         plan_consumed = self._check_plan_consumed()
         business_artifacts = self._get_business_artifact_types()
-        self.assertTrue(
-            plan_consumed or len(business_artifacts) > 0,
-            "Research chain should produce plan consumption or business artifacts. "
-            f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
-        )
+
+        if visited_research:
+            # When RESEARCH was visited, require BOTH plan consumption and findings
+            self.assertTrue(
+                plan_consumed and len(business_artifacts) > 0,
+                "Research chain with RESEARCH phase visited should produce both plan consumption and business artifacts. "
+                f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
+            )
+        else:
+            # When RESEARCH was not visited, still allow OR condition
+            self.assertTrue(
+                plan_consumed or len(business_artifacts) > 0,
+                "Research chain should produce plan consumption or business artifacts. "
+                f"Plan consumed: {plan_consumed}, Business artifacts: {business_artifacts}"
+            )
 
         # Step 9: 验证研究产物（findings artifact）
         # Only verify if RESEARCH phase was actually visited
