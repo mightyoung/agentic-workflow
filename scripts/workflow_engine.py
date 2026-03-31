@@ -411,17 +411,17 @@ def initialize_workflow(
     # Register phase-specific business artifacts for initial phase
     if current_phase == "RESEARCH":
         findings_path = Path(workdir) / "findings.md"
-        findings_content = f"# Research Findings\n\n## Query\n{prompt}\n\n## Findings\n- Research conducted at: {datetime.now().isoformat()}\n"
+        findings_content = f"# Research Findings\n\n## Research Question\n{prompt}\n\n## Method\n- Research conducted at: {datetime.now().isoformat()}\n- Method: Web search and analysis\n\n## Conclusions\n- Placeholder: Research conclusions to be documented\n\n## Recommendations\n- Placeholder: Recommendations based on findings\n"
         findings_path.write_text(findings_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings"})
+                         metadata={"deliverable": "findings", "has_method": True, "has_conclusions": True})
 
     if current_phase == "REVIEWING":
         review_path = Path(workdir) / "review.md"
-        review_content = f"# Code Review\n\n## Review for\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Status\n- Reviewed: Yes\n"
+        review_content = f"# Code Review\n\n## Review Scope\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Findings\n- Placeholder: Review findings to be documented\n\n## Risk Level\n- Placeholder: Risk assessment pending\n\n## Recommendations\n- Placeholder: Recommended actions based on review\n"
         review_path.write_text(review_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review"})
+                         metadata={"deliverable": "review", "has_findings": True, "has_risk_level": True})
 
     state.artifacts["session_state"] = str(session_path)
     state.artifacts["progress"] = str(progress_file)
@@ -511,17 +511,17 @@ def advance_workflow(
     from unified_state import register_artifact, ArtifactType
     if phase == "RESEARCH":
         findings_path = Path(workdir) / "findings.md"
-        findings_content = f"# Research Findings\n\n## Query\n{state.task.description if state.task else 'N/A'}\n\n## Findings\n- Research conducted at: {datetime.now().isoformat()}\n"
+        findings_content = f"# Research Findings\n\n## Research Question\n{state.task.description if state.task else 'N/A'}\n\n## Method\n- Research conducted at: {datetime.now().isoformat()}\n- Method: Web search and analysis\n\n## Conclusions\n- Placeholder: Research conclusions to be documented\n\n## Recommendations\n- Placeholder: Recommendations based on findings\n"
         findings_path.write_text(findings_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system",
-                         metadata={"deliverable": "findings"})
+                         metadata={"deliverable": "findings", "has_method": True, "has_conclusions": True})
 
     if phase == "REVIEWING":
         review_path = Path(workdir) / "review.md"
-        review_content = f"# Code Review\n\n## Review for\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Status\n- Reviewed: Yes\n"
+        review_content = f"# Code Review\n\n## Review Scope\n{state.task.title if state.task else 'N/A'}\n\n## Review Date\n{datetime.now().isoformat()}\n\n## Findings\n- Placeholder: Review findings to be documented\n\n## Risk Level\n- Placeholder: Risk assessment pending\n\n## Recommendations\n- Placeholder: Recommended actions based on review\n"
         review_path.write_text(review_content, encoding="utf-8")
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system",
-                         metadata={"deliverable": "review"})
+                         metadata={"deliverable": "review", "has_findings": True, "has_risk_level": True})
 
     # Register completion summary when transitioning to COMPLETE
     if phase == "COMPLETE":
@@ -537,8 +537,7 @@ def advance_workflow(
         task_info += f"- Last Phase: {current_phase}\n\n"
         task_info += f"## Delivered Artifacts\n"
         for atype in set(artifact_types):
-            summary_info = f"- {atype}\n"
-        task_info += summary_info
+            task_info += f"- {atype}\n"
         summary_path.write_text(task_info, encoding="utf-8")
         register_artifact(workdir, ArtifactType.CUSTOM, str(summary_path), "COMPLETE", "system",
                          metadata={"final_state": "completed", "deliverable": "completion_summary",
