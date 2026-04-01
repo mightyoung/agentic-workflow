@@ -692,6 +692,9 @@ def advance_workflow(
             ]
 
             findings_path = Path(workdir) / f"findings_{session_id}.md"
+            engine_label = search_response.search_engine
+            if search_response.search_engine == "duckduckgo":
+                engine_label = f"{search_response.search_engine} [DEGRADED - DuckDuckGo HTML fallback]"
             findings_content = f"""# Research Findings: {task_title}
 
 ## Research Question
@@ -699,7 +702,7 @@ def advance_workflow(
 
 ## Method
 - Research conducted at: {datetime.now().isoformat()}
-- Search engine: {search_response.search_engine}
+- Search engine: {engine_label}
 - Results: {search_response.total_results} sources found
 
 ## Key Findings
@@ -917,6 +920,10 @@ def advance_workflow(
             recommendations.append("- Add integration tests for critical business paths")
 
             review_path = Path(workdir) / f"review_{session_id}.md"
+            degraded_note = ""
+            if review_source == "workdir_scan":
+                degraded_note = """> **⚠️ Degraded Mode**: Review used workdir_scan fallback (task_plan has no owned_files and no file_changes recorded). Results are less targeted than owned_files/file_changes directed review.
+"""
             review_content = f"""# Code Review: {task_title}
 
 ## Review Scope
@@ -928,7 +935,7 @@ def advance_workflow(
 ## Review Date
 {datetime.now().isoformat()}
 
-## Reviewed Files ({len(target_files)} files analyzed)
+{degraded_note}## Reviewed Files ({len(target_files)} files analyzed)
 {chr(10).join(reviewed_files_info)}
 
 ## Risk Findings

@@ -139,7 +139,7 @@ python3 scripts/trajectory_logger.py --op list --workdir .
 ## 测试命令
 
 ```bash
-# 核心测试 (69 tests)
+# 核心测试 (74 tests)
 python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
 
 # 任务分解测试

@@ -1,6 +1,7 @@
 # Protected Zones for Self-Improvement
 # Part of docs/self_improvement_program.md implementation.
-# Version: 1.0
+# Zone definitions here mirror self_improvement_program.md exactly.
+# Version: 1.1 (aligned with self_improvement_program.md)
 
 ## Zone A: Protected Core (Never touch without explicit justification)
 
@@ -17,34 +18,28 @@ Files:
 - `scripts/quality_gate.py` - Quality enforcement
 - `scripts/safe_io.py` - Atomic write / file lock primitives
 - `scripts/trajectory_logger.py` - Trajectory persistence
+
+## Zone B: Guided Mutable Surface (Preferred zone for improvements)
+
+These are the preferred files for self-improvement. Zone B files have
+established interfaces and are more resilient to change than Zone A.
+
+Files:
 - `scripts/router.py` - Entry routing
 - `scripts/task_decomposer.py` - Task decomposition
 - `scripts/task_tracker.py` - Task state tracking
-- `scripts/memory_ops.py` - Session state operations
 - `scripts/search_adapter.py` - Web search integration
-- `scripts/state_schema.py` - Core data model
-- `SKILL.md` - Skill definition
-- `README.md` - Root documentation
-
-## Zone B: Guided Mutable Surface (Preferred for improvements)
-
-These are the preferred files for self-improvement:
-- Routing heuristics refinements
-- Plan quality improvements
-- Review/research output quality
-- State prompts and instructions
-- Documentation truthfulness
-
-Files:
+- `scripts/memory_ops.py` - Session state operations
 - `skills/*/skill.md` - Phase skill definitions
-- `scripts/README.md` - Scripts documentation
-- `docs/roadmap/roadmap.md` - Roadmap planning
+- `README.md` - Root documentation
+- `SKILL.md` - Skill definition
 
 ## Zone C: Experimental Surface (Safe to iterate)
 
 Files:
 - `scripts/experimental/*` - All experimental modules
 - `docs/experimental/*` - Experimental documentation
+- `docs/roadmap/*` - Roadmap planning
 - `tests/bench_*` - Benchmark tests
 - `tests/run_*.py` - Historical test runners
 
