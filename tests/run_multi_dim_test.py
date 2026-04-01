@@ -10,12 +10,11 @@
 4. 解决方案完整性 (30%)
 """
 
-import os
 import json
 import time
 import asyncio
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List
 from datetime import datetime
 from pathlib import Path
 from enum import Enum
@@ -407,7 +406,7 @@ async def main():
     print(f"总任务数: {report['total_tasks']}")
     print(f"完成率: {report['summary']['completion_rate']:.1%}")
     print(f"Skill使用率: {report['summary']['skill_usage_rate']:.1%}")
-    print(f"\n各维度平均分:")
+    print("\n各维度平均分:")
     print(f"  正确性: {report['summary']['avg_correctness']:.1%}")
     print(f"  Token效率: {report['summary']['avg_token_efficiency']:.1%}")
     print(f"  执行速度: {report['summary']['avg_speed_score']:.1%}")

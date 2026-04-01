@@ -13,8 +13,8 @@ import os
 import json
 import time
 import asyncio
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 from datetime import datetime
 from pathlib import Path
 
@@ -1438,11 +1438,11 @@ async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] 
 
         if use_skill:
             # P1: 使用带token监控的skill执行
-            print(f"  [有Skill+P1] 执行中 (监测模式 - 无token限制)...")
+            print("  [有Skill+P1] 执行中 (监测模式 - 无token限制)...")
             result_with = await run_with_skill_monitored(task)
 
             # 无Skill执行
-            print(f"  [无Skill] 执行中...")
+            print("  [无Skill] 执行中...")
             result_without = await run_without_skill(task)
 
             # P2: 检查是否需要fallback
@@ -1453,12 +1453,12 @@ async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] 
                 result_without["correct"] = correct_without
 
                 if should_fallback(result_with, result_without, task):
-                    print(f"  [P2] 触发fallback: skill质量未提升，切换到无skill模式")
+                    print("  [P2] 触发fallback: skill质量未提升，切换到无skill模式")
                     # 使用无skill结果作为最终结果
                     result_with = None
         else:
             # 不使用skill，直接执行无skill版本
-            print(f"  [无Skill] 执行中...")
+            print("  [无Skill] 执行中...")
             result_without = await run_without_skill(task)
 
         if result_with and result_without:
@@ -1490,13 +1490,13 @@ async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] 
 
                 results.append(result)
 
-                print(f"\n  结果对比:")
+                print("\n  结果对比:")
                 print(f"    有Skill: {result_with['duration']:.1f}s, {result_with['total_tokens']} tokens, 正确: {correct_with}")
                 print(f"    无Skill: {result_without['duration']:.1f}s, {result_without['total_tokens']} tokens, 正确: {correct_without}")
                 print(f"    时间改进: {duration_imp:+.1f}%")
                 print(f"    Token改进: {token_imp:+.1f}%")
             else:
-                print(f"  ❌ 执行失败")
+                print("  ❌ 执行失败")
         elif result_without:
             # P0 fallback: 只使用无skill结果
             if result_without["success"]:
@@ -1520,13 +1520,13 @@ async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] 
                 )
                 results.append(result)
 
-                print(f"\n  结果对比 (仅无Skill):")
+                print("\n  结果对比 (仅无Skill):")
                 print(f"    无Skill: {result_without['duration']:.1f}s, {result_without['total_tokens']} tokens, 正确: {correct_without}")
-                print(f"    [P0] Skill被禁用，使用基线模式")
+                print("    [P0] Skill被禁用，使用基线模式")
             else:
-                print(f"  ❌ 执行失败")
+                print("  ❌ 执行失败")
         else:
-            print(f"  ❌ 执行失败")
+            print("  ❌ 执行失败")
 
     return results
 
@@ -1621,7 +1621,7 @@ def generate_report(results: List[BenchmarkResult], output_path: str = "tests/be
     for module, stats in report["by_module"].items():
         md_report += f"| {module} | {stats['count']} | {stats['avg_duration_improvement']:+.1f}% | {stats['avg_token_improvement']:+.1f}% |\n"
 
-    md_report += f"""
+    md_report += """
 ## 按难度统计
 
 | 难度 | 任务数 | 平均时间改进 | 平均Token改进 |
@@ -1630,7 +1630,7 @@ def generate_report(results: List[BenchmarkResult], output_path: str = "tests/be
     for difficulty, stats in report["by_difficulty"].items():
         md_report += f"| {difficulty} | {stats['count']} | {stats['avg_duration_improvement']:+.1f}% | {stats['avg_token_improvement']:+.1f}% |\n"
 
-    md_report += f"""
+    md_report += """
 ---
 
 ## 详细结果
@@ -1672,7 +1672,7 @@ async def main():
         print("\n设置API key后可执行真实对比测试")
         return
 
-    print(f"\n✅ API key已设置，开始执行对比测试...")
+    print("\n✅ API key已设置，开始执行对比测试...")
     print(f"任务数量: {len(SWE_BENCH_TASKS)}")
     print()
 
@@ -1685,9 +1685,9 @@ async def main():
     print("\n" + "="*80)
     print("  测试完成")
     print("="*80)
-    print(f"\n结果已保存到:")
-    print(f"  - JSON: tests/benchmark_results.json")
-    print(f"  - Markdown: tests/benchmark_results.md")
+    print("\n结果已保存到:")
+    print("  - JSON: tests/benchmark_results.json")
+    print("  - Markdown: tests/benchmark_results.md")
     print("\n" + md_report)
 
 

@@ -217,3 +217,17 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
         self._setup_code_task_with_gate(True)
         result = workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
         self.assertEqual(result["final_state"], "completed")
+
+    def test_advance_to_complete_blocks_when_quality_gate_none(self):
+        """advance(phase=COMPLETE) must block when quality_gates_passed=None for code tasks."""
+        self._setup_code_task_with_gate(None)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.advance_workflow(workdir=self.temp_dir, phase="COMPLETE")
+        self.assertIn("quality gate not passed", str(ctx.exception))
+
+    def test_advance_to_complete_blocks_when_quality_gate_false(self):
+        """advance(phase=COMPLETE) must block when quality_gates_passed=False for code tasks."""
+        self._setup_code_task_with_gate(False)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.advance_workflow(workdir=self.temp_dir, phase="COMPLETE")
+        self.assertIn("quality gate not passed", str(ctx.exception))

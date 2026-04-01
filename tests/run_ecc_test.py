@@ -5,10 +5,9 @@ ECC集成测试运行器
 """
 
 import json
-import sys
 import time
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 @dataclass
 class TestResult:
@@ -159,4 +158,4 @@ if __name__ == "__main__":
     # 保存报告
     with open("ecc_test_results.json", "w", encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
-    print(f"\n详细报告已保存到 ecc_test_results.json")
+    print("\n详细报告已保存到 ecc_test_results.json")

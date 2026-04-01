@@ -6,9 +6,9 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.10.0
+**Current Version**: 5.11.0
 
-## Current Capabilities (v5.10.0)
+## Current Capabilities (v5.11.0)
 
 This section describes what actually works **today** via the scripts layer.
 

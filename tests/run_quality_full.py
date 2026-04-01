@@ -8,7 +8,7 @@ import os
 import json
 import time
 import asyncio
-from typing import Dict, List
+from typing import Dict
 
 # 完整的20个质量测试任务
 TEST_TASKS = [

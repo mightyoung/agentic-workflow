@@ -3,7 +3,6 @@
 import pytest
 import os
 import tempfile
-from dataclasses import asdict
 
 
 # ===== TDD RED: Write failing tests first =====

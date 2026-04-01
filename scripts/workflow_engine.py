@@ -19,7 +19,7 @@ import memory_ops
 import router
 import task_tracker
 import search_adapter
-from safe_io import safe_write_json
+from safe_io import safe_write_json, safe_write_text_locked
 from trajectory_logger import TrajectoryLogger
 from unified_state import (
     create_initial_state,
@@ -198,7 +198,7 @@ def _generate_and_register_summary(
         except (json.JSONDecodeError, IOError):
             pass
 
-    summary_path.write_text(task_info, encoding="utf-8")
+    safe_write_text_locked(summary_path, task_info)
     register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
                      metadata={"final_state": final_state,
                              "aggregated_types": list(set(artifact_types)),
@@ -219,7 +219,7 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
         content = template_path.read_text(encoding="utf-8")
         content = content.replace("{{TASK_NAME}}", task_name)
         content = content.replace("{{CREATED_AT}}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        destination.write_text(content, encoding="utf-8")
+        safe_write_text_locked(destination, content)
         return destination
     else:
         # Create minimal plan file if no template
@@ -237,7 +237,7 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
 ## Status
 - Overall: Not Started
 """
-        destination.write_text(content, encoding="utf-8")
+        safe_write_text_locked(destination, content)
         return destination
 
 
@@ -443,7 +443,7 @@ def update_task_status_in_plan(
     if not task_found:
         return {"success": False, "error": f"Task {task_id} not found"}
 
-    plan_path.write_text("\n".join(new_lines), encoding="utf-8")
+    safe_write_text_locked(plan_path, "\n".join(new_lines))
     return {"success": True, "task_id": task_id, "status": status}
 
 
@@ -536,7 +536,7 @@ def initialize_workflow(
 - session_id: {state.session_id}
 - task_id: {state.task.task_id if state.task else 'N/A'}
 """
-    progress_file.write_text(progress_content, encoding="utf-8")
+    safe_write_text_locked(progress_file, progress_content)
 
     # Register progress.md artifact (authoritative tracking via registry only)
     register_artifact(workdir, ArtifactType.PROGRESS, str(progress_file), current_phase, "system")
@@ -640,7 +640,7 @@ def advance_workflow(
                 in_phase_section = False
                 continue
             new_lines.append(line)
-        progress_file.write_text("\n".join(new_lines), encoding="utf-8")
+        safe_write_text_locked(progress_file, "\n".join(new_lines))
 
     # Save updated state
     save_state(workdir, state)
@@ -798,7 +798,7 @@ def advance_workflow(
                 "used_real_search": False,
             }
 
-        findings_path.write_text(findings_content, encoding="utf-8")
+        safe_write_text_locked(findings_path, findings_content)
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system", metadata=metadata)
 
     if current_phase == "REVIEWING" and phase != "REVIEWING":
@@ -1036,7 +1036,7 @@ def advance_workflow(
                 "note": "No code files found in workdir - template-based review",
             }
 
-        review_path.write_text(review_content, encoding="utf-8")
+        safe_write_text_locked(review_path, review_content)
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system", metadata=metadata)
 
     # Block COMPLETE transition if quality gate failed for code tasks

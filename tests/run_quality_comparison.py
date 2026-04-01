@@ -12,7 +12,7 @@ import os
 import json
 import time
 import asyncio
-from typing import Dict, List
+from typing import Dict
 
 # 测试任务集 - 代表性任务
 TEST_TASKS = [
@@ -145,7 +145,7 @@ async def run_comparison():
         print("✅ 测试框架就绪 - 设置 API key 后可执行真实对比测试")
         return
 
-    print(f"✅ API key 已设置，开始执行对比测试...")
+    print("✅ API key 已设置，开始执行对比测试...")
     print()
 
     results = []
@@ -185,7 +185,7 @@ async def run_comparison():
 
             results.append(task_result)
         else:
-            print(f"    ❌ 执行失败")
+            print("    ❌ 执行失败")
 
         print()
 
