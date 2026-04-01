@@ -92,7 +92,7 @@ if [[ -z "$STATUS" ]]; then
     echo "Error: status is required"; usage
 fi
 
-VALID_STATUSES="keep discard rollback stabilization"
+VALID_STATUSES="keep discard rollback stabilization in_progress"
 if [[ ! " $VALID_STATUSES " =~ " $STATUS " ]]; then
     echo "Error: status must be one of: $VALID_STATUSES"
     usage

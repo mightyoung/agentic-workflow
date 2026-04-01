@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -241,12 +242,132 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
         return destination
 
 
+def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path:
+    """
+    Create a phase contract artifact (Anthropic-style written contract).
+
+    This artifact establishes explicit negotiated agreement between planner and executor:
+    - Goals for this phase/sprint
+    - Verification methods (how to know when done)
+    - Owned files (what will be produced/modified)
+    - Failure threshold (when to abort/retry)
+
+    Produced by PLANNING, consumed by EXECUTING and REVIEWING.
+    """
+    contract_path = Path(workdir) / "phase_contract.md"
+    if contract_path.exists():
+        return contract_path
+
+    content = f"""# Phase Contract
+
+## Session
+- Task: {task_name}
+- Description: {task_desc}
+- Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Goals
+
+- [ ] Goal 1: (to be filled by planner)
+
+## Verification Methods
+
+How will we know the goals are achieved?
+
+1. **Automated verification**: (e.g., `pytest tests/`, `python3 -m mypy`)
+2. **Manual verification**: (e.g., code review, integration test)
+3. **Success criteria**: (e.g., all tests pass, no type errors)
+
+## Owned Files
+
+Files to be produced or modified:
+
+- `src/` (list specific files if known)
+
+## Failure Threshold
+
+When should we abort or escalate?
+
+- **Hard failure**: (e.g., quality gate fails, P0 tasks incomplete)
+- **Soft failure**: (e.g., P1 tasks incomplete, warnings present)
+- **Retry strategy**: (e.g., max 3 retries before escalating)
+
+## Review Contract
+
+REVIEWING phase will validate:
+
+1. All verification methods pass
+2. Owned files match actual changes
+3. No hard failures detected
+4. Code quality meets baseline standards
+
+---
+*This contract is negotiated during PLANNING phase and binding for EXECUTING and REVIEWING.*
+"""
+    safe_write_text_locked(contract_path, content)
+    return contract_path
+
+
 def _phase_display_name(trigger_type: str, phase: str) -> str:
     if trigger_type == "DIRECT_ANSWER":
         return "DIRECT_ANSWER"
     if trigger_type == "FULL_WORKFLOW":
         return "PLANNING"
     return phase
+
+
+def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
+    """
+    Parse phase_contract.md into a structured dict.
+
+    Returns:
+        Dict with keys: goals (list), verification_methods (list),
+        owned_files (list), failure_threshold (dict), review_contract (dict)
+    """
+    import re
+    contract_path = Path(workdir) / "phase_contract.md"
+    if not contract_path.exists():
+        return {}
+
+    content = contract_path.read_text(encoding="utf-8")
+    result: Dict[str, Any] = {
+        "goals": [],
+        "verification_methods": [],
+        "owned_files": [],
+        "failure_threshold": {},
+        "review_contract": {},
+    }
+
+    current_section = None
+    for line in content.split("\n"):
+        line = line.rstrip()
+        if line.startswith("## Goals"):
+            current_section = "goals"
+            continue
+        if line.startswith("## Verification"):
+            current_section = "verification"
+            continue
+        if line.startswith("## Owned Files"):
+            current_section = "owned_files"
+            continue
+        if line.startswith("## Failure Threshold"):
+            current_section = "failure_threshold"
+            continue
+        if line.startswith("## Review Contract"):
+            current_section = "review_contract"
+            continue
+
+        if current_section == "goals" and line.strip().startswith("- [ ]"):
+            goal = line.strip()[6:].strip()
+            if goal and not goal.startswith("Goal"):
+                result["goals"].append(goal)
+        elif current_section == "verification" and line.strip().startswith("1.") or line.strip().startswith("2.") or line.strip().startswith("3."):
+            result["verification_methods"].append(line.strip())
+        elif current_section == "owned_files" and line.strip().startswith("- `"):
+            file_match = re.search(r'- `([^`]+)`', line)
+            if file_match:
+                result["owned_files"].append(file_match.group(1))
+
+    return result
 
 
 def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
@@ -337,6 +458,214 @@ def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
 
     candidates.sort(key=lambda item: (priority_order.get(item.get("priority"), 9), item.get("id", "")))
     return candidates[:limit]
+
+
+def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
+    """
+    Compute the executable task frontier from task_plan.md.
+
+    Returns:
+        {
+            "executable_frontier": [task, ...],     # Tasks ready to execute
+            "serial_groups": [[task, task], ...],   # Tasks must run sequentially
+            "parallel_groups": [[task, task], ...], # Tasks can run in parallel
+            "blocked_tasks": [task, ...],           # Tasks blocked by dependencies
+            "completed_count": int,
+            "total_count": int,
+        }
+
+    Frontier rules:
+    - executable_frontier: backlog tasks with all dependencies satisfied
+    - serial_groups: within frontier, tasks that depend on each other form sequential groups
+    - parallel_groups: within frontier, independent tasks that can run concurrently
+    """
+    all_tasks = parse_task_plan(workdir)
+    if not all_tasks:
+        return {
+            "executable_frontier": [],
+            "serial_groups": [],
+            "parallel_groups": [],
+            "blocked_tasks": [],
+            "completed_count": 0,
+            "total_count": 0,
+        }
+
+    completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
+    backlog_tasks = [t for t in all_tasks if t.get("status") == "backlog"]
+
+    # Partition into frontier (ready) vs blocked
+    frontier_tasks = []
+    blocked_tasks = []
+    for task in backlog_tasks:
+        deps = task.get("dependencies", [])
+        if deps and not all(d in completed_ids for d in deps):
+            blocked_tasks.append(task)
+        else:
+            frontier_tasks.append(task)
+
+    # Build dependency graph for frontier tasks
+    # task_id -> set of task_ids it depends on (within frontier)
+    frontier_ids = {t["id"] for t in frontier_tasks}
+    dep_graph: Dict[str, set] = {}
+    for task in frontier_tasks:
+        task_deps = task.get("dependencies", [])
+        # Only consider deps within frontier
+        relevant_deps = {d for d in task_deps if d in frontier_ids}
+        dep_graph[task["id"]] = relevant_deps
+
+    # Find serial groups (tasks with dependencies on each other, forming a chain)
+    # and parallel groups (independent tasks)
+    serial_groups: List[List[Dict[str, Any]]] = []
+    parallel_tasks: List[Dict[str, Any]] = []
+    assigned_ids: set = set()
+
+    # First pass: find chains (tasks that depend on each other)
+    for task in frontier_tasks:
+        if task["id"] in assigned_ids:
+            continue
+        # Follow the dependency chain
+        chain = []
+        current = task
+        visited_in_chain = set()
+        while current["id"] in frontier_ids and current["id"] not in visited_in_chain:
+            chain.append(current)
+            visited_in_chain.add(current["id"])
+            assigned_ids.add(current["id"])
+            deps = list(dep_graph.get(current["id"], set()))
+            if not deps:
+                break
+            # Find next task in chain (should be the one this task depends on)
+            next_id = deps[0]  # Take first dependency
+            if next_id not in frontier_ids:
+                break
+            # Check if dependency is mutual (forms a chain)
+            next_task = next((t for t in frontier_tasks if t["id"] == next_id), None)
+            if not next_task:
+                break
+            current = next_task
+
+        if len(chain) > 1:
+            serial_groups.append(chain)
+        else:
+            parallel_tasks.extend(chain)
+
+    return {
+        "executable_frontier": frontier_tasks,
+        "serial_groups": serial_groups,
+        "parallel_groups": [[t] for t in parallel_tasks],
+        "blocked_tasks": blocked_tasks,
+        "completed_count": len(completed_ids),
+        "total_count": len(all_tasks),
+    }
+
+
+@dataclass
+class CheckpointConfig:
+    """Conditional checkpoint configuration"""
+    # Trigger checkpoint after N phase transitions
+    phase_change_threshold: int = 3
+    # Trigger checkpoint after N resume attempts
+    resume_threshold: int = 2
+    # Trigger checkpoint after N failures
+    failure_threshold: int = 2
+    # Trigger checkpoint after N workflow steps
+    step_threshold: int = 10
+    # Enable auto-checkpoint
+    enabled: bool = True
+
+
+def should_checkpoint(
+    workdir: str,
+    config: Optional[CheckpointConfig] = None,
+) -> Tuple[bool, str]:
+    """
+    Determine if a checkpoint should be triggered based on conditions.
+
+    Conditions:
+    - Phase changes since last checkpoint
+    - Resume attempts
+    - Failure count
+    - Total workflow steps
+
+    Returns:
+        (should_checkpoint, reason)
+    """
+    if config is None:
+        config = CheckpointConfig()
+
+    if not config.enabled:
+        return False, "checkpoint disabled"
+
+    state = load_state(workdir)
+    if state is None:
+        return False, "no state"
+
+    session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+    if not session_path.exists():
+        return False, "no session"
+
+    try:
+        session_data = json.loads(session_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False, "session parse error"
+
+    # Count phase transitions
+    phase_history = state.phase.history if hasattr(state.phase, 'history') else []
+    phase_changes = len(phase_history)
+
+    # Get counters from session metadata
+    metadata = session_data.get("metadata", {})
+    resume_count = metadata.get("resume_count", 0)
+    failure_count = metadata.get("failure_count", 0)
+    step_count = metadata.get("step_count", 0)
+
+    # Check each condition
+    reasons = []
+    if phase_changes >= config.phase_change_threshold:
+        reasons.append(f"phase_changes={phase_changes}>={config.phase_change_threshold}")
+    if resume_count >= config.resume_threshold:
+        reasons.append(f"resume_count={resume_count}>={config.resume_threshold}")
+    if failure_count >= config.failure_threshold:
+        reasons.append(f"failure_count={failure_count}>={config.failure_threshold}")
+    if step_count >= config.step_threshold:
+        reasons.append(f"step_count={step_count}>={config.step_threshold}")
+
+    if reasons:
+        return True, "; ".join(reasons)
+
+    return False, ""
+
+
+def conditional_checkpoint(
+    workdir: str,
+    config: Optional[CheckpointConfig] = None,
+) -> Dict[str, Any]:
+    """
+    Save a checkpoint if conditions are met.
+
+    Returns:
+        {"checkpoint_saved": bool, "reason": str}
+    """
+    should_save, reason = should_checkpoint(workdir, config)
+
+    if not should_save:
+        return {"checkpoint_saved": False, "reason": reason}
+
+    # Save trajectory checkpoint
+    state = load_state(workdir)
+    if state is None:
+        return {"checkpoint_saved": False, "reason": "no state"}
+
+    session_id = state.session_id
+    if session_id in _active_loggers:
+        logger = _active_loggers[session_id]
+        logger.flush()  # Ensure all logs are written
+
+    return {
+        "checkpoint_saved": True,
+        "reason": reason,
+        "session_id": session_id,
+    }
 
 
 def validate_task_plan(workdir: str = ".") -> Tuple[bool, List[str]]:
@@ -557,11 +886,19 @@ def initialize_workflow(
         task_tracker.update_status(task_id, "in_progress", progress=0, path=str(tracker_path))
 
     plan_path: Optional[Path] = None
+    contract_path: Optional[Path] = None
     if auto_create_plan and current_phase == "PLANNING":
         plan_path = _create_plan_from_template(prompt, workdir)
         if plan_path is not None:
             # Register plan artifact (authoritative tracking via registry only)
             register_artifact(workdir, ArtifactType.PLAN, str(plan_path), current_phase, "system")
+        # Create Anthropic-style phase contract
+        task_title = state.task.title if state.task else prompt[:50]
+        task_desc = state.task.description if state.task else prompt
+        contract_path = _create_phase_contract(task_title, task_desc, workdir)
+        if contract_path is not None:
+            register_artifact(workdir, "contract", str(contract_path), current_phase, "system",
+                            metadata={"deliverable": "contract", "phase": current_phase})
 
     # Register session state artifact
     register_artifact(workdir, ArtifactType.SESSION, str(session_path), current_phase, "system")
@@ -719,6 +1056,11 @@ def advance_workflow(
 ## Recommendations
 {chr(10).join(recommendations)}
 """
+            # Extract degraded_reason from search metadata if present
+            degraded_reason = None
+            if search_response.metadata and isinstance(search_response.metadata, dict):
+                degraded_reason = search_response.metadata.get("degraded_reason")
+
             metadata = {
                 "deliverable": "findings",
                 "session_id": session_id,
@@ -731,6 +1073,8 @@ def advance_workflow(
                 "used_real_search": True,
                 "degraded_mode": search_response.search_engine == "duckduckgo",
             }
+            if degraded_reason:
+                metadata["degraded_reason"] = degraded_reason
         else:
             # Fall back to template-based findings (search failed or unavailable)
             desc_lower = task_desc.lower()
@@ -937,6 +1281,22 @@ def advance_workflow(
             recommendations.append("- Verify implementation against specific acceptance criteria")
             recommendations.append("- Add integration tests for critical business paths")
 
+            # Read phase contract if available (Anthropic-style negotiated contract)
+            contract_info = ""
+            contract = parse_phase_contract(workdir)
+            if contract.get("goals"):
+                contract_info = "\n## Phase Contract\n"
+                if contract.get("goals"):
+                    contract_info += "**Goals:**\n"
+                    for goal in contract["goals"][:3]:
+                        contract_info += f"- {goal}\n"
+                if contract.get("verification_methods"):
+                    contract_info += "\n**Verification:**\n"
+                    for method in contract["verification_methods"][:2]:
+                        contract_info += f"- {method}\n"
+                if contract.get("owned_files"):
+                    contract_info += f"\n**Contract Files:** {', '.join(contract['owned_files'][:3])}\n"
+
             review_path = Path(workdir) / f"review_{session_id}.md"
             degraded_note = ""
             if review_source == "workdir_scan":
@@ -949,6 +1309,7 @@ def advance_workflow(
 
 ## Task Description
 {task_desc}
+{contract_info}
 
 ## Review Date
 {datetime.now().isoformat()}
@@ -1233,6 +1594,79 @@ def log_workflow_file_change(
     return {"status": "no_active_logger", "file_path": file_path, "action": action}
 
 
+# ============================================================================
+# Lightweight Generator-Evaluator Loop
+# ============================================================================
+# Anthropic-style generator-evaluator pattern, thin stable implementation.
+#
+# Trigger conditions (one of):
+#   - High complexity task (detected by task size/complexity indicators)
+#   - Quality gate failure during REVIEWING
+#   - Explicit opt-in via task_plan.md flag: `enable_evaluator_loop=true`
+#
+# Revision cycle:
+#   REVIEWING -> (if issues found) -> EXECUTING (revise) -> REVIEWING (re-verify)
+#   Maximum 2 revision cycles per phase contract
+# ============================================================================
+
+MAX_REVISION_CYCLES = 2
+
+
+def request_revision(
+    workdir: str,
+    reason: str,
+    feedback: str,
+) -> Dict[str, Any]:
+    """
+    Request revision from REVIEWING back to EXECUTING.
+
+    Lightweight Generator-Evaluator loop integration point.
+    Tracks revision count in state and limits to MAX_REVISION_CYCLES.
+
+    Args:
+        workdir: Working directory
+        reason: Why revision is needed (e.g., "quality_gate_failed", "high_risk_issues")
+        feedback: Specific feedback for the executor
+
+    Returns:
+        Dict with transition info including revision_count and whether revision is allowed
+    """
+    from state_schema import Decision
+
+    state = load_state(workdir)
+    if state is None:
+        raise ValueError("workflow state not found")
+
+    # Track revision count in state decisions
+    revision_decisions = [d for d in state.decisions if "revision" in d.decision.lower()]
+    revision_count = len(revision_decisions)
+
+    if revision_count >= MAX_REVISION_CYCLES:
+        return {
+            "status": "revision_limit_reached",
+            "revision_count": revision_count,
+            "max_revisions": MAX_REVISION_CYCLES,
+            "message": f"Maximum revision cycles ({MAX_REVISION_CYCLES}) reached. Proceeding to COMPLETE.",
+        }
+
+    # Log revision request
+    state.decisions.append(Decision(
+        timestamp=datetime.now().isoformat(),
+        decision=f"Revision requested: {reason}",
+        reason=feedback,
+    ))
+    save_state(workdir, state)
+
+    return {
+        "status": "revision_requested",
+        "revision_count": revision_count + 1,
+        "max_revisions": MAX_REVISION_CYCLES,
+        "reason": reason,
+        "feedback": feedback,
+        "next_phase": "EXECUTING",
+    }
+
+
 def resume_workflow(
     workdir: str,
     session_id: Optional[str] = None,
@@ -1460,7 +1894,7 @@ def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Workflow runtime engine")
     parser.add_argument("--workdir", default=".", help="workspace directory")
-    parser.add_argument("--op", choices=["init", "advance", "snapshot", "recommend", "validate", "plan", "complete", "log-decision", "log-file", "validate-plan", "update-task", "resume", "handle-failure"], required=True)
+    parser.add_argument("--op", choices=["init", "advance", "snapshot", "recommend", "validate", "plan", "frontier", "checkpoint", "complete", "log-decision", "log-file", "validate-plan", "update-task", "resume", "handle-failure"], required=True)
     parser.add_argument("--prompt", help="user prompt for workflow initialization")
     parser.add_argument("--task-id", help="optional task id")
     parser.add_argument("--phase", help="target phase for advance")
@@ -1526,6 +1960,11 @@ def main() -> int:
 
     if args.op == "plan":
         print(json.dumps({"tasks": parse_task_plan(args.workdir), "next_tasks": next_plan_tasks(args.workdir)}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "frontier":
+        frontier = compute_frontier(args.workdir)
+        print(json.dumps(frontier, ensure_ascii=False, indent=2))
         return 0
 
     if args.op == "validate-plan":

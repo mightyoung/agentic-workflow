@@ -57,14 +57,19 @@ if [[ "$current_branch" == self-improve/* ]] || \
 fi
 
 # Also accept if we are inside an actual worktree (not the main working tree)
-# Use --porcelain for reliable parsing
-# Note: ALL worktrees (including main) show with "worktree" prefix in --porcelain
-# So additional worktrees = count > 1
+# Use --porcelain for reliable parsing and check if current path appears in non-main worktree list
 if [[ $is_self_improve_context -eq 0 ]]; then
-    worktree_count=$(git worktree list --porcelain 2>/dev/null | grep -c "^worktree" || echo "0")
-    if [[ "$worktree_count" -gt 1 ]]; then
-        is_self_improve_context=1
-    fi
+    current_pwd="$(pwd)"
+    # Parse worktree list: first entry is always main, subsequent ones are additional worktrees
+    # Format: "worktree /path/to/worktree" lines followed by metadata lines, then next "worktree" or "bare"
+    worktree_paths=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2}' | tail -n +2)
+    while IFS= read -r wt_path; do
+        # Only check if wt_path is non-empty (avoids empty glob matching everything)
+        if [[ -n "$wt_path" && "$current_pwd" == "$wt_path"* ]]; then
+            is_self_improve_context=1
+            break
+        fi
+    done <<< "$worktree_paths"
 fi
 
 if [[ $is_self_improve_context -eq 1 ]]; then
@@ -151,20 +156,22 @@ fi
 echo ""
 
 # Check 5: Workflow smoke path
-echo "[5/8] Workflow smoke path (init + snapshot + validate)..."
+echo "[5/8] Workflow smoke path (init + snapshot + validate + recommend)..."
 tmpdir=$(mktemp -d)
 cleanup() { rm -rf "$tmpdir"; }
 trap cleanup EXIT
 
 if python3 scripts/workflow_engine.py --op init --prompt "baseline smoke test" --workdir "$tmpdir" > /tmp/baseline_wf_init.log 2>&1 &&
    python3 scripts/workflow_engine.py --op snapshot --workdir "$tmpdir" > /tmp/baseline_wf_snap.log 2>&1 &&
-   python3 scripts/unified_state.py --op validate --workdir "$tmpdir" > /tmp/baseline_wf_val.log 2>&1; then
-    pass_gate "Workflow smoke path (init/snapshot/validate)"
+   python3 scripts/unified_state.py --op validate --workdir "$tmpdir" > /tmp/baseline_wf_val.log 2>&1 &&
+   python3 scripts/workflow_engine.py --op recommend --workdir "$tmpdir" > /tmp/baseline_wf_rec.log 2>&1; then
+    pass_gate "Workflow smoke path (init/snapshot/validate/recommend)"
 else
     fail_gate "Workflow smoke path"
     echo "=== init ==="; cat /tmp/baseline_wf_init.log
     echo "=== snapshot ==="; cat /tmp/baseline_wf_snap.log
     echo "=== validate ==="; cat /tmp/baseline_wf_val.log
+    echo "=== recommend ==="; cat /tmp/baseline_wf_rec.log
 fi
 echo ""
 
