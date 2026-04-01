@@ -927,14 +927,14 @@ def advance_workflow(
 ## Review Date
 {datetime.now().isoformat()}
 
-## Reviewed Files ({len(code_files)} files analyzed)
+## Reviewed Files ({len(target_files)} files analyzed)
 {chr(10).join(reviewed_files_info)}
 
 ## Risk Findings
 {chr(10).join(risk_findings)}
 
 ## Risk Assessment
-- **Files Reviewed**: {len(code_files)} code files
+- **Files Reviewed**: {len(target_files)} code files
 - **Total Lines**: {total_lines}
 - **Correctness**: Implementation reviewed based on actual code
 - **Security**: Security posture assessed based on code analysis

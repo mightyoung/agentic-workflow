@@ -22,7 +22,7 @@ import sys
 from datetime import datetime
 from typing import Dict, Optional, Any
 
-from safe_io import safe_append_jsonl
+from safe_io import safe_append_jsonl, safe_write_text_locked
 
 # 默认 SESSION-STATE 路径
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
@@ -96,8 +96,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 | 问题 | 尝试次数 | 解决方案 |
 |------|----------|----------|
 """
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(default_content)
+        safe_write_text_locked(path, default_content)
         return True
     return False
 
@@ -121,8 +120,7 @@ def update_task_info(path: str, task: str, phase: str = "PLANNING") -> bool:
     pattern = r'(\*\*阶段\*\*: )(.*)(\n)'
     content = re.sub(pattern, f'\\1{phase}\\3', content)
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -147,8 +145,7 @@ def add_correction(path: str, original: str, corrected: str) -> bool:
         # 如果表格为空或格式不对，追加
         content += new_row
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -175,8 +172,7 @@ def add_preference(path: str, preference_type: str, value: str) -> bool:
         # 如果找不到，追加
         content += f"\n{new_pref}\n"
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -199,8 +195,7 @@ def add_decision(path: str, decision: str, reason: str = "") -> bool:
     else:
         content += new_row
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -222,8 +217,7 @@ def add_value(path: str, value_type: str, value: str) -> bool:
     else:
         content += new_row
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -261,8 +255,7 @@ def update_resume_point(path: str, phase: str, progress: int) -> bool:
         if re.search(pattern, content):
             content = re.sub(pattern, f'\\1- **进度**: {progress}%\n', content)
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(content)
+    safe_write_text_locked(path, content)
 
     return True
 
@@ -456,8 +449,7 @@ def main():
                 content = f.read()
             pattern = r'(\*\*阶段\*\*: )(.*)(\n)'
             content = re.sub(pattern, f'\\1{args.value}\\3', content)
-            with open(args.path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            safe_write_text_locked(args.path, content)
         else:
             print(f"未知key: {args.key}")
             return 1

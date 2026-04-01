@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TextIO
 
-from safe_io import safe_write_json
+from safe_io import safe_write_json_locked
 
 
 TRAJECTORY_DIR = "trajectories"
@@ -258,7 +258,7 @@ class TrajectoryLogger:
             try:
                 data = json.loads(self._trajectory_file.read_text(encoding="utf-8"))
                 data["current_phase"] = phase
-                safe_write_json(self._trajectory_file, data)
+                safe_write_json_locked(self._trajectory_file, data)
             except (json.JSONDecodeError, IOError):
                 pass
 
@@ -419,13 +419,13 @@ class TrajectoryLogger:
         existing["phases"] = [p.to_dict() for p in phases]
         existing["current_phase"] = new_phase.phase
 
-        safe_write_json(self._trajectory_file, existing)
+        safe_write_json_locked(self._trajectory_file, existing)
 
     def _save_trajectory(self, trajectory: Trajectory):
         """保存完整轨迹"""
         if not self._trajectory_file:
             return
-        safe_write_json(self._trajectory_file, trajectory.to_dict())
+        safe_write_json_locked(self._trajectory_file, trajectory.to_dict())
 
     def get_summary(self) -> Dict[str, Any]:
         """获取轨迹摘要"""
@@ -478,7 +478,7 @@ def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     base_dir = trajectory_date_dir(workdir, trajectory.session_id)
     base_dir.mkdir(parents=True, exist_ok=True)
     trajectory_file = base_dir / "trajectory.json"
-    safe_write_json(trajectory_file, trajectory.to_dict())
+    safe_write_json_locked(trajectory_file, trajectory.to_dict())
     return trajectory_file
 
 
