@@ -478,10 +478,7 @@ def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     base_dir = trajectory_date_dir(workdir, trajectory.session_id)
     base_dir.mkdir(parents=True, exist_ok=True)
     trajectory_file = base_dir / "trajectory.json"
-    trajectory_file.write_text(
-        json.dumps(trajectory.to_dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
+    safe_write_json(trajectory_file, trajectory.to_dict())
     return trajectory_file
 
 
