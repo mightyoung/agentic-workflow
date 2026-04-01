@@ -112,6 +112,8 @@ if python3 -m pytest \
     tests/test_failure_handling.py \
     tests/test_quality_gate.py \
     tests/test_result_only_spawning.py \
+    tests/test_frontier_scheduler.py \
+    tests/test_self_improvement_harness.py \
     -q --tb=short > /tmp/baseline_pytest.log 2>&1; then
     pass_gate "Full pytest suite"
 else
@@ -122,7 +124,7 @@ echo ""
 
 # Check 3: Core type checks (FAIL-CLOSED; use standalone mypy or python3 -m mypy)
 echo "[3/8] Core mypy checks..."
-mypy_files="scripts/workflow_engine.py scripts/quality_gate.py scripts/task_decomposer.py scripts/router.py scripts/task_tracker.py scripts/unified_state.py"
+mypy_files="scripts/workflow_engine.py scripts/quality_gate.py scripts/task_decomposer.py scripts/router.py scripts/task_tracker.py scripts/unified_state.py scripts/team_agent.py"
 if command -v mypy > /dev/null 2>&1; then
     # Use standalone mypy if available
     if mypy $mypy_files --no-error-summary > /tmp/baseline_mypy.log 2>&1; then
@@ -156,22 +158,44 @@ fi
 echo ""
 
 # Check 5: Workflow smoke path
-echo "[5/8] Workflow smoke path (init + snapshot + validate + recommend)..."
+echo "[5/8] Workflow smoke path (init + snapshot + validate + recommend + frontier + checkpoint + team-run)..."
 tmpdir=$(mktemp -d)
 cleanup() { rm -rf "$tmpdir"; }
 trap cleanup EXIT
 
+# Create references/templates for init
+mkdir -p "$tmpdir/references/templates"
+cat > "$tmpdir/references/templates/task_plan.md" << 'EOF'
+# Task Plan: {{TASK_NAME}}
+
+> Created at: {{CREATED_AT}}
+EOF
+cat > "$tmpdir/references/templates/progress.md" << 'EOF'
+# Progress
+
+## Current Phase
+
+- phase: initialization
+- status: pending
+EOF
+
 if python3 scripts/workflow_engine.py --op init --prompt "baseline smoke test" --workdir "$tmpdir" > /tmp/baseline_wf_init.log 2>&1 &&
    python3 scripts/workflow_engine.py --op snapshot --workdir "$tmpdir" > /tmp/baseline_wf_snap.log 2>&1 &&
    python3 scripts/unified_state.py --op validate --workdir "$tmpdir" > /tmp/baseline_wf_val.log 2>&1 &&
-   python3 scripts/workflow_engine.py --op recommend --workdir "$tmpdir" > /tmp/baseline_wf_rec.log 2>&1; then
-    pass_gate "Workflow smoke path (init/snapshot/validate/recommend)"
+   python3 scripts/workflow_engine.py --op recommend --workdir "$tmpdir" > /tmp/baseline_wf_rec.log 2>&1 &&
+   python3 scripts/workflow_engine.py --op frontier --workdir "$tmpdir" > /tmp/baseline_wf_frontier.log 2>&1 &&
+   python3 scripts/workflow_engine.py --op checkpoint --workdir "$tmpdir" > /tmp/baseline_wf_checkpoint.log 2>&1 &&
+   python3 scripts/workflow_engine.py --op team-run --workdir "$tmpdir" > /tmp/baseline_wf_team.log 2>&1; then
+    pass_gate "Workflow smoke path (init/snapshot/validate/recommend/frontier/checkpoint/team-run)"
 else
     fail_gate "Workflow smoke path"
     echo "=== init ==="; cat /tmp/baseline_wf_init.log
     echo "=== snapshot ==="; cat /tmp/baseline_wf_snap.log
     echo "=== validate ==="; cat /tmp/baseline_wf_val.log
     echo "=== recommend ==="; cat /tmp/baseline_wf_rec.log
+    echo "=== frontier ==="; cat /tmp/baseline_wf_frontier.log
+    echo "=== checkpoint ==="; cat /tmp/baseline_wf_checkpoint.log
+    echo "=== team-run ==="; cat /tmp/baseline_wf_team.log
 fi
 echo ""
 

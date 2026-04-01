@@ -1,4 +1,4 @@
-# Scripts 目录 (v5.11.0更新)
+# Scripts 目录 (v5.12.0更新)
 
 > 可执行的脚本，用于自动化任务执行和环境操作。支持跨平台运行。
 
@@ -9,12 +9,13 @@
 如果你只想知道仓库现在实际能跑什么，先看这几个脚本：
 
 - `router.py`: 轻量关键词路由
-- `workflow_engine.py`: workflow runtime，串联 router、state、task tracker、plan
+- `workflow_engine.py`: workflow runtime，串联 router、state、task tracker、plan，含 frontier scheduler 和 checkpoint
 - `unified_state.py`: 统一状态管理（单一真相来源）
 - `task_decomposer.py`: 任务分解（带唯一ID）
 - `trajectory_logger.py`: 轨迹持久化 + 断点恢复
 - `memory_ops.py`: 维护项目内 `SESSION-STATE.md`
 - `task_tracker.py`: 任务状态追踪
+- `team_agent.py`: 小团队多Agent编排 (lead + typed workers)
 
 这组脚本加上 `.workflow_state.json`、`SESSION-STATE.md`、`progress.md`、`task_plan.md` 这些状态文件，就是当前的 workflow runtime layer。
 
@@ -23,9 +24,9 @@
 - `semantic_router.py`: 语义路由（基于嵌入向量）
 - `execution_loop.py`: 执行循环模式 (ReAct/Plan-and-Execute/Reflexion)
 - `parallel_executor.py`: 并行执行 Band
-- `agent_spawner.py`: 多Agent编排
+- `agent_spawner.py`: 多Agent编排（重型，含注册表、心跳、共识）
 - `evaluator.py`: Generator-Evaluator 模式
-- `context_manager.py`: 上下文管理与检查点
+- `context_manager.py`: 上下文管理模式
 
 说明：
 - 实验版模块尚未接入主流程

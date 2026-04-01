@@ -6,9 +6,9 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.11.0
+**Current Version**: 5.12.0
 
-## Current Capabilities (v5.11.0)
+## Current Capabilities (v5.12.0)
 
 This section describes what actually works **today** via the scripts layer.
 
@@ -39,19 +39,20 @@ The actual executable surface:
 | Script | Status | Purpose |
 |--------|--------|---------|
 | `scripts/router.py` | ✅ Stable | Route user input to phase |
-| `scripts/workflow_engine.py` | ✅ Stable | Phase orchestration, state transitions |
+| `scripts/workflow_engine.py` | ✅ Stable | Phase orchestration, state transitions, frontier scheduling |
 | `scripts/unified_state.py` | ✅ Stable | Unified state management (single source of truth) |
 | `scripts/task_decomposer.py` | ✅ Stable | Task decomposition with IDs |
 | `scripts/trajectory_logger.py` | ✅ Stable | Trajectory persistence + resume |
 | `scripts/memory_ops.py` | ✅ Stable | SESSION-STATE.md operations |
 | `scripts/task_tracker.py` | ✅ Stable | Task progress tracking |
 | `scripts/search_adapter.py` | ✅ Stable | Web search adapter for RESEARCH (Exa/DuckDuckGo) |
+| `scripts/team_agent.py` | ✅ Stable | Small-team orchestration foundations (lead + typed workers) |
 | `scripts/experimental/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
-| `scripts/experimental/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration |
+| `scripts/experimental/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration (heavyweight) |
 | `scripts/experimental/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
 | `scripts/experimental/execution_loop.py` | 🔬 Experimental | Execution loop patterns |
 | `scripts/experimental/evaluator.py` | 🔬 Experimental | Generator-Evaluator pattern |
-| `scripts/experimental/context_manager.py` | 🔬 Experimental | Context reset + checkpoints |
+| `scripts/experimental/context_manager.py` | 🔬 Experimental | Context reset patterns |
 
 ### State Files
 

@@ -381,6 +381,33 @@ class TrajectoryLogger:
         # 关闭文件句柄
         self._close_files()
 
+    def flush(self) -> Dict[str, Any]:
+        """
+        Flush current trajectory state to disk.
+
+        Returns:
+            Summary of flushed state
+        """
+        # Load and re-save full trajectory
+        phases = self._load_phases()
+        trajectory = Trajectory(
+            run_id=self._run_id,
+            session_id=self.session_id,
+            created_at=self._prompt[:50] if self._prompt else "",
+            prompt=self._prompt,
+            trigger_type=self._trigger_type,
+            current_phase=self._current_phase or "UNKNOWN",
+            phases=phases,
+            final_state="running",
+        )
+        self._save_trajectory(trajectory)
+
+        return {
+            "session_id": self.session_id,
+            "current_phase": self._current_phase,
+            "phase_count": len(phases),
+        }
+
     def _close_files(self):
         """关闭所有文件句柄"""
         if self._decisions_file:

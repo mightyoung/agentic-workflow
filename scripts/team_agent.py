@@ -31,9 +31,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 import search_adapter
+from safe_io import safe_write_text_locked
 
 
 # ============================================================================
@@ -56,6 +57,16 @@ WORKER_DESCRIPTIONS: Dict[WorkerType, str] = {
     WorkerType.DEBUGGER: "错误定位、问题修复、调试执行",
     WorkerType.LEAD: "任务分配、进度协调、结果汇总",
 }
+
+
+class TeamRunResults(TypedDict):
+    """Team run results type"""
+    session_id: str
+    task: str
+    tasks_completed: int
+    tasks_failed: int
+    outputs: List[Dict[str, Any]]
+    artifacts: List[str]
 
 
 # ============================================================================
@@ -355,16 +366,20 @@ class TeamAgent:
 
         return result
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> TeamRunResults:
         """
         运行团队任务
 
         基于 contract 和 frontier 自动分配任务
+        使用 frontier 分组进行调度:
+        - serial_groups: 依赖链顺序执行
+        - parallel_groups: 组内并行执行
+        - conflict_groups: 冲突任务串行执行
 
         Returns:
-            Dict with results summary
+            TeamRunResults with results summary
         """
-        results = {
+        results: TeamRunResults = {
             "session_id": self.session_id,
             "task": self.task,
             "tasks_completed": 0,
@@ -373,38 +388,81 @@ class TeamAgent:
             "artifacts": [],
         }
 
+        executed_ids: set = set()
+
         # 如果有 frontier，使用 frontier 分配任务
+        # frontier 任务已分组: executable_frontier, serial_groups, parallel_groups, conflict_groups
         if self.frontier.get("executable_frontier"):
             for task_data in self.frontier["executable_frontier"]:
                 task_desc = f"Execute: {task_data.get('title', 'Untitled')}"
-                # 根据任务类型分配 worker
                 worker_type = self._infer_worker_type(task_data)
-                task_id = self.add_task(task_desc, worker_type)
+                self.add_task(task_desc, worker_type)
 
         # 如果有 contract goals，为每个 goal 添加任务
         if self.contract.get("goals"):
             for goal in self.contract["goals"]:
                 task_desc = f"Goal: {goal}"
-                task_id = self.add_task(task_desc, WorkerType.CODER)
+                self.add_task(task_desc, WorkerType.CODER)
 
-        # 执行所有已分配的任务
+        # 执行已分配的任务 - 按 frontier 分组策略调度
+        # 1. 先执行 serial_groups (依赖链，顺序执行)
+        serial_groups = self.frontier.get("serial_groups", [])
+        for serial_group in serial_groups:
+            for task_data in serial_group:
+                task_desc = f"Serial: {task_data.get('title', 'Untitled')}"
+                worker_type = self._infer_worker_type(task_data)
+                task_id = self.add_task(task_desc, worker_type)
+                self._execute_single_task(task_id, results, executed_ids)
+
+        # 2. 执行 parallel_groups (组内可并行)
+        parallel_groups = self.frontier.get("parallel_groups", [])
+        for parallel_group in parallel_groups:
+            # 并行执行组内所有任务
+            for task_data in parallel_group:
+                task_desc = f"Parallel: {task_data.get('title', 'Untitled')}"
+                worker_type = self._infer_worker_type(task_data)
+                task_id = self.add_task(task_desc, worker_type)
+                self._execute_single_task(task_id, results, executed_ids)
+
+        # 3. 执行 conflict_groups (冲突任务串行)
+        conflict_groups = self.frontier.get("conflict_groups", [])
+        for conflict_group in conflict_groups:
+            for task_data in conflict_group:
+                task_desc = f"Conflict: {task_data.get('title', 'Untitled')}"
+                worker_type = self._infer_worker_type(task_data)
+                task_id = self.add_task(task_desc, worker_type)
+                self._execute_single_task(task_id, results, executed_ids)
+
+        # 4. 执行通过 add_task 直接添加的任务（非 frontier 任务）
         for task_id, task in self.tasks.items():
-            if task.status == "assigned" and task.assigned_worker:
-                result = self.execute_task(task_id)
-                if result.success:
-                    results["tasks_completed"] += 1
-                    results["artifacts"].extend(result.artifacts)
-                else:
-                    results["tasks_failed"] += 1
-                results["outputs"].append({
-                    "task_id": task_id,
-                    "worker": task.assigned_worker.value,
-                    "success": result.success,
-                    "output": result.output[:200] if result.output else "",
-                    "error": result.error,
-                })
+            if task.status == "assigned" and task.assigned_worker and task_id not in executed_ids:
+                self._execute_single_task(task_id, results, executed_ids)
 
         return results
+
+    def _execute_single_task(self, task_id: str, results: TeamRunResults, executed_ids: set) -> None:
+        """执行单个任务并更新 results"""
+        task = self.tasks.get(task_id)
+        if not task or not task.assigned_worker:
+            return
+        if task_id in executed_ids:
+            return
+
+        result = self.execute_task(task_id)
+        executed_ids.add(task_id)
+
+        if result.success:
+            results["tasks_completed"] += 1
+            results["artifacts"].extend(result.artifacts)
+        else:
+            results["tasks_failed"] += 1
+        results["outputs"].append({
+            "task_id": task_id,
+            "worker": task.assigned_worker.value,
+            "success": result.success,
+            "output": result.output[:200] if result.output else "",
+            "error": result.error,
+        })
 
     def _infer_worker_type(self, task_data: Dict[str, Any]) -> WorkerType:
         """根据任务数据推断合适的 worker 类型"""
@@ -442,6 +500,45 @@ class TeamAgent:
             },
             "messages_count": len(self.messages),
         }
+
+    def save_snapshot(self, workdir: str) -> None:
+        """Save team state snapshot to .team_registry.json for recoverability"""
+        registry_path = Path(workdir) / ".team_registry.json"
+
+        # Load existing registry or create new
+        if registry_path.exists():
+            try:
+                import json as json_lib
+                registry = json_lib.loads(registry_path.read_text(encoding="utf-8"))
+            except (json_lib.JSONDecodeError, OSError):
+                registry = {"team_sessions": []}
+        else:
+            registry = {"team_sessions": []}
+
+        # Add/update this session
+        snapshot = {
+            "session_id": self.session_id,
+            "task": self.task,
+            "timestamp": datetime.now().isoformat(),
+            "total_tasks": len(self.tasks),
+            "completed_tasks": sum(1 for t in self.tasks.values() if t.status == "completed"),
+            "failed_tasks": sum(1 for t in self.tasks.values() if t.status == "failed"),
+            "state": self.get_state(),
+        }
+
+        # Update or append
+        found = False
+        for i, sess in enumerate(registry.get("team_sessions", [])):
+            if sess.get("session_id") == self.session_id:
+                registry["team_sessions"][i] = snapshot
+                found = True
+                break
+        if not found:
+            registry["team_sessions"].append(snapshot)
+
+        # Write registry
+        import json as json_lib
+        safe_write_text_locked(registry_path, json_lib.dumps(registry, indent=2, ensure_ascii=False))
 
 
 # ============================================================================
