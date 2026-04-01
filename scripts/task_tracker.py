@@ -21,7 +21,7 @@ import sys
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from safe_io import safe_write_json
+from safe_io import safe_write_json_locked
 
 # 默认任务状态文件
 DEFAULT_TRACKER_FILE = ".task_tracker.json"
@@ -76,7 +76,7 @@ def save_tracker(path: str, data: Dict) -> None:
     """保存任务追踪数据"""
     if not _validate_path(path):
         return
-    safe_write_json(path, data)
+    safe_write_json_locked(path, data)
 
 
 def create_task(task_id: str, description: str, priority: str = "P2",

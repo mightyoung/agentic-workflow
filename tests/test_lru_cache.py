@@ -15,7 +15,6 @@ LRU Cache 测试 - TDD 方式验证实现
 import os
 import sys
 import unittest
-from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "utils"))
 from lru_cache import LRUCache, LRUCacheManual

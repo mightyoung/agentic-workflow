@@ -10,7 +10,6 @@ WAL Scanner 测试 - 测试 wal_scanner.py 的功能
 
 import os
 import sys
-import json
 import tempfile
 import unittest
 
@@ -21,13 +20,11 @@ from wal_scanner import (
     scan_wal_triggers,
     should_update_session_state,
     load_patterns,
-    save_patterns,
     increment_pattern_count,
     get_pending_promotions,
     promote_pattern,
     get_pattern_key,
     WAL_PATTERNS,
-    VALUE_PATTERNS,
     PROMOTION_THRESHOLD
 )
 

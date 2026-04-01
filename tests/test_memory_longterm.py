@@ -19,8 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from memory_longterm import (
     read_task_history,
-    generate_weekly_report,
-    DEFAULT_MEMORY_FILE
+    generate_weekly_report
 )
 
 

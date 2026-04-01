@@ -12,7 +12,6 @@ Evaluation Scripts Test - 评估脚本测试
 
 import os
 import sys
-import json
 import tempfile
 import unittest
 

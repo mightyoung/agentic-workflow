@@ -699,7 +699,7 @@ class TestTrajectoryPersistence(TestE2EBusinessChains):
 
     def test_trajectory_resume_from_interrupted(self):
         """测试从中断点恢复功能"""
-        from trajectory_logger import TrajectoryLogger, resume_from_point, list_trajectories
+        from trajectory_logger import TrajectoryLogger, resume_from_point
 
         # 创建一个中断的工作流 (不调用complete)
         logger = TrajectoryLogger(self.workdir)

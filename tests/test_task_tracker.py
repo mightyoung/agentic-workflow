@@ -15,14 +15,12 @@ import sys
 import json
 import tempfile
 import unittest
-from datetime import datetime
 
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
 from task_tracker import (
     load_tracker,
-    save_tracker,
     create_task,
     start_task,
     update_status,
@@ -32,8 +30,7 @@ from task_tracker import (
     list_tasks,
     record_step_failure,
     check_circuit_state,
-    reset_circuit,
-    DEFAULT_TRACKER_FILE
+    reset_circuit
 )
 
 

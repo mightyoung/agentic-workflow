@@ -9,7 +9,6 @@ Artifact Registry Tests - 工件注册表专项测试
 4. 工件ID生成
 """
 
-import json
 import os
 import shutil
 import tempfile

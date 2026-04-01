@@ -9,7 +9,6 @@ Failure Handling Tests - 失败处理专项测试
 4. state 和 trajectory 同步更新
 """
 
-import json
 import os
 import shutil
 import tempfile
@@ -24,7 +23,6 @@ from workflow_engine import (
     initialize_workflow,
     handle_workflow_failure,
     load_state,
-    save_state,
 )
 from state_schema import Decision
 
@@ -44,7 +42,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_retry_count_starts_at_zero(self):
         """测试首次失败重试计数从0开始"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # 处理失败 - 首次重试
         result = handle_workflow_failure(self.workdir, "测试错误", strategy="retry", max_retries=3)
@@ -61,7 +59,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_retry_count_increments(self):
         """测试重试计数递增"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # 第一次重试
         result1 = handle_workflow_failure(self.workdir, "错误1", strategy="retry", max_retries=3)
@@ -78,7 +76,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_retry_exceeds_threshold_transitions_to_debugging(self):
         """测试重试超过阈值后转为DEBUGGING"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # 第一次重试 (retry_count=1)
         result1 = handle_workflow_failure(self.workdir, "错误", strategy="retry", max_retries=2)
@@ -102,7 +100,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_abort_terminates_workflow(self):
         """测试abort终止工作流"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # Abort
         result = handle_workflow_failure(self.workdir, "严重错误", strategy="abort")
@@ -118,7 +116,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_retry_persists_retry_count_in_state(self):
         """测试重试计数持久化到state"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # 执行多次重试
         handle_workflow_failure(self.workdir, "错误1", strategy="retry", max_retries=5)
@@ -137,7 +135,7 @@ class TestFailureHandling(unittest.TestCase):
     def test_debugging_transition_updates_phase(self):
         """测试DEBUGGING转换更新phase"""
         # 初始化工作流
-        init_result = initialize_workflow("测试工作流", self.workdir)
+        _ = initialize_workflow("测试工作流", self.workdir)
 
         # 强制转为DEBUGGING
         result = handle_workflow_failure(self.workdir, "需要调试", strategy="debugging")

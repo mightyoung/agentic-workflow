@@ -12,10 +12,8 @@ Memory Ops 测试 - 测试 memory_ops.py 的功能
 
 import os
 import sys
-import json
 import tempfile
 import unittest
-from pathlib import Path
 
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
@@ -30,8 +28,7 @@ from memory_ops import (
     get_info,
     show_session_state,
     check_idle_status,
-    add_task_result,
-    DEFAULT_SESSION_STATE
+    add_task_result
 )
 
 
@@ -224,7 +221,7 @@ class TestMemoryOpsEdgeCases(unittest.TestCase):
         add_decision(self.temp_session, '决策2')
 
         # 验证都能添加
-        state = show_session_state(self.temp_session)
+        _ = show_session_state(self.temp_session)
 
     def test_special_characters_in_values(self):
         """测试特殊字符的数值"""

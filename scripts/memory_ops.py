@@ -16,12 +16,13 @@ Memory Operations - 记忆操作工具
 """
 
 import argparse
-import json
 import os
 import re
 import sys
 from datetime import datetime
 from typing import Dict, Optional, Any
+
+from safe_io import safe_append_jsonl
 
 # 默认 SESSION-STATE 路径
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
@@ -397,8 +398,7 @@ def add_task_result(path: str, task_id: str, status: str,
     }
 
     try:
-        with open(history_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        safe_append_jsonl(history_file, record)
         return True
     except (OSError, TypeError) as e:
         import logging
