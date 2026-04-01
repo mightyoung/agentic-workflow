@@ -1,0 +1,5 @@
+# Self-Improvement Results Ledger
+# Format: run_id | hypothesis | files_changed | checks_passed | status | notes
+# status: keep | discard | rollback | stabilization
+# Version: 1.0
+
