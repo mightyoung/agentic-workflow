@@ -726,6 +726,7 @@ def advance_workflow(
                 "search_engine": search_response.search_engine,
                 "sources_count": search_response.total_results,
                 "used_real_search": True,
+                "degraded_mode": search_response.search_engine == "duckduckgo",
             }
         else:
             # Fall back to template-based findings (search failed or unavailable)
@@ -958,6 +959,7 @@ def advance_workflow(
                 "total_lines": total_lines,
                 "used_real_review": True,
                 "review_source": review_source,
+                "degraded_mode": review_source == "workdir_scan",
             }
         else:
             # Fall back to template-based review (no code files found)

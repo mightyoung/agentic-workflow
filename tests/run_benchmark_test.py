@@ -938,7 +938,7 @@ async def call_claude(prompt: str, system_prompt: str = "", max_tokens: int = 32
         duration = time.time() - start_time
 
         content_text = ""
-        thinking_text = ""
+        _thinking_text = ""
         for block in response.content:
             if hasattr(block, 'type'):
                 if block.type == 'text':

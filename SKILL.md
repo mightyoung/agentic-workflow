@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.10.0
+version: 5.11.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,18 +12,16 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.10.0)
+## 单入口设计 (v5.11.0)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
-## 核心改进 (v5.10.0)
+## 核心改进 (v5.11.0)
 
-- **统一状态 Schema**: `trigger_type` 字段正式写入 WorkflowState
-- **Phase History**: 初始化时初始 phase 自动写入 history
-- **Resume 增强**: 支持 init→resume、init→advance→resume、failed→resume 三种场景，状态同步
-- **Artifact Registry**: 工件自动注册到 `.artifacts.json`，支持业务产物审计
-- **Plan-driven Execution**: 任务状态更新影响 phase 推荐
-- **Failure Handling**: retry_count 持久化到 Decision.metadata
+- **硬门禁完全收口**: `complete_workflow()` 与 `advance_workflow(COMPLETE)` 使用相同门禁校验，P0/P1无verification的任务禁止完成
+- **真实搜索集成**: RESEARCH phase 使用 Exa API + DuckDuckGo HTML 回退，带 URL 编码和 metadata 追踪
+- **任务定向审查**: REVIEWING phase 优先审查 owned_files > file_changes > workdir_scan
+- **质量门禁 fail-closed**: 代码任务门禁失败阻断完成，研究任务保持宽松
 
 ## 当前能力状态
 
@@ -33,11 +31,12 @@ requires:
 |------|------|------|
 | 关键词路由 | `scripts/router.py` | 集成测试 |
 | 统一状态管理 | `scripts/unified_state.py` | ✅ 专项测试 |
-| 工作流引擎 | `scripts/workflow_engine.py` | ✅ 8 tests |
+| 工作流引擎 | `scripts/workflow_engine.py` | ✅ 13 tests |
 | 任务分解 | `scripts/task_decomposer.py` | ✅ 14 tests |
 | 轨迹持久化 | `scripts/trajectory_logger.py` | ✅ 18 tests |
 | Session状态 | `scripts/memory_ops.py` | 集成测试 |
 | 任务追踪 | `scripts/task_tracker.py` | 集成测试 |
+| 搜索适配器 | `scripts/search_adapter.py` | ✅ 集成 |
 
 ### 🔬 实验版 (未接入主线)
 

@@ -42,7 +42,7 @@ class ModuleTestRunner:
         print(f"{'='*50}")
 
         for test in test_list:
-            start = time.time()
+            _start = time.time()
             result = self._execute_test(test, module_name)
             self.results.append(result)
             self._update_stats(result)

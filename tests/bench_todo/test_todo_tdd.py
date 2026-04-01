@@ -81,7 +81,7 @@ class TestTodoValidation:
         from todo import TodoList
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             todos = TodoList(f.name)
-            result = todos.add("")
+            _ = todos.add("")
             # 空标题应该被截断或处理
             os.unlink(f.name)
 
