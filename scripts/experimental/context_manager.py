@@ -232,11 +232,32 @@ class ContextManager:
             token_estimate=self.estimate_tokens(current_context),
         )
 
-    def save_checkpoint(self, checkpoint: ContextCheckpoint) -> Path:
-        """保存检查点"""
+    def save_checkpoint(self, checkpoint: ContextCheckpoint) -> Dict[str, Any]:
+        """
+        保存检查点
+
+        Returns:
+            {"success": bool, "path": str, "error": str | None}
+        """
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        try:
+            from safe_io import safe_write_json
+        except ImportError:
+            # Fallback if safe_io not available
+            path = self.checkpoint_dir / f"{checkpoint.checkpoint_id}.json"
+            try:
+                path.write_text(json.dumps(checkpoint.to_dict(), ensure_ascii=False, indent=2))
+                return {"success": True, "path": str(path), "error": None}
+            except Exception as e:
+                return {"success": False, "path": "", "error": str(e)}
+
         path = self.checkpoint_dir / f"{checkpoint.checkpoint_id}.json"
-        path.write_text(json.dumps(checkpoint.to_dict(), ensure_ascii=False, indent=2))
-        return path
+        try:
+            safe_write_json(path, checkpoint.to_dict())
+            return {"success": True, "path": str(path), "error": None}
+        except Exception as e:
+            return {"success": False, "path": "", "error": str(e)}
 
     def load_checkpoint(self, checkpoint_id: str) -> Optional[ContextCheckpoint]:
         """加载检查点"""
@@ -431,9 +452,13 @@ def main():
             current_context=context,
         )
 
-        path = cm.save_checkpoint(checkpoint)
-        print(f"检查点已保存: {path}")
-        print(json.dumps(checkpoint.to_dict(), indent=2))
+        result = cm.save_checkpoint(checkpoint)
+        if result["success"]:
+            print(f"检查点已保存: {result['path']}")
+            print(json.dumps(checkpoint.to_dict(), indent=2))
+        else:
+            print(f"检查点保存失败: {result['error']}")
+            return 1
 
     elif args.op == "list":
         # 列出所有检查点
