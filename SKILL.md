@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.11.0
+version: 5.12.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,16 +12,17 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.11.0)
+## 单入口设计 (v5.12.0)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
-## 核心改进 (v5.11.0)
+## 核心改进 (v5.12.0)
 
 - **硬门禁完全收口**: `complete_workflow()` 与 `advance_workflow(COMPLETE)` 使用相同门禁校验，P0/P1无verification的任务禁止完成
 - **真实搜索集成**: RESEARCH phase 使用 Exa API + DuckDuckGo HTML 回退，带 URL 编码和 metadata 追踪
-- **任务定向审查**: REVIEWING phase 优先审查 owned_files > file_changes > workdir_scan
+- **任务定向审查**: REVIEWING phase 优先审查 owned_files > file_changes，workdir_scan 仅在显式允许时启用
 - **质量门禁 fail-closed**: 代码任务门禁失败阻断完成，研究任务保持宽松
+- **自改进治理**: 完整的 self-improvement harness，含 baseline_check、ledger、zones、runner
 
 ## 当前能力状态
 
@@ -139,8 +140,11 @@ python3 scripts/trajectory_logger.py --op list --workdir .
 ## 测试命令
 
 ```bash
+# 完整测试套件 (307 tests)
+python3 -m pytest tests/ -q
+
 # 核心测试 (74 tests)
-python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
+python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py tests/test_quality_gate.py tests/test_result_only_spawning.py -q
 
 # 任务分解测试
 python3 -m pytest tests/test_task_decomposer.py -v
@@ -151,6 +155,56 @@ python3 -m pytest tests/test_artifact_registry.py -v
 # 轨迹测试
 python3 -m pytest tests/test_trajectory.py -v
 ```
+
+## 自改进治理 (Self-Improvement)
+
+完整的自治改进 harness，支持在隔离环境中安全地改造 harness 本身。
+
+### 文件结构
+
+```
+.self-improvement/
+  baseline_check.sh     # 基线检查（10-gate fail-closed）
+  record_result.sh     # ledger 追加工具（fcntl 并发安全）
+  results.tsv          # 机器可读 ledger
+  zones.md             # Zone A/B/C 定义
+  self_improve.sh      # 薄封装 runner（创建分支 + baseline + 记录）
+```
+
+### Zone 定义
+
+| Zone | 内容 | 说明 |
+|------|------|------|
+| **A: Protected Core** | workflow_engine, unified_state, quality_gate, safe_io, trajectory_logger | 变更需完整验证 |
+| **B: Guided Mutable Surface** | router, task_decomposer, task_tracker, search_adapter, memory_ops, skills/*, README, SKILL | 首选改进区 |
+| **C: Experimental** | experimental/*, roadmap/*, bench_*, run_* | 安全迭代区 |
+
+### 自改进流程
+
+```bash
+# 方式1: 使用统一 runner（推荐）
+.self-improvement/self_improve.sh --hypothesis "improve routing heuristics"
+
+# 方式2: 手动执行
+git checkout -b self-improve/20260401-my-idea
+.self-improvement/baseline_check.sh
+# ... 做修改 ...
+.self-improvement/baseline_check.sh  # 验证
+.self-improvement/record_result.sh --hypothesis "..." --files "..." --status keep --notes "..."
+```
+
+### 基线检查项 (10 gates)
+
+1. 自改进上下文（self-improve/* 或 worktree/* 或额外 worktree）
+2. Git 状态（默认 dirty 阻断，--allow-dirty 放行）
+3. 完整 pytest 套件（9 个测试文件）
+4. mypy 类型检查
+5. ruff lint 检查
+6. Workflow smoke（init/snapshot/validate）
+7. 质量门禁通过 fixture
+8. 质量门禁失败 fixture
+9. Schema 验证
+10. Ledger 完整性
 
 ## 废弃说明
 
