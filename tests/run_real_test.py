@@ -7,9 +7,8 @@
 import json
 import subprocess
 import time
-import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 
 @dataclass
