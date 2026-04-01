@@ -145,9 +145,23 @@ def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if result.returncode != 0:
             return SearchResponse(query=query, results=[], total_results=0, search_engine="duckduckgo",
-                               error=f"Curl failed with code {result.returncode}")
+                               error=f"Curl failed with code {result.returncode}",
+                               metadata={"degraded_mode": True, "degraded_reason": "DuckDuckGo HTML - curl failed"})
 
         html = result.stdout
+
+        # Validate HTML structure - check for expected markers
+        if '<a class="result__a"' not in html:
+            # Page structure may have changed - return degraded error
+            return SearchResponse(
+                query=query, results=[], total_results=0, search_engine="duckduckgo",
+                error="DuckDuckGo HTML structure changed - parsing failed",
+                metadata={
+                    "degraded_mode": True,
+                    "degraded_reason": "DuckDuckGo HTML structure changed - result__a class not found. HTML length: " + str(len(html))
+                }
+            )
+
         results = []
         # Simple HTML parsing for DuckDuckGo results
         lines = html.split('\n')
@@ -193,6 +207,17 @@ def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
                     ))
                     if len(results) >= num_results:
                         break
+
+        # Validate we got results - if not, something changed in structure
+        if len(results) == 0:
+            return SearchResponse(
+                query=query, results=[], total_results=0, search_engine="duckduckgo",
+                error="DuckDuckGo HTML parsing found no results - structure may have changed",
+                metadata={
+                    "degraded_mode": True,
+                    "degraded_reason": "DuckDuckGo HTML parsing produced 0 results despite HTML being present"
+                }
+            )
 
         return SearchResponse(
             query=query, results=results, total_results=len(results),
