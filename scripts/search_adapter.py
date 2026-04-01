@@ -197,14 +197,20 @@ def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
         return SearchResponse(
             query=query, results=results, total_results=len(results),
             search_engine="duckduckgo",
-            metadata={"reliability_distribution": _get_reliability_dist(results)}
+            metadata={
+                "reliability_distribution": _get_reliability_dist(results),
+                "degraded_mode": True,
+                "degraded_reason": "DuckDuckGo HTML fallback - fragile, structure may change without notice"
+            }
         )
     except subprocess.TimeoutExpired:
         return SearchResponse(query=query, results=[], total_results=0, search_engine="duckduckgo",
-                           error="Search timeout")
+                           error="Search timeout",
+                           metadata={"degraded_mode": True, "degraded_reason": "DuckDuckGo HTML fallback - timeout"})
     except Exception as e:
         return SearchResponse(query=query, results=[], total_results=0, search_engine="duckduckgo",
-                           error=str(e))
+                           error=str(e),
+                           metadata={"degraded_mode": True, "degraded_reason": f"DuckDuckGo HTML fallback - error: {e}"})
 
 
 def _search_exa(query: str, num_results: int = 5) -> SearchResponse:

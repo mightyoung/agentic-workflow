@@ -854,15 +854,33 @@ def advance_workflow(
             if target_files:
                 review_source = "file_changes"
 
-        # 3. Fallback: scan workdir for code files but with a smarter filter
+        # 3. Strict fallback: ONLY do workdir_scan if explicitly allowed
+        # Check if user/task explicitly allows fallback review
+        review_fallback_allowed = False
+        if state.task:
+            task_text = (state.task.description or "").lower() + (state.task.title or "").lower()
+            if "allow_review_fallback" in task_text or "review_fallback=true" in task_text:
+                review_fallback_allowed = True
+
+        # Also check task_plan.md for explicit allow_fallback flag
+        if not review_fallback_allowed and plan_path.exists():
+            plan_content = plan_path.read_text(encoding="utf-8", errors="ignore").lower()
+            if "allow_review_fallback" in plan_content or "review_fallback: true" in plan_content:
+                review_fallback_allowed = True
+
         if not target_files:
-            code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
-            for ext in code_extensions:
-                for fp in workdir_path.rglob(f'*{ext}'):
-                    if not any(ex in fp.parts for ex in excluded_dirs):
-                        target_files.append(fp)
-            if target_files:
-                review_source = "workdir_scan"
+            if review_fallback_allowed:
+                # Explicitly allowed - do the scan
+                code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
+                for ext in code_extensions:
+                    for fp in workdir_path.rglob(f'*{ext}'):
+                        if not any(ex in fp.parts for ex in excluded_dirs):
+                            target_files.append(fp)
+                if target_files:
+                    review_source = "workdir_scan"
+            else:
+                # Not allowed - leave target_files empty; template-based review will be used
+                review_source = "none"
 
         # Limit to 10 files total for performance
         target_files = target_files[:10]
@@ -967,6 +985,7 @@ def advance_workflow(
                 "used_real_review": True,
                 "review_source": review_source,
                 "degraded_mode": review_source == "workdir_scan",
+                "fallback_mode": review_source == "workdir_scan",
             }
         else:
             # Fall back to template-based review (no code files found)

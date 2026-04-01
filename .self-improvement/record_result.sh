@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
 # Record a self-improvement run result to the results ledger.
-# Usage: record_result.sh --run-id <id> --hypothesis <text> --files <paths> --checks <summary> --status <keep|discard|rollback|stabilization> [--notes <text>]
-# Or shorthand: record_result.sh <hypothesis> <files> <status> [notes]
+# Uses Python fcntl for concurrent-safe appends (cross-platform).
+#
+# Usage:
+#   record_result.sh --run-id <id> --hypothesis <text> --files <paths> \
+#       --checks <summary> --status <keep|discard|rollback|stabilization> [--notes <text>]
+#
+#   Shorthand:
+#   record_result.sh <hypothesis> <files> <status> [notes]
 #
 # Examples:
-#   record_result.sh "improve routing heuristics" "scripts/router.py" "keep" "routing accuracy +5%"
-#   record_result.sh --run-id 20260401-01 --hypothesis "tighten REVIEWING" --files "scripts/workflow_engine.py" --checks "8/8 gates" --status keep --notes "review targeting improved"
+#   record_result.sh "improve routing heuristics" "scripts/router.py" "keep" "routing +5%"
+#   record_result.sh --run-id 20260401-01 --hypothesis "tighten REVIEWING" \
+#       --files "scripts/workflow_engine.py" --checks "10/10 gates" --status keep \
+#       --notes "review targeting improved"
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LEDGER="$SCRIPT_DIR/results.tsv"
+HELPER="$SCRIPT_DIR/_record_helper.py"
 
 usage() {
-    echo "Usage: record_result.sh [--run-id <id>] --hypothesis <text> --files <paths> --checks <summary> --status <keep|discard|rollback|stabilization> [--notes <text>]"
-    echo "   or: record_result.sh <hypothesis> <files> <status> [notes]"
+    echo "Usage: record_result.sh [--run-id <id>] --hypothesis <text> --files <paths>"
+    echo "       --checks <summary> --status <keep|discard|rollback|stabilization>"
+    echo "       [--notes <text>]"
+    echo ""
+    echo "   Shorthand: record_result.sh <hypothesis> <files> <status> [notes]"
     echo ""
     echo "Statuses: keep | discard | rollback | stabilization"
     exit 1
@@ -91,22 +103,48 @@ if [[ -z "$RUN_ID" ]]; then
     RUN_ID="run-$(date -u +%Y%m%dT%H%M%S)"
 fi
 
-# Escape tabs and newlines in fields
-HYPOTHESIS_ESCAPED="${HYPOTHESIS//$'\t'/ }"
-HYPOTHESIS_ESCAPED="${HYPOTHESIS_ESCAPED//$'\n'/ }"
-FILES_ESCAPED="${FILES//$'\t'/ }"
-CHECKS_ESCAPED="${CHECKS//$'\t'/ }"
-NOTES_ESCAPED="${NOTES//$'\t'/ }"
-NOTES_ESCAPED="${NOTES_ESCAPED//$'\n'/ }"
+# Use Python helper for locked TSV append (cross-platform fcntl)
+python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$NOTES" << 'PYEOF'
+import sys
+import fcntl
+import os
 
-# Append TSV row
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$RUN_ID" \
-    "$HYPOTHESIS_ESCAPED" \
-    "$FILES_ESCAPED" \
-    "${CHECKS:-passed}" \
-    "$STATUS" \
-    "$NOTES_ESCAPED" >> "$LEDGER"
+ledger_path = sys.argv[1]
+run_id = sys.argv[2]
+hypothesis = sys.argv[3]
+files = sys.argv[4]
+checks = sys.argv[5]
+status = sys.argv[6]
+notes = sys.argv[7]
 
-echo "Recorded: $RUN_ID | $STATUS | $HYPOTHESIS_ESCAPED"
-echo "Ledger: $LEDGER"
+# TSV-safe cleaning: replace tabs and newlines with spaces
+def tsv_clean(value):
+    return ' '.join(value.replace('\t', ' ').replace('\n', ' ').split())
+
+hypothesis = tsv_clean(hypothesis)
+files = tsv_clean(files)
+checks = tsv_clean(checks)
+notes = tsv_clean(notes)
+
+lock_path = ledger_path + '.lock'
+
+# Ensure ledger exists with proper header
+header_line = "run_id\thypothesis\tfiles_changed\tchecks_passed\tstatus\tnotes"
+if not os.path.exists(ledger_path):
+    with open(ledger_path, 'w') as f:
+        f.write(header_line + '\n')
+
+# Lock and append
+with open(lock_path, 'w') as lock_f:
+    fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)  # exclusive lock
+    try:
+        with open(ledger_path, 'a') as f:
+            row = '\t'.join([run_id, hypothesis, files, checks, status, notes])
+            f.write(row + '\n')
+    finally:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+        os.remove(lock_path)
+
+print(f"Recorded: {run_id} | {status} | {hypothesis}", file=sys.stdout)
+print(f"Ledger: {ledger_path}", file=sys.stdout)
+PYEOF

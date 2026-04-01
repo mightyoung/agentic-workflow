@@ -23,7 +23,7 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from safe_io import safe_write_json
+from safe_io import safe_write_json_locked
 
 # 默认 worktree 根目录
 DEFAULT_WORKTREE_ROOT = ".worktrees"
@@ -74,7 +74,7 @@ def save_tracker(data: Dict) -> None:
     """保存 worktree 追踪数据"""
     if not _validate_path(TRACK_FILE):
         return
-    safe_write_json(TRACK_FILE, data)
+    safe_write_json_locked(TRACK_FILE, data)
 
 
 def create_worktree(
