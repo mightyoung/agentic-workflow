@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from safe_io import safe_write_json
+from safe_io import safe_write_json_locked
 from state_schema import (
     Decision,
     FileChange,
@@ -157,7 +157,7 @@ def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
 def _save_artifact_registry(workdir: str, registry: Dict[str, Any]) -> Path:
     """保存工件注册表"""
     path = Path(workdir) / ARTIFACT_REGISTRY_FILE
-    safe_write_json(path, registry)
+    safe_write_json_locked(path, registry)
     return path
 
 
@@ -271,7 +271,7 @@ def save_state(workdir: str, state: WorkflowState) -> Path:
     """
     path = workflow_state_path(workdir)
     state.updated_at = datetime.now().isoformat()
-    safe_write_json(path, state)
+    safe_write_json_locked(path, state)
 
     return path
 
@@ -439,7 +439,7 @@ def _get_trajectory_path(workdir: str, run_id: str) -> Path:
 def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     """保存轨迹"""
     path = _get_trajectory_path(workdir, trajectory.run_id)
-    safe_write_json(path, trajectory)
+    safe_write_json_locked(path, trajectory)
 
     return path
 

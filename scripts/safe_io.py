@@ -111,6 +111,55 @@ def safe_write_json_locked(path: str | Path, data: Any, timeout: float = 5.0) ->
         safe_write_json(path, data)
 
 
+def safe_write_text(path: str | Path, content: str, encoding: str = "utf-8") -> None:
+    """
+    Safely write text content to a file using an atomic rename operation.
+
+    Args:
+        path: File to write
+        content: Text content to write
+        encoding: Text encoding (default utf-8)
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    temp_fd, temp_path_str = tempfile.mkstemp(
+        dir=str(path.parent),
+        suffix=".tmp",
+        prefix=path.name + "_"
+    )
+
+    try:
+        with os.fdopen(temp_fd, "w", encoding=encoding) as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(temp_path_str, str(path))
+    except Exception:
+        if os.path.exists(temp_path_str):
+            os.remove(temp_path_str)
+        raise
+
+
+def safe_write_text_locked(
+    path: str | Path, content: str, encoding: str = "utf-8", timeout: float = 5.0
+) -> None:
+    """
+    Safely write text content with file locking for concurrent access safety.
+
+    Args:
+        path: File to write
+        content: Text content to write
+        encoding: Text encoding (default utf-8)
+        timeout: Lock acquisition timeout in seconds
+    """
+    path = Path(path)
+
+    with file_lock(path, timeout=timeout):
+        safe_write_text(path, content, encoding=encoding)
+
+
 def safe_read_json(path: str | Path) -> Any:
     """
     Safely read a JSON file, returning None if the file doesn't exist

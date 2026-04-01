@@ -151,3 +151,69 @@ class TestWorkflowEngine(unittest.TestCase):
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot["next_plan_tasks"][0]["id"], "TASK-001")
+
+
+class TestQualityGateCompletionBlock(unittest.TestCase):
+    """Regression tests for quality gate COMPLETE blocking - P0 hardening."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        refs = Path(self.temp_dir) / "references" / "templates"
+        refs.mkdir(parents=True, exist_ok=True)
+        (refs / "task_plan.md").write_text(
+            "# Task Plan: {{TASK_NAME}}\n\n> Created at: {{CREATED_AT}}\n",
+            encoding="utf-8",
+        )
+        # Create dummy Python file so quality gate can pass
+        src_dir = Path(self.temp_dir) / "src"
+        src_dir.mkdir(exist_ok=True)
+        (src_dir / "main.py").write_text("def main(): pass\n", encoding="utf-8")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _setup_code_task_with_gate(self, gate_value):
+        """Set up a workflow with a code task that has explicit gate value."""
+        # Init with EXECUTING (code task)
+        workflow_engine.initialize_workflow("帮我实现这个功能", workdir=self.temp_dir)
+        # Manually add EXECUTING to phase history to mark as code task
+        state_path = Path(self.temp_dir) / ".workflow_state.json"
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        state_data["phase"]["history"].append({
+            "phase": "EXECUTING",
+            "entered_at": "2026-04-01T00:00:00",
+            "exited_at": "2026-04-01T00:00:01",
+            "reason": "test",
+            "actions": [],
+            "decisions": [],
+            "file_changes": [],
+            "error": None,
+        })
+        state_path.write_text(json.dumps(state_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Set quality_gates_passed in tracker
+        tracker_path = Path(self.temp_dir) / ".task_tracker.json"
+        tracker_data = json.loads(tracker_path.read_text(encoding="utf-8"))
+        if tracker_data["tasks"]:
+            tracker_data["tasks"][0]["quality_gates_passed"] = gate_value
+            tracker_path.write_text(json.dumps(tracker_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def test_complete_blocks_when_quality_gate_none(self):
+        """complete_workflow must block when quality_gates_passed=None for code tasks."""
+        self._setup_code_task_with_gate(None)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertIn("quality gate not passed", str(ctx.exception))
+
+    def test_complete_blocks_when_quality_gate_false(self):
+        """complete_workflow must block when quality_gates_passed=False for code tasks."""
+        self._setup_code_task_with_gate(False)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertIn("quality gate not passed", str(ctx.exception))
+
+    def test_complete_allows_when_quality_gate_true(self):
+        """complete_workflow must allow when quality_gates_passed=True for code tasks."""
+        self._setup_code_task_with_gate(True)
+        result = workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertEqual(result["final_state"], "completed")

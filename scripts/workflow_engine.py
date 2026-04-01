@@ -1058,10 +1058,11 @@ def advance_workflow(
             task_priority = task_data.get("priority") if task_data else None
             task_verification = task_data.get("verification") if task_data else None
 
-            # If quality gates were run and failed, block COMPLETE
-            if quality_gate_passed is False:
+            # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
+            if quality_gate_passed is not True:
                 raise ValueError(
-                    f"Cannot transition to COMPLETE: quality gate failed for task {task_id}. "
+                    f"Cannot transition to COMPLETE: quality gate not passed for task {task_id}. "
+                    f"quality_gates_passed={quality_gate_passed}. "
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
                 )
 
@@ -1131,10 +1132,11 @@ def complete_workflow(
             task_priority = task_data.get("priority") if task_data else None
             task_verification = task_data.get("verification") if task_data else None
 
-            # If quality gates were run and failed, block COMPLETE
-            if quality_gate_passed is False:
+            # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
+            if quality_gate_passed is not True:
                 raise ValueError(
-                    f"Cannot complete workflow: quality gate failed for task {task_id}. "
+                    f"Cannot complete workflow: quality gate not passed for task {task_id}. "
+                    f"quality_gates_passed={quality_gate_passed}. "
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
                 )
 
