@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 import search_adapter
 from safe_io import safe_write_text_locked
+from unified_state import register_artifact
 
 
 # ============================================================================
@@ -366,15 +367,18 @@ class TeamAgent:
 
         return result
 
-    def run(self) -> TeamRunResults:
+    def run(self, phase: str = "EXECUTING", register_artifacts: bool = False) -> TeamRunResults:
         """
         运行团队任务
 
         基于 contract 和 frontier 自动分配任务
         使用 frontier 分组进行调度:
-        - serial_groups: 依赖链顺序执行
-        - parallel_groups: 组内并行执行
+        - parallel_candidates: 可并行的任务候选（顺序执行，当前为 parallel-ready 而非真正并行）
         - conflict_groups: 冲突任务串行执行
+
+        Args:
+            phase: Current workflow phase for artifact registration
+            register_artifacts: Whether to register artifacts with the artifact registry
 
         Returns:
             TeamRunResults with results summary
@@ -391,7 +395,6 @@ class TeamAgent:
         executed_ids: set = set()
 
         # 如果有 frontier，使用 frontier 分配任务
-        # frontier 任务已分组: executable_frontier, serial_groups, parallel_groups, conflict_groups
         if self.frontier.get("executable_frontier"):
             for task_data in self.frontier["executable_frontier"]:
                 task_desc = f"Execute: {task_data.get('title', 'Untitled')}"
@@ -404,19 +407,9 @@ class TeamAgent:
                 task_desc = f"Goal: {goal}"
                 self.add_task(task_desc, WorkerType.CODER)
 
-        # 执行已分配的任务 - 按 frontier 分组策略调度
-        # 1. 先执行 serial_groups (依赖链，顺序执行)
-        serial_groups = self.frontier.get("serial_groups", [])
-        for serial_group in serial_groups:
-            for task_data in serial_group:
-                task_desc = f"Serial: {task_data.get('title', 'Untitled')}"
-                worker_type = self._infer_worker_type(task_data)
-                task_id = self.add_task(task_desc, worker_type)
-                self._execute_single_task(task_id, results, executed_ids)
-
-        # 2. 执行 parallel_groups (组内可并行)
-        parallel_groups = self.frontier.get("parallel_groups", [])
-        for parallel_group in parallel_groups:
+        # 执行 parallel_candidates (顺序执行，当前为 parallel-ready)
+        parallel_candidates = self.frontier.get("parallel_candidates", [])
+        for parallel_group in parallel_candidates:
             # 并行执行组内所有任务
             for task_data in parallel_group:
                 task_desc = f"Parallel: {task_data.get('title', 'Untitled')}"
@@ -424,7 +417,7 @@ class TeamAgent:
                 task_id = self.add_task(task_desc, worker_type)
                 self._execute_single_task(task_id, results, executed_ids)
 
-        # 3. 执行 conflict_groups (冲突任务串行)
+        # 2. 执行 conflict_groups (冲突任务串行)
         conflict_groups = self.frontier.get("conflict_groups", [])
         for conflict_group in conflict_groups:
             for task_data in conflict_group:
@@ -433,10 +426,18 @@ class TeamAgent:
                 task_id = self.add_task(task_desc, worker_type)
                 self._execute_single_task(task_id, results, executed_ids)
 
-        # 4. 执行通过 add_task 直接添加的任务（非 frontier 任务）
+        # 3. 执行通过 add_task 直接添加的任务（非 frontier 任务）
         for task_id, task in self.tasks.items():
             if task.status == "assigned" and task.assigned_worker and task_id not in executed_ids:
                 self._execute_single_task(task_id, results, executed_ids)
+
+        # Save team snapshot for recoverability
+        self.save_snapshot(str(self.workdir))
+
+        # Register artifacts with authoritative pipeline if requested
+        if register_artifacts and results.get("artifacts"):
+            for artifact in results["artifacts"]:
+                register_artifact(str(self.workdir), "team_output", artifact, phase)
 
         return results
 

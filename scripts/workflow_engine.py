@@ -448,6 +448,83 @@ def update_contract_json(workdir: str = ".", **kwargs) -> bool:
         return False
 
 
+def validate_contract_gate(workdir: str, state: Any) -> Tuple[bool, str]:
+    """
+    Validate contract fulfillment for completion gate.
+
+    Checks:
+    1. status != 'draft' (contract is active/fulfilled)
+    2. If goals exist, they are not placeholder text
+    3. If owned_files exist, they match actual file_changes
+    4. If verification_methods exist, they are not placeholder text
+
+    Returns:
+        (is_valid, error_message)
+    """
+    import json as json_lib
+    json_contract_path = Path(workdir) / ".contract.json"
+
+    if not json_contract_path.exists():
+        return True, ""  # No contract = no gate
+
+    try:
+        contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
+    except (json_lib.JSONDecodeError, OSError):
+        return True, ""  # Can't read = skip gate
+
+    # Check 1: status must not be draft
+    status = contract.get("status", "unknown")
+    if status == "draft":
+        return False, "Contract status is 'draft' - update to 'active' or 'fulfilled'"
+
+    # Check 2: goals should not be empty placeholder
+    goals = contract.get("goals", [])
+    if goals:
+        # Check goals are not all placeholders
+        placeholder_patterns = ["to be filled", "(to be", "placeholder", "tbd", "tdd"]
+        has_real_goals = any(
+            not any(p.lower() in g.lower() for p in placeholder_patterns)
+            for g in goals
+        )
+        if not has_real_goals:
+            return False, "Contract goals are placeholders - fill in actual goals"
+
+    # Check 3: owned_files should match actual file_changes
+    owned_files = contract.get("owned_files", [])
+    if owned_files:
+        actual_paths = set()
+        for fc in (state.file_changes or []):
+            if hasattr(fc, 'path'):
+                actual_paths.add(fc.path)
+            elif isinstance(fc, dict):
+                actual_paths.add(fc.get("path", ""))
+
+        # Check if any owned files are in actual changes
+        has_matching_files = any(
+            owned in actual_paths or any(owned in p for p in actual_paths)
+            for owned in owned_files
+        )
+        # If we have owned_files specified, at least verify some exist in the project
+        if owned_files and not has_matching_files:
+            # Soft check: warn but don't block if files exist in workdir
+            for owned in owned_files:
+                if not (Path(workdir) / owned).exists():
+                    return False, f"Contract owned_files '{owned}' not found in actual file changes"
+
+    # Check 4: verification_methods should not be placeholder
+    verification_methods = contract.get("verification_methods", [])
+    if verification_methods:
+        placeholder_patterns = ["to be filled", "(e.g.", "example", "placeholder", "tbd"]
+        has_real_methods = any(
+            not any(p.lower() in m.lower() for p in placeholder_patterns)
+            for m in verification_methods
+        )
+        if not has_real_methods:
+            return False, "Contract verification_methods are placeholders - fill in actual methods"
+
+    return True, ""
+
+
 def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
     """
     解析 task_plan.md 为结构化任务列表
@@ -546,18 +623,16 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
         {
             "executable_frontier": [task, ...],     # Tasks ready to execute
             "ready_tasks": [task, ...],            # Alias for executable_frontier
-            "serial_groups": [[task, task], ...],  # Tasks must run sequentially
-            "parallel_groups": [[task, task], ...], # Tasks can run in parallel (ownership-safe)
+            "parallel_candidates": [[task, task], ...], # Tasks can run in parallel (ownership-safe, parallel-ready)
             "blocked_tasks": [task, ...],           # Tasks blocked by dependencies
-            "conflict_groups": [[task, task], ...], # Tasks with ownership conflicts
+            "conflict_groups": [[task, task], ...], # Tasks with overlapping owned_files (must be serialized)
             "completed_count": int,
             "total_count": int,
         }
 
     Frontier rules:
     - executable_frontier: backlog tasks with all dependencies satisfied
-    - serial_groups: within frontier, tasks with dependency chains must run sequentially
-    - parallel_groups: within frontier, tasks WITHOUT ownership conflicts can run concurrently
+    - parallel_candidates: within frontier, tasks WITHOUT ownership conflicts can run concurrently (parallel-ready, not yet parallel execution)
     - conflict_groups: tasks with overlapping owned_files that must be serialized
     """
     all_tasks = parse_task_plan(workdir)
@@ -565,8 +640,7 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
         return {
             "executable_frontier": [],
             "ready_tasks": [],
-            "serial_groups": [],
-            "parallel_groups": [],
+            "parallel_candidates": [],
             "blocked_tasks": [],
             "conflict_groups": [],
             "completed_count": 0,
@@ -657,40 +731,10 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
         relevant_deps = {d for d in task_deps if d in frontier_ids}
         dep_graph[task["id"]] = relevant_deps
 
-    # Find serial groups (dependency chains)
-    serial_groups: List[List[Dict[str, Any]]] = []
-    for task in frontier_tasks:
-        if task["id"] in assigned_ids:
-            continue  # Already in parallel or conflict group
-        # Follow dependency chain
-        chain = []
-        current = task
-        visited_in_chain = set()
-        while current["id"] in frontier_ids and current["id"] not in visited_in_chain:
-            chain.append(current)
-            visited_in_chain.add(current["id"])
-            assigned_ids.add(current["id"])
-            deps = list(dep_graph.get(current["id"], set()))
-            if not deps:
-                break
-            next_id = deps[0]
-            if next_id not in frontier_ids:
-                break
-            next_task = next((t for t in frontier_tasks if t["id"] == next_id), None)
-            if not next_task:
-                break
-            current = next_task
-
-        if len(chain) > 1:
-            serial_groups.append(chain)
-        elif len(chain) == 1 and chain[0]["id"] not in [t["id"] for g in parallel_groups for t in g]:
-            parallel_groups.append(chain)
-
     return {
         "executable_frontier": frontier_tasks,
         "ready_tasks": frontier_tasks,  # Alias
-        "serial_groups": serial_groups,
-        "parallel_groups": parallel_groups,
+        "parallel_candidates": parallel_groups,
         "blocked_tasks": blocked_tasks,
         "conflict_groups": conflict_groups,
         "completed_count": len(completed_ids),
@@ -777,16 +821,28 @@ def conditional_checkpoint(
     - handoff_<checkpoint_id>.md: Human-readable handoff document
 
     Returns:
-        {"checkpoint_saved": bool, "reason": str, "checkpoint_id": str, "files": [str, ...]}
+        {
+            "checkpoint_saved": bool,
+            "reason": str,
+            "checkpoint_id": str,
+            "session_id": str,
+            "files": [str, ...],
+            "error": str | None  # present when checkpoint_saved is False
+        }
+
+    Raises:
+        No exceptions - all failures are reported via return dict with error field.
+        This ensures callers can distinguish between "save succeeded" and "save failed"
+        without relying on exception handling.
     """
     should_save, reason = should_checkpoint(workdir, config)
 
     if not should_save:
-        return {"checkpoint_saved": False, "reason": reason}
+        return {"checkpoint_saved": False, "reason": reason, "error": None}
 
     state = load_state(workdir)
     if state is None:
-        return {"checkpoint_saved": False, "reason": "no state"}
+        return {"checkpoint_saved": False, "reason": "no state", "error": "workflow state not found"}
 
     session_id = state.session_id
     workdir_path = Path(workdir)
@@ -808,8 +864,12 @@ def conditional_checkpoint(
     current_phase = state.phase.get("current", "UNKNOWN") if hasattr(state.phase, 'get') else "UNKNOWN"
 
     # Load task plan if exists
-    plan_tasks = parse_task_plan(workdir)
-    next_tasks = next_plan_tasks(workdir)
+    try:
+        plan_tasks = parse_task_plan(workdir)
+        next_tasks = next_plan_tasks(workdir)
+    except Exception as e:
+        plan_tasks = []
+        next_tasks = []
 
     # Create checkpoint JSON
     checkpoint_data = {
@@ -826,12 +886,32 @@ def conditional_checkpoint(
         "file_changes": state.file_changes if hasattr(state, 'file_changes') else [],
     }
 
+    # Write checkpoint JSON - track success/failure explicitly
     checkpoint_file = checkpoints_dir / f"{checkpoint_id}.json"
-    safe_write_json(checkpoint_file, checkpoint_data)
+    handoff_file = workdir_path / f"handoff_{checkpoint_id}.md"
+    checkpoint_json_written = False
 
-    # Parse contract state if available
-    contract_state = parse_phase_contract(workdir)
-    frontier_state = compute_frontier(workdir)
+    try:
+        safe_write_json(checkpoint_file, checkpoint_data)
+        checkpoint_json_written = True
+    except Exception as e:
+        # Checkpoint JSON write failed - return failure without claiming success
+        return {
+            "checkpoint_saved": False,
+            "reason": reason,
+            "checkpoint_id": checkpoint_id,
+            "session_id": session_id,
+            "files": [],
+            "error": f"checkpoint JSON write failed: {e}",
+        }
+
+    # Parse contract and frontier state (optional - don't fail if these fail)
+    try:
+        contract_state = parse_phase_contract(workdir)
+        frontier_state = compute_frontier(workdir)
+    except Exception:
+        contract_state = {}
+        frontier_state = {"executable_frontier": [], "blocked_tasks": [], "conflict_groups": []}
 
     # Parse recent decisions (last 3)
     recent_decisions = []
@@ -842,7 +922,7 @@ def conditional_checkpoint(
             elif isinstance(d, dict):
                 recent_decisions.append(d.get('decision', str(d)))
 
-    # Create handoff markdown with enhanced info
+    # Build handoff content
     handoff_content = f"""# Checkpoint Handoff: {checkpoint_id}
 
 **Created**: {datetime.now().isoformat()}
@@ -898,8 +978,22 @@ python3 scripts/workflow_engine.py --op resume --session-id {session_id} --workd
 *This is an auto-generated handoff document. See .checkpoints/{checkpoint_id}.json for full state.*
 """
 
-    handoff_file = workdir_path / f"handoff_{checkpoint_id}.md"
-    safe_write_text_locked(handoff_file, handoff_content)
+    # Write handoff file - if this fails, checkpoint JSON was already saved
+    # Return partial success so caller knows the state
+    try:
+        safe_write_text_locked(handoff_file, handoff_content)
+    except Exception as e:
+        # Handoff write failed but checkpoint JSON was saved
+        # Return success with warning - checkpoint can still be recovered from JSON
+        return {
+            "checkpoint_saved": True,
+            "reason": reason,
+            "checkpoint_id": checkpoint_id,
+            "session_id": session_id,
+            "files": [str(checkpoint_file)],
+            "error": f"handoff write failed (checkpoint JSON saved): {e}",
+            "partial": True,
+        }
 
     return {
         "checkpoint_saved": True,
@@ -907,6 +1001,7 @@ python3 scripts/workflow_engine.py --op resume --session-id {session_id} --workd
         "checkpoint_id": checkpoint_id,
         "session_id": session_id,
         "files": [str(checkpoint_file), str(handoff_file)],
+        "error": None,
     }
 
 
@@ -1198,6 +1293,14 @@ def advance_workflow(
 
     # Transition phase using unified_state
     state = transition_phase(state, phase, reason=note or "advance_workflow")
+
+    # Contract lifecycle management
+    # PLANNING -> EXECUTING: activate contract
+    if current_phase == "PLANNING" and phase == "EXECUTING":
+        update_contract_json(workdir, status="active")
+    # EXECUTING -> REVIEWING: mark for review
+    elif current_phase == "EXECUTING" and phase == "REVIEWING":
+        update_contract_json(workdir, status="review")
 
     # Update progress.md
     progress_file = Path(workdir) / "progress.md"
@@ -1704,20 +1807,12 @@ def advance_workflow(
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
                 )
 
-        # Contract gate: if .contract.json exists and has status, it must not be "draft"
-        json_contract_path = Path(workdir) / ".contract.json"
-        if json_contract_path.exists():
-            try:
-                import json as json_lib
-                contract_data = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
-                contract_status = contract_data.get("status", "unknown")
-                if contract_status == "draft":
-                    raise ValueError(
-                        "Cannot transition to COMPLETE: phase contract is still 'draft' (not fulfilled). "
-                        "Update .contract.json status to 'active' or 'fulfilled' before completing."
-                    )
-            except (json_lib.JSONDecodeError, OSError):
-                pass  # Ignore parse errors, let other gates handle
+        # Contract fulfillment gate: validate contract is properly fulfilled
+        contract_valid, contract_error = validate_contract_gate(workdir, state)
+        if not contract_valid:
+            raise ValueError(
+                f"Cannot transition to COMPLETE: {contract_error}"
+            )
 
         _generate_and_register_summary(workdir, state, current_phase, "completed", session_id)
 
@@ -1793,20 +1888,12 @@ def complete_workflow(
                     f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
                 )
 
-        # Contract gate: if .contract.json exists and has status, it must not be "draft"
-        json_contract_path = Path(workdir) / ".contract.json"
-        if json_contract_path.exists():
-            try:
-                import json as json_lib
-                contract_data = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
-                contract_status = contract_data.get("status", "unknown")
-                if contract_status == "draft":
-                    raise ValueError(
-                        "Cannot complete workflow: phase contract is still 'draft' (not fulfilled). "
-                        "Update .contract.json status to 'active' or 'fulfilled' before completing."
-                    )
-            except (json_lib.JSONDecodeError, OSError):
-                pass  # Ignore parse errors, let other gates handle
+        # Contract fulfillment gate: validate contract is properly fulfilled
+        contract_valid, contract_error = validate_contract_gate(workdir, state)
+        if not contract_valid:
+            raise ValueError(
+                f"Cannot complete workflow: {contract_error}"
+            )
 
     # Complete trajectory logging
     if state.session_id in _active_loggers:
@@ -2317,17 +2404,9 @@ def main() -> int:
         frontier = compute_frontier(args.workdir)
 
         # Create and run team - tasks come from frontier/contract, not hardcoded
+        phase_name = state.phase.get("current", "EXECUTING") if state and state.phase else "EXECUTING"
         team = TeamAgent(args.workdir, task=task_title, contract=contract, frontier=frontier)
-        team_result = team.run()
-
-        # Save team snapshot for recoverability
-        team.save_snapshot(args.workdir)
-
-        # Register team artifacts if present
-        if team_result.get("artifacts"):
-            phase_name = state.phase.get("current", "EXECUTING") if state and state.phase else "EXECUTING"
-            for artifact in team_result["artifacts"]:
-                register_artifact(args.workdir, "team_output", artifact, phase_name)
+        team_result = team.run(phase=phase_name, register_artifacts=True)
 
         print(json.dumps({
             "team_session_id": team_result["session_id"],

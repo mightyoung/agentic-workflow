@@ -37,7 +37,7 @@ class TestComputeFrontier(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = compute_frontier(tmpdir)
             self.assertEqual(result["executable_frontier"], [])
-            self.assertEqual(result["parallel_groups"], [])
+            self.assertEqual(result["parallel_candidates"], [])
             self.assertEqual(result["conflict_groups"], [])
 
     def test_frontier_ready_tasks(self):
@@ -306,7 +306,7 @@ class TestTeamRunIntegration(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_team_run_consumes_frontier_groups(self):
-        """TeamAgent.run() consumes parallel_groups and conflict_groups"""
+        """TeamAgent.run() consumes parallel_candidates and conflict_groups"""
         # Create a task plan with frontier groups
         plan_path = Path(self.temp_dir) / "task_plan.md"
         plan_path.write_text("""# Task Plan
@@ -331,7 +331,7 @@ class TestTeamRunIntegration(unittest.TestCase):
 
         # Verify frontier has the grouping info
         self.assertEqual(len(frontier["executable_frontier"]), 3)
-        self.assertIn("parallel_groups", frontier)
+        self.assertIn("parallel_candidates", frontier)
         self.assertIn("conflict_groups", frontier)
 
         # TASK-002 and TASK-003 share src/core.py -> conflict
@@ -341,7 +341,7 @@ class TestTeamRunIntegration(unittest.TestCase):
         self.assertIn("TASK-003", conflict_ids)
 
         # TASK-004 (src/api.py) has no conflict -> can be parallel with others in a different group
-        self.assertIn("parallel_groups", frontier)
+        self.assertIn("parallel_candidates", frontier)
 
     def test_team_run_with_contract_goals(self):
         """Contract goals are added as team tasks"""
@@ -412,6 +412,68 @@ class TestTeamRunIntegration(unittest.TestCase):
         # WorkerResult should have artifacts
         self.assertIsNotNone(result)
         self.assertTrue(result.success)
+
+    def test_contract_gate_blocks_draft_complete(self):
+        """Contract with status=draft blocks workflow completion"""
+        # Create a draft contract
+        import json
+        contract_path = Path(self.temp_dir) / ".contract.json"
+        contract_path.write_text(json.dumps({
+            "version": "1.0",
+            "task": "Test",
+            "status": "draft",
+            "goals": [],
+            "verification_methods": [],
+            "owned_files": [],
+        }))
+
+        # Initialize workflow
+        workflow_engine.initialize_workflow("Test task", workdir=self.temp_dir)
+
+        # Set quality_gates_passed=True to skip quality gate check
+        tracker_path = Path(self.temp_dir) / ".task_tracker.json"
+        tracker_data = json.loads(tracker_path.read_text())
+        for t in tracker_data.get("tasks", []):
+            t["quality_gates_passed"] = True
+        tracker_path.write_text(json.dumps(tracker_data))
+
+        # Try to complete - should fail due to draft contract
+        from workflow_engine import complete_workflow
+        with self.assertRaises(ValueError) as ctx:
+            complete_workflow(self.temp_dir)
+        self.assertIn("draft", str(ctx.exception))
+
+    def test_team_run_accepts_phase_and_register_artifacts(self):
+        """TeamAgent.run() accepts phase and register_artifacts params"""
+        team = TeamAgent(self.temp_dir, task="Test")
+        team.add_task("Do something", WorkerType.CODER)
+
+        # Run with phase and register_artifacts
+        result = team.run(phase="EXECUTING", register_artifacts=False)
+
+        # Should complete without errors
+        self.assertIn("session_id", result)
+        self.assertIn("tasks_completed", result)
+
+    def test_validate_contract_gate_with_placeholder_goals(self):
+        """Contract with placeholder goals is rejected"""
+        import json
+        contract_path = Path(self.temp_dir) / ".contract.json"
+        contract_path.write_text(json.dumps({
+            "version": "1.0",
+            "task": "Test",
+            "status": "active",
+            "goals": ["Goal 1: (to be filled by planner)"],
+            "verification_methods": [],
+            "owned_files": [],
+        }))
+
+        from workflow_engine import validate_contract_gate, load_state
+        state = load_state(self.temp_dir)
+        is_valid, error = validate_contract_gate(self.temp_dir, state)
+
+        self.assertFalse(is_valid)
+        self.assertIn("placeholder", error.lower())
 
 
 if __name__ == "__main__":
