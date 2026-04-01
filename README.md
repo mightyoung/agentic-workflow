@@ -155,12 +155,13 @@ Layer 2: Workflow Runtime (scripts/*.py)
 ├── trajectory_logger.py ✅ - trajectory + resume
 ├── memory_ops.py ✅ - session state operations
 ├── task_tracker.py ✅ - task tracking
-├── semantic_router.py 🔬 - semantic routing (experimental)
-├── execution_loop.py 🔬 - execution loops (experimental)
-├── parallel_executor.py 🔬 - parallel execution (experimental)
-├── agent_spawner.py 🔬 - multi-agent (experimental)
-├── evaluator.py 🔬 - Generator-Evaluator (experimental)
-└── context_manager.py 🔬 - context management (experimental)
+└── experimental/
+    ├── semantic_router.py 🔬 - semantic routing
+    ├── execution_loop.py 🔬 - execution loops
+    ├── parallel_executor.py 🔬 - parallel execution
+    ├── agent_spawner.py 🔬 - multi-agent
+    ├── evaluator.py 🔬 - Generator-Evaluator
+    └── context_manager.py 🔬 - context management
 ```
 
 ## Current Capabilities (What Works)
