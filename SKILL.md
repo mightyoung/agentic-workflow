@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 用于任何复杂任务开发。
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施、实现、创建
   DO NOT TRIGGER when: 简单闲聊
-version: 5.12.0
+version: 5.13.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -12,17 +12,20 @@ requires:
 
 # Agentic Workflow - 统一智能体工作流
 
-## 单入口设计 (v5.12.0)
+## 单入口设计 (v5.13.0)
 
 所有任务统一从 router 开始，智能选择执行阶段。
 
-## 核心改进 (v5.12.0)
+## 核心改进 (v5.13.0)
 
-- **硬门禁完全收口**: `complete_workflow()` 与 `advance_workflow(COMPLETE)` 使用相同门禁校验，P0/P1无verification的任务禁止完成
-- **真实搜索集成**: RESEARCH phase 使用 Exa API + DuckDuckGo HTML 回退，带 URL 编码和 metadata 追踪
-- **任务定向审查**: REVIEWING phase 优先审查 owned_files > file_changes，workdir_scan 仅在显式允许时启用
-- **质量门禁 fail-closed**: 代码任务门禁失败阻断完成，研究任务保持宽松
-- **自改进治理**: 完整的 self-improvement harness，含 baseline_check、ledger、zones、runner
+- **Contract 履约门禁**: `.contract.json` 的 goals/verification/owned_files 必须非占位符，draft 状态阻断完成
+- **Contract 全链路**: PLANNING→EXECUTING 设置 active，EXECUTING→REVIEWING 设置 review
+- **Frontier 调度**: `parallel_candidates` (并行就绪候选) + `conflict_groups` (冲突串行)
+- **Team 编排**: TeamAgent 内部整合 artifact 管线，`workflow_engine --op team-run` 接入主线
+- **自改进治理**: 完整的 self-improvement harness，smoke 路径含 frontier/checkpoint/team-run
+- **错误自分类**: handle_workflow_failure() 分类 test/type/lint/syntax/runtime 错误，智能调整重试策略
+- **完整状态机**: 12 phase (IDLE/DIRECT_ANSWER/SUBAGENT/PLANNING/RESEARCH/THINKING/EXECUTING/REVIEWING/DEBUGGING/REFINING/EXPLORING/OFFICE_HOURS/COMPLETE)
+- **英文关键词**: 所有 phase 支持英文关键词路由
 
 ## 当前能力状态
 
@@ -86,7 +89,9 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 | 迭代精炼 | 迭代/优化/精炼 | REFINING |
 | 简单任务 | 其他 | EXECUTING |
 
-## Phase Skills
+## Phase Skills (Prompt Templates)
+
+> **注意**: Phase Skills 是 prompt 模板，不是可执行逻辑。它们为 LLM 提供阶段特定的指导原则和行为规范，但不直接驱动运行时行为。
 
 | Phase | Skill | 核心职责 |
 |-------|-------|----------|
@@ -127,6 +132,15 @@ python3 scripts/workflow_engine.py --op advance --phase EXECUTING
 # 获取快照
 python3 scripts/workflow_engine.py --op snapshot
 
+# 计算 frontier
+python3 scripts/workflow_engine.py --op frontier --workdir .
+
+# 多 agent 团队执行
+python3 scripts/workflow_engine.py --op team-run --workdir .
+
+# 条件 checkpoint
+python3 scripts/workflow_engine.py --op checkpoint --workdir .
+
 # 恢复工作流
 python3 scripts/workflow_engine.py --op resume
 
@@ -140,11 +154,11 @@ python3 scripts/trajectory_logger.py --op list --workdir .
 ## 测试命令
 
 ```bash
-# 完整测试套件 (307 tests)
+# 完整测试套件 (354 tests)
 python3 -m pytest tests/ -q
 
-# 核心测试 (74 tests)
-python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py tests/test_quality_gate.py tests/test_result_only_spawning.py -q
+# 核心测试 (frontier_scheduler, failure_handling, quality_gate, workflow_engine)
+python3 -m pytest tests/test_workflow_engine.py tests/test_frontier_scheduler.py tests/test_failure_handling.py tests/test_quality_gate.py -q
 
 # 任务分解测试
 python3 -m pytest tests/test_task_decomposer.py -v

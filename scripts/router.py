@@ -30,7 +30,7 @@ ROUTE_KEYWORDS = {
         "选型", "参考", "案例", "了解一下", "想知道", "查一下",
         "找一下", "有没有", "哪里有", "如何实现", "怎么做的",
         "怎么做", "如何做", "怎么实现", "方法",
-        "部署", "数据库优化"
+        "部署", "数据库优化", "research", "best practice", "case study"
     ],
     "THINKING": [
         "谁最懂", "专家", "分析", "理解", "看看", "分析一下",
@@ -43,7 +43,7 @@ ROUTE_KEYWORDS = {
     "PLANNING": [
         "计划", "规划", "拆分", "设计", "安排", "整理一下",
         "要做什么", "步骤", "先后顺序", "先做哪个", "如何开始",
-        "从哪里入手", "规划一下", "安排一下"
+        "从哪里入手", "规划一下", "安排一下", "plan", "break down"
     ],
     "DEBUGGING": [
         "帮我调试", "修复这个bug", "报错如下", "报错信息", "错误如下",
@@ -56,18 +56,31 @@ ROUTE_KEYWORDS = {
     ],
     "SUBAGENT": [
         "给我结果就行", "直接给我", "就要结果", "不用解释",
-        "不要过程", "直接输出", "出结果", "只要结果"
+        "不要过程", "直接输出", "出结果", "只要结果",
+        "just give me", "just result", "direct output", "no explanation"
     ],
     "REVIEWING": [
         "代码审查", "帮我review", "审查这段代码", "审计", "审查",
         "review", "检查", "审查一下", "代码审查建议"
     ],
     "EXECUTING": [
-        "写一个", "帮我写", "实现", "开发", "创建", "编写"
+        "写一个", "帮我写", "实现", "开发", "创建", "编写",
+        "implement", "build", "create", "develop", "write code"
     ],
     "REFINING": [
         "迭代", "优化", "精炼", "改进", "完善", "再优化",
-        "调优", "打磨", "迭代优化"
+        "调优", "打磨", "迭代优化", "refine", "improve", "iterate"
+    ],
+    "EXPLORING": [
+        "实验", "想法", "深层", "本质", "探索", "挖掘",
+        "思考", "研究", "investigate", "explore",
+        "深入分析", "根本原因", "为什么会这样"
+    ],
+    "OFFICE_HOURS": [
+        "产品想法", "需求不明确", "咨询", "讨论一下",
+        "该怎么选", "纠结", "拿不定主意", "意见",
+        "产品咨询", "建议", "帮我出主意",
+        "product idea", "not sure", "advice", "consult"
     ]
 }
 
@@ -143,9 +156,11 @@ def detect_stage(text: str) -> str:
     """检测应该触发的阶段"""
     text_lower = text.lower()
     stage_priority = {
-        "DEBUGGING": 6,
-        "REVIEWING": 5,
+        "DEBUGGING": 7,
+        "REVIEWING": 6,
         "REFINING": 5,
+        "EXPLORING": 5,
+        "OFFICE_HOURS": 5,
         "THINKING": 4,
         "PLANNING": 3,
         "RESEARCH": 2,

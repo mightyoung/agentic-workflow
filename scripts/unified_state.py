@@ -135,7 +135,6 @@ def get_artifact_by_id(workdir: str, artifact_id: str) -> Optional[Dict[str, Any
         if isinstance(artifact, dict) and artifact.get("id") == artifact_id:
             return artifact
     return None
-    return None
 
 
 def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
@@ -298,14 +297,18 @@ def validate_workflow_state(workdir: str = ".") -> Tuple[bool, List[str]]:
 # ============================================================================
 
 TRANSITIONS = {
-    "IDLE": {"DIRECT_ANSWER", "PLANNING", "RESEARCH", "THINKING", "EXECUTING", "REVIEWING", "DEBUGGING"},
+    "IDLE": {"DIRECT_ANSWER", "SUBAGENT", "PLANNING", "RESEARCH", "THINKING", "EXECUTING", "REVIEWING", "DEBUGGING", "REFINING", "EXPLORING", "OFFICE_HOURS"},
     "DIRECT_ANSWER": {"COMPLETE"},
-    "PLANNING": {"RESEARCH", "THINKING", "EXECUTING", "REVIEWING", "COMPLETE"},
+    "SUBAGENT": {"COMPLETE"},
+    "PLANNING": {"RESEARCH", "THINKING", "EXECUTING", "REVIEWING", "REFINING", "COMPLETE"},
     "RESEARCH": {"THINKING", "PLANNING", "EXECUTING", "COMPLETE"},
-    "THINKING": {"PLANNING", "EXECUTING", "REVIEWING", "COMPLETE"},
-    "EXECUTING": {"REVIEWING", "DEBUGGING", "COMPLETE"},
-    "REVIEWING": {"DEBUGGING", "COMPLETE", "EXECUTING"},
+    "THINKING": {"PLANNING", "EXECUTING", "REVIEWING", "REFINING", "COMPLETE"},
+    "EXECUTING": {"REVIEWING", "DEBUGGING", "REFINING", "COMPLETE"},
+    "REVIEWING": {"DEBUGGING", "COMPLETE", "EXECUTING", "REFINING"},
     "DEBUGGING": {"EXECUTING", "REVIEWING", "COMPLETE"},
+    "REFINING": {"EXECUTING", "REVIEWING", "COMPLETE"},
+    "EXPLORING": {"PLANNING", "RESEARCH", "THINKING", "EXECUTING", "REVIEWING", "COMPLETE"},
+    "OFFICE_HOURS": {"PLANNING", "EXECUTING", "COMPLETE"},
     "COMPLETE": set(),
 }
 

@@ -231,3 +231,96 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             workflow_engine.advance_workflow(workdir=self.temp_dir, phase="COMPLETE")
         self.assertIn("quality gate not passed", str(ctx.exception))
+
+    def test_complete_blocks_when_task_id_missing(self):
+        """complete_workflow must block when task_id is None for code tasks (bypass prevention)."""
+        # Init with EXECUTING (code task)
+        workflow_engine.initialize_workflow("帮我实现这个功能", workdir=self.temp_dir)
+        # Manually add EXECUTING to phase history to mark as code task
+        state_path = Path(self.temp_dir) / ".workflow_state.json"
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        state_data["phase"]["history"].append({
+            "phase": "EXECUTING",
+            "entered_at": "2026-04-01T00:00:00",
+            "exited_at": "2026-04-01T00:00:01",
+            "reason": "test",
+            "actions": [],
+            "decisions": [],
+            "file_changes": [],
+            "error": None,
+        })
+        # Set task_id to None to simulate the bypass scenario
+        state_data["task"]["task_id"] = None
+        state_path.write_text(json.dumps(state_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertIn("task has no task_id", str(ctx.exception))
+        self.assertIn("Cannot verify quality gate was run", str(ctx.exception))
+
+
+class TestNewPhases(unittest.TestCase):
+    """Tests for newly added phases: REFINING, EXPLORING, OFFICE_HOURS, SUBAGENT."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_refining_phase_transition(self):
+        """Test REFINING phase is reachable and transitions correctly."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        # PLANNING -> REFINING is valid
+        result = workflow_engine.advance_workflow("REFINING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "REFINING")
+
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "REFINING")
+
+    def test_exploring_phase_transition(self):
+        """Test EXPLORING phase is reachable and transitions correctly."""
+        workflow_engine.initialize_workflow("深层探索", workdir=self.temp_dir)
+        # Should route to EXPLORING automatically
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "EXPLORING")
+
+    def test_office_hours_phase_transition(self):
+        """Test OFFICE_HOURS phase is reachable and transitions correctly."""
+        workflow_engine.initialize_workflow("产品咨询", workdir=self.temp_dir)
+        # Should route to OFFICE_HOURS automatically
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "OFFICE_HOURS")
+
+    def test_subagent_phase_transition(self):
+        """Test SUBAGENT phase is reachable and transitions to COMPLETE."""
+        workflow_engine.initialize_workflow("给我结果就行", workdir=self.temp_dir)
+        # Should route to SUBAGENT automatically
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "SUBAGENT")
+
+        # SUBAGENT -> COMPLETE is valid
+        result = workflow_engine.advance_workflow("COMPLETE", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "COMPLETE")
+
+    def test_refining_to_executing_transition(self):
+        """Test REFINING can transition to EXECUTING."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        workflow_engine.advance_workflow("REFINING", workdir=self.temp_dir)
+        result = workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "EXECUTING")
+
+    def test_exploring_to_planning_transition(self):
+        """Test EXPLORING can transition to PLANNING."""
+        workflow_engine.initialize_workflow("深层探索", workdir=self.temp_dir)
+        # Already in EXPLORING from routing
+        result = workflow_engine.advance_workflow("PLANNING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "PLANNING")
+
+    def test_office_hours_to_planning_transition(self):
+        """Test OFFICE_HOURS can transition to PLANNING."""
+        workflow_engine.initialize_workflow("产品想法", workdir=self.temp_dir)
+        # Already in OFFICE_HOURS from routing
+        result = workflow_engine.advance_workflow("PLANNING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "PLANNING")

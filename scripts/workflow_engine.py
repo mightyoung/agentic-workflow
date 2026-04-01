@@ -34,6 +34,7 @@ from unified_state import (
     register_artifact,
     ArtifactType,
 )
+from skill_loader import load_skill, SkillPromptFormatter
 from team_agent import TeamAgent
 
 # 存储当前活跃的 TrajectoryLogger 实例
@@ -1816,6 +1817,29 @@ def advance_workflow(
 
         _generate_and_register_summary(workdir, state, current_phase, "completed", session_id)
 
+    # Load and format skill prompt for the new phase
+    skill_prompt_path = None
+    skill_name = None
+    try:
+        skill = load_skill(phase)
+        if skill:
+            formatter = SkillPromptFormatter(skill)
+            task_desc = state.task.description if state.task else ""
+            task_title = state.task.title if state.task else ""
+            prompt = formatter.format(
+                task=task_desc or task_title or "未指定任务",
+                session_id=session_id or "",
+            )
+            # Save skill prompt as artifact (use PROGRESS type, not SUMMARY - SUMMARY is for completion_summary)
+            skill_prompt_path = Path(workdir) / f"skill_prompt_{phase.lower()}_{session_id}.md"
+            safe_write_text_locked(skill_prompt_path, prompt)
+            skill_name = skill.metadata.name
+            register_artifact(workdir, ArtifactType.PROGRESS, str(skill_prompt_path), phase, "system",
+                             metadata={"skill_name": skill_name, "phase": phase})
+    except Exception:
+        # Skill loading is best-effort - don't fail the phase transition
+        pass
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -1824,6 +1848,8 @@ def advance_workflow(
         "task_status": task_status,
         "recommended_next_phases": recommend_next_phases(phase, state.trigger_type),
         "state_file": str(workflow_state_path(workdir)),
+        "skill_prompt_path": str(skill_prompt_path) if skill_prompt_path else None,
+        "skill_name": skill_name,
     }
 
 
@@ -1860,33 +1886,42 @@ def complete_workflow(
     if is_code_task and final_state == "completed":
         # Get task_id from state
         task_id = state.task.task_id if state.task else None
-        if task_id:
-            tracker_path = Path(workdir) / ".task_tracker.json"
-            tracker_data = task_tracker.load_tracker(str(tracker_path))
-            task_data = None
-            for t in tracker_data.get("tasks", []):
-                if t.get("id") == task_id:
-                    task_data = t
-                    break
 
-            quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
-            task_priority = task_data.get("priority") if task_data else None
-            task_verification = task_data.get("verification") if task_data else None
+        # Code tasks MUST have a valid task_id to complete
+        # If task_id is None, we cannot verify quality gate was run - fail closed
+        if task_id is None:
+            raise ValueError(
+                f"Cannot complete workflow: task has no task_id. "
+                f"Cannot verify quality gate was run. "
+                f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+            )
 
-            # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
-            if quality_gate_passed is not True:
-                raise ValueError(
-                    f"Cannot complete workflow: quality gate not passed for task {task_id}. "
-                    f"quality_gates_passed={quality_gate_passed}. "
-                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
-                )
+        tracker_path = Path(workdir) / ".task_tracker.json"
+        tracker_data = task_tracker.load_tracker(str(tracker_path))
+        task_data = None
+        for t in tracker_data.get("tasks", []):
+            if t.get("id") == task_id:
+                task_data = t
+                break
 
-            # If P0/P1 task has no verification, block COMPLETE
-            if task_priority in ("P0", "P1") and not task_verification:
-                raise ValueError(
-                    f"Cannot complete workflow: task {task_id} (P0/P1) has no verification method. "
-                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
-                )
+        quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
+        task_priority = task_data.get("priority") if task_data else None
+        task_verification = task_data.get("verification") if task_data else None
+
+        # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
+        if quality_gate_passed is not True:
+            raise ValueError(
+                f"Cannot complete workflow: quality gate not passed for task {task_id}. "
+                f"quality_gates_passed={quality_gate_passed}. "
+                f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+            )
+
+        # If P0/P1 task has no verification, block COMPLETE
+        if task_priority in ("P0", "P1") and not task_verification:
+            raise ValueError(
+                f"Cannot complete workflow: task {task_id} (P0/P1) has no verification method. "
+                f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+            )
 
         # Contract fulfillment gate: validate contract is properly fulfilled
         contract_valid, contract_error = validate_contract_gate(workdir, state)
@@ -2099,6 +2134,73 @@ def resume_workflow(
     }
 
 
+# Error classification patterns
+_ERROR_TYPE_PATTERNS = {
+    "test_failure": [
+        "FAILED", "pytest", "test fail", "assertion error",
+        "AssertionError", "test failed", "tests failed",
+    ],
+    "type_error": [
+        "TypeError", "type error", "typing error",
+        "cannot assign", "argument type", "expected ", "got ",
+    ],
+    "lint_error": [
+        "lint", "ruff", "flake8", "pylint", "mypy",
+        "unused import", "undefined name", "missing import",
+    ],
+    "runtime_exception": [
+        "Exception", "Error:", "Traceback", "IndexError",
+        "KeyError", "ValueError", "AttributeError", "ImportError",
+    ],
+    "syntax_error": [
+        "SyntaxError", "IndentationError", "TabError",
+        "unexpected EOF", "invalid syntax",
+    ],
+    "quality_gate_failed": [
+        "quality gate", "gate failed", "gate_check",
+    ],
+}
+
+
+def classify_error(error: str) -> Tuple[str, float]:
+    """
+    Classify error type and return (error_type, confidence).
+
+    Args:
+        error: Error message string
+
+    Returns:
+        Tuple of (error_type, confidence_score)
+    """
+    error_lower = error.lower()
+    scores: Dict[str, float] = {}
+
+    for error_type, patterns in _ERROR_TYPE_PATTERNS.items():
+        score = sum(1 for p in patterns if p.lower() in error_lower)
+        if score > 0:
+            scores[error_type] = score / len(patterns)
+
+    if not scores:
+        return ("unknown", 1.0)
+
+    # Return highest scoring type
+    best_type = max(scores, key=scores.get)
+    return (best_type, scores[best_type])
+
+
+def _get_error_history(state) -> List[Dict[str, Any]]:
+    """Extract error history from state decisions."""
+    history = []
+    for decision in state.decisions:
+        if "error" in decision.metadata:
+            history.append({
+                "error": decision.metadata.get("error", ""),
+                "type": decision.metadata.get("error_type", "unknown"),
+                "timestamp": decision.timestamp,
+            })
+    return history
+
+
 def handle_workflow_failure(
     workdir: str,
     error: str,
@@ -2106,19 +2208,19 @@ def handle_workflow_failure(
     max_retries: int = 3,
 ) -> Dict[str, Any]:
     """
-    处理工作流失败
+    Handle workflow failure with intelligent error classification and retry strategy.
 
     Args:
-        workdir: 工作目录
-        error: 错误信息
-        strategy: 失败策略
-            - "retry": 重试当前 phase
-            - "debugging": 转换到 DEBUGGING phase
-            - "abort": 中止工作流
-        max_retries: 最大重试次数
+        workdir: Working directory
+        error: Error message
+        strategy: Failure handling strategy
+            - "retry": Retry current phase
+            - "debugging": Transition to DEBUGGING phase
+            - "abort": Abort workflow
+        max_retries: Maximum retry count
 
     Returns:
-        处理结果
+        Handling result
     """
     from datetime import datetime
     from state_schema import Decision
@@ -2129,47 +2231,85 @@ def handle_workflow_failure(
 
     current_phase = state.phase.get("current", "IDLE")
 
-    # 记录失败到 trajectory
+    # Classify the error
+    error_type, confidence = classify_error(error)
+
+    # Log failure to trajectory
     if state.session_id in _active_loggers:
         logger = _active_loggers[state.session_id]
         logger.log_error(error, recoverable=(strategy != "abort"))
 
+    # Check for quality gate failure details
+    quality_gate_details = None
+    if error_type == "quality_gate_failed":
+        quality_gate_details = _extract_quality_gate_details(workdir)
+
+    # Syntax errors always go to debugging immediately - they can't be fixed by retry
+    if error_type == "syntax_error":
+        strategy = "debugging"
+        retry_hint = "syntax error cannot be fixed by retry"
+
     if strategy == "retry":
-        # 从最后一个决策的metadata获取retry_count
+        # Get retry count and error history from decisions
         retry_count = 0
+        error_history = _get_error_history(state)
+
         if state.decisions:
             last_decision = state.decisions[-1]
             retry_count = last_decision.metadata.get("retry_count", 0)
 
-        if retry_count >= max_retries:
-            # 超过阈值，转为debugging
+        # Adjust max_retries based on error classification
+        adjusted_max_retries = max_retries
+        retry_hint = ""
+
+        if error_type == "test_failure" and retry_count >= 1:
+            # After one test failure retry, suggest debugging
+            adjusted_max_retries = max(retry_count + 1, 2)
+        elif error_type == "lint_error":
+            # Lint errors often fixed by auto-fix
+            retry_hint = "try running ruff/lint auto-fix"
+        elif error_type == "type_error":
+            # Type errors need careful review
+            retry_hint = "check type annotations"
+
+        if retry_count >= adjusted_max_retries:
             strategy = "debugging"
         else:
-            # 增加retry_count并存储到state
             new_retry_count = retry_count + 1
             state.decisions.append(Decision(
                 timestamp=datetime.now().isoformat(),
                 decision=f"Retry attempt {new_retry_count}",
-                reason=f"Retry after error: {error}",
-                metadata={"retry_count": new_retry_count, "error": error},
+                reason=f"Retry after {error_type} error: {error[:200]}",
+                metadata={
+                    "retry_count": new_retry_count,
+                    "error": error,
+                    "error_type": error_type,
+                    "error_confidence": confidence,
+                    "error_history": error_history,
+                },
             ))
             save_state(workdir, state)
 
-            return {
+            result = {
                 "success": True,
                 "action": "retry",
                 "phase": current_phase,
                 "retry_count": new_retry_count,
-                "message": f"Retrying {current_phase} (attempt {new_retry_count}/{max_retries})",
+                "error_type": error_type,
+                "confidence": confidence,
+                "message": f"Retrying {current_phase} (attempt {new_retry_count}/{adjusted_max_retries})",
             }
+            if retry_hint:
+                result["retry_hint"] = retry_hint
+            if quality_gate_details:
+                result["quality_gate_details"] = quality_gate_details
+            return result
 
     if strategy == "debugging":
-        # 转换到 DEBUGGING phase
         if can_transition(current_phase, "DEBUGGING"):
             state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")
             save_state(workdir, state)
 
-            # 记录到 trajectory
             if state.session_id in _active_loggers:
                 logger = _active_loggers[state.session_id]
                 logger.exit_phase(current_phase)
@@ -2181,6 +2321,8 @@ def handle_workflow_failure(
                 "previous_phase": current_phase,
                 "new_phase": "DEBUGGING",
                 "error": error,
+                "error_type": error_type,
+                "error_history": _get_error_history(state),
             }
         else:
             return {
@@ -2189,16 +2331,35 @@ def handle_workflow_failure(
             }
 
     if strategy == "abort":
-        # 中止工作流
         complete_workflow(workdir, "failed", error)
         return {
             "success": True,
             "action": "aborted",
             "final_state": "failed",
             "error": error,
+            "error_type": error_type,
         }
 
     return {"success": False, "error": f"Unknown strategy: {strategy}"}
+
+
+def _extract_quality_gate_details(workdir: str) -> Optional[Dict[str, Any]]:
+    """Extract quality gate failure details from latest gate report."""
+    import json
+    gate_files = list(Path(workdir).glob(".quality_gate_*.json"))
+    if not gate_files:
+        return None
+
+    latest = max(gate_files, key=lambda p: p.stat().st_mtime)
+    try:
+        data = json.loads(latest.read_text())
+        return {
+            "gate_file": str(latest.name),
+            "passed": data.get("all_passed", False),
+            "failed_checks": data.get("failed_checks", []),
+        }
+    except Exception:
+        return None
 
 
 def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:

@@ -17,15 +17,19 @@ from typing import Any, Dict, List, Optional
 
 
 class PhaseStatus(Enum):
-    """Phase执行状态"""
+    """Phase execution status"""
     IDLE = "IDLE"
     DIRECT_ANSWER = "DIRECT_ANSWER"
+    SUBAGENT = "SUBAGENT"
     PLANNING = "PLANNING"
     RESEARCH = "RESEARCH"
     THINKING = "THINKING"
     EXECUTING = "EXECUTING"
     REVIEWING = "REVIEWING"
     DEBUGGING = "DEBUGGING"
+    REFINING = "REFINING"
+    EXPLORING = "EXPLORING"
+    OFFICE_HOURS = "OFFICE_HOURS"
     COMPLETE = "COMPLETE"
 
 

@@ -7,6 +7,7 @@ Failure Handling Tests - 失败处理专项测试
 2. retry 超过阈值转 DEBUGGING
 3. abort 终止工作流
 4. state 和 trajectory 同步更新
+5. Error classification and retry strategy adjustment
 """
 
 import os
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from workflow_engine import (
     initialize_workflow,
     handle_workflow_failure,
+    classify_error,
     load_state,
 )
 from state_schema import Decision
@@ -185,6 +187,130 @@ class TestStateSchemaDecision(unittest.TestCase):
         d = decision.to_dict()
         self.assertIn("metadata", d)
         self.assertEqual(d["metadata"]["key"], "value")
+
+
+class TestErrorClassification(unittest.TestCase):
+    """Error classification tests for intelligent retry strategy."""
+
+    def setUp(self):
+        """Set up workdir for tests that need it."""
+        self.workdir = tempfile.mkdtemp(prefix="error_class_test_")
+
+    def tearDown(self):
+        """Clean up temp directory."""
+        if os.path.exists(self.workdir):
+            shutil.rmtree(self.workdir, ignore_errors=True)
+
+    def test_classify_test_failure(self):
+        """Test classification of test failure errors."""
+        error = "FAILED: test_example.py::test_my_function"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "test_failure")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_type_error(self):
+        """Test classification of type error."""
+        error = "TypeError: cannot assign 'str' to 'int'"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "type_error")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_lint_error(self):
+        """Test classification of lint error."""
+        error = "lint error: unused import 'os'"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "lint_error")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_runtime_exception(self):
+        """Test classification of runtime exception."""
+        error = "IndexError: list index out of range"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "runtime_exception")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_syntax_error(self):
+        """Test classification of syntax error."""
+        error = "SyntaxError: invalid syntax"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "syntax_error")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_quality_gate_failure(self):
+        """Test classification of quality gate failure."""
+        error = "quality gate failed: type check did not pass"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "quality_gate_failed")
+        self.assertGreater(confidence, 0)
+
+    def test_classify_unknown_error(self):
+        """Test classification of unknown error."""
+        error = "some random error message"
+        error_type, confidence = classify_error(error)
+        self.assertEqual(error_type, "unknown")
+        self.assertEqual(confidence, 1.0)
+
+    def test_syntax_error_goes_directly_to_debugging(self):
+        """Test that syntax errors skip retry and go directly to debugging."""
+        _ = initialize_workflow("测试工作流", self.workdir)
+
+        result = handle_workflow_failure(
+            self.workdir,
+            "SyntaxError: invalid syntax",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        # Syntax errors should go directly to debugging without retry
+        self.assertEqual(result["action"], "debugging")
+        self.assertIn("error_type", result)
+        self.assertEqual(result["error_type"], "syntax_error")
+
+    def test_retry_includes_error_type_in_metadata(self):
+        """Test that retry includes error_type in decision metadata."""
+        _ = initialize_workflow("测试工作流", self.workdir)
+
+        handle_workflow_failure(
+            self.workdir,
+            "pytest: test failed",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        state = load_state(self.workdir)
+        last_decision = state.decisions[-1]
+        self.assertEqual(last_decision.metadata.get("error_type"), "test_failure")
+
+    def test_retry_includes_error_history(self):
+        """Test that retry preserves error history across attempts."""
+        _ = initialize_workflow("测试工作流", self.workdir)
+
+        handle_workflow_failure(self.workdir, "Error 1", strategy="retry", max_retries=3)
+        handle_workflow_failure(self.workdir, "Error 2", strategy="retry", max_retries=3)
+
+        state = load_state(self.workdir)
+        error_history = []
+        for decision in state.decisions:
+            if "error" in decision.metadata:
+                error_history.append(decision.metadata.get("error"))
+
+        self.assertIn("Error 1", error_history)
+        self.assertIn("Error 2", error_history)
+
+    def test_retry_result_includes_error_type(self):
+        """Test that retry result includes error_type for downstream handling."""
+        _ = initialize_workflow("测试工作流", self.workdir)
+
+        result = handle_workflow_failure(
+            self.workdir,
+            "TypeError: type mismatch",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        self.assertEqual(result["action"], "retry")
+        self.assertIn("error_type", result)
+        self.assertEqual(result["error_type"], "type_error")
 
 
 if __name__ == "__main__":
