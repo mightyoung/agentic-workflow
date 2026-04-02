@@ -453,6 +453,304 @@ def load_tasks_json(workdir: str, session_id: str) -> List[DecomposedTask]:
     return [DecomposedTask.from_dict(t) for t in data.get("tasks", [])]
 
 
+def extract_user_stories(spec_content: str) -> List[Dict[str, str]]:
+    """
+    Extract user stories from spec.md content.
+
+    Returns list of dicts with keys: id, title, as_a, i_want, so_that, acceptance_criteria
+    """
+    stories = []
+    # Match ### Story N: Title pattern
+    story_pattern = re.compile(r"### Story (\d+):\s*([^\n]+)")
+    # Match acceptance criteria blocks
+    acceptance_pattern = re.compile(r"\*\*Acceptance Criteria:\*\*\s*\n((?:\s*-\s*[^\n]+\n)+)", re.MULTILINE)
+    # Match As a / I want / So that
+    story_block_pattern = re.compile(
+        r"### Story (\d+):\s*([^\n]+)\n"
+        r"\*\*As a\*\*\s+([^\n]+)\n"
+        r"\*\*I want\*\*\s+([^\n]+)\n"
+        r"\*\*So that\*\*\s+([^\n]+)",
+        re.MULTILINE
+    )
+
+    # Find all story blocks
+    for match in story_block_pattern.finditer(spec_content):
+        story_id = match.group(1)
+        title = match.group(2).strip()
+        as_a = match.group(3).strip()
+        i_want = match.group(4).strip()
+        so_that = match.group(5).strip()
+
+        # Find acceptance criteria after this story
+        story_start = match.end()
+        next_story_match = story_pattern.search(spec_content, match.end())
+        story_end = next_story_match.start() if next_story_match else len(spec_content)
+        story_text = spec_content[story_start:story_end]
+
+        acceptance_criteria = []
+        for criteria_match in acceptance_pattern.finditer(story_text):
+            criteria_lines = criteria_match.group(1).strip().split("\n")
+            for line in criteria_lines:
+                # Extract criterion text
+                criterion = re.sub(r"^\s*-\s*", "", line).strip()
+                criterion = re.sub(r"^\[?\s*[xX ]\s*\]?\s*", "", criterion).strip()
+                if criterion and criterion != "[verifiable outcome]":
+                    acceptance_criteria.append(criterion)
+
+        stories.append({
+            "id": story_id,
+            "title": title,
+            "as_a": as_a,
+            "i_want": i_want,
+            "so_that": so_that,
+            "acceptance_criteria": acceptance_criteria,
+        })
+
+    return stories
+
+
+def decompose_from_spec(workdir: str, feature_id: str = "default") -> List[DecomposedTask]:
+    """
+    Decompose tasks from spec.md using user story based splitting.
+
+    Creates tasks organized by:
+    - Setup tasks (infrastructure)
+    - Foundational tasks (shared components)
+    - Per-user-story tasks
+    - Polish tasks (docs, finalization)
+
+    Args:
+        workdir: Working directory
+        feature_id: Feature identifier for spec directory
+
+    Returns:
+        List of DecomposedTask organized by user stories
+    """
+    spec_path = Path(workdir) / ".specs" / feature_id / "spec.md"
+    if not spec_path.exists():
+        # Fall back to simple decomposition
+        return decompose(f"Implement feature from {spec_path}")
+
+    spec_content = spec_path.read_text(encoding="utf-8")
+    stories = extract_user_stories(spec_content)
+
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    tasks: List[DecomposedTask] = []
+
+    # Counter for task IDs
+    counter = 1
+
+    # Create Setup tasks
+    setup_keywords = ["setup", "install", "initialize", "configuration", "环境", "安装", "初始化"]
+    has_setup = any(k in spec_content.lower() for k in setup_keywords)
+    if has_setup:
+        task_id = f"T{ts}-{counter:03d}"
+        counter += 1
+        tasks.append(DecomposedTask(
+            task_id=task_id,
+            title="Setup and Initialization",
+            description="Setup development environment and dependencies",
+            status="backlog",
+            priority="P0",
+            owned_files=["requirements.txt", "pyproject.toml", ".env"],
+            verification="pip install -r requirements.txt",
+            created_at=datetime.now().isoformat(),
+            phase="EXECUTING",
+        ))
+
+    # Create Foundational tasks (shared components)
+    foundational_keywords = ["model", "schema", "database", "core", "shared", "common"]
+    has_foundational = any(k in spec_content.lower() for k in foundational_keywords)
+    if has_foundational:
+        task_id = f"T{ts}-{counter:03d}"
+        counter += 1
+        tasks.append(DecomposedTask(
+            task_id=task_id,
+            title="Foundational Components",
+            description="Implement shared/core components needed by all features",
+            status="backlog",
+            priority="P0",
+            owned_files=["src/core/", "src/shared/"],
+            verification="pytest tests/test_core.py -v",
+            created_at=datetime.now().isoformat(),
+            phase="EXECUTING",
+        ))
+
+    # Create tasks for each user story
+    for story in stories:
+        story_id = story["id"]
+        story_title = story["title"]
+
+        # Story implementation task
+        task_id = f"T{ts}-{counter:03d}"
+        counter += 1
+        files = f"src/features/story_{story_id}/"
+        tasks.append(DecomposedTask(
+            task_id=f"US{story_id}-1",
+            title=f"User Story {story_id}: {story_title}",
+            description=f"As a {story['as_a']}, I want {story['i_want']} so that {story['so_that']}",
+            status="backlog",
+            priority="P1",
+            owned_files=[files],
+            verification=f"pytest tests/features/story_{story_id}/ -v",
+            created_at=datetime.now().isoformat(),
+            phase="EXECUTING",
+        ))
+
+        # Add acceptance criteria as subtasks
+        for i, criteria in enumerate(story["acceptance_criteria"][:3], start=2):
+            task_id = f"T{ts}-{counter:03d}"
+            counter += 1
+            tasks.append(DecomposedTask(
+                task_id=f"US{story_id}-{i}",
+                title=f"Acceptance: {criteria[:50]}",
+                description=criteria,
+                status="backlog",
+                priority="P1",
+                owned_files=[files],
+                verification=f"pytest tests/features/story_{story_id}/ -v",
+                created_at=datetime.now().isoformat(),
+                phase="EXECUTING",
+                dependencies=[f"US{story_id}-1"] if i > 1 else [],
+            ))
+
+    # Create Polish tasks
+    polish_keywords = ["docs", "readme", "documentation", "example", "polish"]
+    has_polish = any(k in spec_content.lower() for k in polish_keywords)
+    if has_polish or len(stories) > 0:
+        task_id = f"T{ts}-{counter:03d}"
+        counter += 1
+        tasks.append(DecomposedTask(
+            task_id=task_id,
+            title="Documentation and Polish",
+            description="Finalize documentation, examples, and polish",
+            status="backlog",
+            priority="P2",
+            owned_files=["README.md", "docs/"],
+            verification="pytest tests/ -v",
+            created_at=datetime.now().isoformat(),
+            phase="EXECUTING",
+        ))
+
+    # Add dependencies between foundational and story tasks
+    found_idx = None
+    for i, t in enumerate(tasks):
+        if t.title == "Foundational Components":
+            found_idx = i
+            break
+
+    for i, t in enumerate(tasks):
+        if t.title.startswith("User Story"):
+            if found_idx is not None and not t.dependencies:
+                t.dependencies.append(tasks[found_idx].task_id)
+        elif t.title == "Documentation and Polish":
+            # Polish depends on all story tasks
+            for other in tasks:
+                if other.title.startswith("User Story"):
+                    if other.task_id not in t.dependencies:
+                        t.dependencies.append(other.task_id)
+
+    return tasks
+
+
+def generate_tasks_md(tasks: List[DecomposedTask], spec_path: str, session_id: str, feature_id: str) -> str:
+    """
+    Generate tasks.md content following spec-kit template.
+
+    Args:
+        tasks: List of DecomposedTask
+        spec_path: Path to source spec.md
+        session_id: Session identifier
+        feature_id: Feature identifier
+
+    Returns:
+        tasks.md content as string
+    """
+    lines = [
+        "# Tasks",
+        "",
+        "> **Provenance Header**",
+        "> Generated-By: agentic-workflow",
+        f"> Session: {session_id}",
+        f"> Source-Spec: {spec_path}",
+        f"> Timestamp: {datetime.now().isoformat()}",
+        "",
+        "---",
+        "",
+    ]
+
+    # Group tasks by category
+    setup_tasks = [t for t in tasks if "setup" in t.title.lower()]
+    found_tasks = [t for t in tasks if "foundational" in t.title.lower() or "core" in t.title.lower()]
+    story_tasks = [t for t in tasks if t.task_id.startswith("US")]
+    polish_tasks = [t for t in tasks if "polish" in t.title.lower() or "documentation" in t.title.lower()]
+
+    if setup_tasks:
+        lines.append("## Setup\n")
+        for task in setup_tasks:
+            lines.append(f"- [ ] **{task.task_id}:** {task.title}")
+            lines.append(f"  - **Files:** `{', '.join(task.owned_files)}`")
+            lines.append(f"  - **Verification:** `[P]` {task.verification}")
+            if task.dependencies:
+                lines.append(f"  - **Blocked-By:** {', '.join(task.dependencies)}")
+            lines.append("")
+
+    if found_tasks:
+        lines.append("## Foundational\n")
+        for task in found_tasks:
+            lines.append(f"- [ ] **{task.task_id}:** {task.title}")
+            lines.append(f"  - **Files:** `{', '.join(task.owned_files)}`")
+            lines.append(f"  - **Verification:** `[P]` {task.verification}")
+            if task.dependencies:
+                lines.append(f"  - **Blocked-By:** {', '.join(task.dependencies)}")
+            lines.append("")
+
+    # Group story tasks by story ID
+    story_groups: Dict[str, List[DecomposedTask]] = {}
+    for task in story_tasks:
+        story_match = re.match(r"US(\d+)", task.task_id)
+        if story_match:
+            story_num = story_match.group(1)
+            if story_num not in story_groups:
+                story_groups[story_num] = []
+            story_groups[story_num].append(task)
+
+    for story_num in sorted(story_groups.keys(), key=int):
+        story_tasks_in_group = story_groups[story_num]
+        lines.append(f"## User Story {story_num}\n")
+        for task in story_tasks_in_group:
+            marker = "[P]" if task.priority == "P1" else ""
+            lines.append(f"- [ ] **{task.task_id}:** {task.title} {marker}".strip())
+            lines.append(f"  - **Files:** `{', '.join(task.owned_files)}`")
+            lines.append(f"  - **Verification:** {task.verification}")
+            if task.dependencies:
+                lines.append(f"  - **Blocked-By:** {', '.join(task.dependencies)}")
+            if task.description and len(task.description) > 10:
+                lines.append(f"  - **Acceptance:** {task.description[:100]}")
+            lines.append("")
+
+    if polish_tasks:
+        lines.append("## Polish\n")
+        for task in polish_tasks:
+            lines.append(f"- [ ] **{task.task_id}:** {task.title}")
+            lines.append(f"  - **Files:** `{', '.join(task.owned_files)}`")
+            lines.append(f"  - **Verification:** {task.verification}")
+            if task.dependencies:
+                lines.append(f"  - **Blocked-By:** {', '.join(task.dependencies)}")
+            lines.append("")
+
+    lines.append("---\n")
+    lines.append("\n## Task Provenance\n")
+    lines.append("| Task ID | Source | Story | Created |")
+    lines.append("|---------|--------|-------|---------|")
+    for task in tasks:
+        source = "spec" if task.task_id.startswith("US") else "auto"
+        story = f"US-{task.task_id.split('-')[0][2:]}" if task.task_id.startswith("US") else "-"
+        lines.append(f"| {task.task_id} | {source} | {story} | {task.created_at[:10]} |")
+
+    return "\n".join(lines)
+
+
 def main():
     import argparse
 
@@ -462,9 +760,14 @@ def main():
     parser.add_argument("--session-id", help="session id for saving tasks")
     parser.add_argument("--output", choices=["json", "markdown"], default="markdown", help="output format")
     parser.add_argument("--timestamp", help="base timestamp for task IDs")
+    parser.add_argument("--from-spec", action="store_true", help="decompose from spec.md instead of prompt")
+    parser.add_argument("--feature-id", default="default", help="feature id for spec directory")
     args = parser.parse_args()
 
-    tasks = decompose(args.prompt, base_timestamp=args.timestamp)
+    if args.from_spec:
+        tasks = decompose_from_spec(args.workdir, args.feature_id)
+    else:
+        tasks = decompose(args.prompt, base_timestamp=args.timestamp)
 
     if args.output == "json":
         print(json.dumps([t.to_dict() for t in tasks], ensure_ascii=False, indent=2))

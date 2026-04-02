@@ -16,7 +16,7 @@ from pathlib import Path
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from task_decomposer import decompose, DecomposedTask, auto_priority
+from task_decomposer import decompose, DecomposedTask, auto_priority, extract_user_stories, decompose_from_spec, generate_tasks_md
 
 
 class TestTaskDecomposer(unittest.TestCase):
@@ -127,6 +127,78 @@ class TestDecomposedTask(unittest.TestCase):
         )
         self.assertEqual(task.dependencies, ["T001"])
         self.assertEqual(task.owned_files, ["file1.py", "file2.py"])
+
+
+class TestUserStoryDecomposition(unittest.TestCase):
+    """Tests for user story based decomposition"""
+
+    def test_extract_user_stories_basic(self):
+        """Test basic user story extraction"""
+        spec_content = """
+# Spec: Test Feature
+
+## User Stories
+
+### Story 1: User Registration
+**As a** new user
+**I want** register an account
+**So that** I can access the system
+
+**Acceptance Criteria:**
+- [ ] Criterion 1: User can enter email and password
+- [ ] Criterion 2: System validates email format
+
+### Story 2: User Login
+**As a** registered user
+**I want** login to my account
+**So that** I can access my data
+"""
+        stories = extract_user_stories(spec_content)
+        self.assertEqual(len(stories), 2)
+        self.assertEqual(stories[0]["id"], "1")
+        self.assertEqual(stories[0]["title"], "User Registration")
+        self.assertEqual(stories[0]["as_a"], "new user")
+        self.assertEqual(stories[0]["i_want"], "register an account")
+        self.assertEqual(stories[0]["so_that"], "I can access the system")
+
+    def test_extract_user_stories_no_stories(self):
+        """Test extraction with no user stories"""
+        spec_content = "# Spec: No Stories\n\nJust some text."
+        stories = extract_user_stories(spec_content)
+        self.assertEqual(len(stories), 0)
+
+    def test_decompose_from_spec_without_spec(self):
+        """Test decompose_from_spec falls back when no spec exists"""
+        import tempfile
+        import shutil
+        temp_dir = tempfile.mkdtemp()
+        try:
+            tasks = decompose_from_spec(temp_dir)
+            # Should fall back to simple decomposition
+            self.assertIsInstance(tasks, list)
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_generate_tasks_md_format(self):
+        """Test tasks.md generation format"""
+        tasks = [
+            DecomposedTask(
+                task_id="US1-1",
+                title="User Registration",
+                description="As a new user, I want to register",
+                priority="P1",
+                owned_files=["src/features/user_reg.py"],
+                verification="pytest tests/",
+                created_at="2024-01-01T00:00:00",
+                dependencies=[],
+            )
+        ]
+        md = generate_tasks_md(tasks, ".specs/test/spec.md", "session123", "test")
+        self.assertIn("# Tasks", md)
+        self.assertIn("User Story 1", md)
+        self.assertIn("Generated-By: agentic-workflow", md)
+        self.assertIn("Source-Spec: .specs/test/spec.md", md)
+        self.assertIn("US1-1", md)
 
 
 if __name__ == "__main__":

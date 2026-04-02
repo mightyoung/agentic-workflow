@@ -251,6 +251,136 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
         return destination
 
 
+def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Optional[Path], Optional[Path]]:
+    """
+    Create spec.md and plan.md artifacts in .specs/<feature_id>/ directory.
+
+    Args:
+        task_name: Name/title of the task
+        task_description: Full description
+        workdir: Working directory
+        session_id: Session identifier
+
+    Returns:
+        (spec_path, plan_path) tuple - either may be None if creation failed
+    """
+    # Generate feature_id from task_name
+    feature_id = re.sub(r"[^a-zA-Z0-9]+", "_", task_name.lower())[:50]
+    specs_dir = Path(workdir) / ".specs" / feature_id
+    specs_dir.mkdir(parents=True, exist_ok=True)
+
+    spec_path = None
+    plan_path = None
+
+    # Create spec.md from template if available
+    template_dir = Path(workdir) / "scripts" / "templates"
+    spec_template = template_dir / "spec_template.md"
+    if spec_template.exists():
+        content = spec_template.read_text(encoding="utf-8")
+        content = content.replace("{{TASK_NAME}}", task_name)
+        content = content.replace("{{SESSION_ID}}", session_id)
+        content = content.replace("{{TIMESTAMP}}", datetime.now().isoformat())
+        spec_path = specs_dir / "spec.md"
+        safe_write_text_locked(spec_path, content)
+    else:
+        # Create minimal spec
+        spec_path = specs_dir / "spec.md"
+        content = f"""# Spec: {task_name}
+
+> Generated: {datetime.now().isoformat()}
+> Session: {session_id}
+
+## User Stories
+
+### Story 1: {task_name}
+**As a** [user type]
+**I want** [goal]
+**So that** [benefit]
+
+**Acceptance Criteria:**
+- [ ] Criterion 1: [verifiable outcome]
+- [ ] Criterion 2: [verifiable outcome]
+
+## Success Criteria
+
+- [ ] **SC-1:** [Measurable outcome with specific metrics]
+
+## Constraints
+
+- **Tech Stack:** [e.g., Python 3.11+]
+- **Performance:** [e.g., <100ms latency]
+"""
+        safe_write_text_locked(spec_path, content)
+
+    # Create plan.md from template if available
+    plan_template = template_dir / "plan_template.md"
+    if plan_template.exists():
+        content = plan_template.read_text(encoding="utf-8")
+        content = content.replace("{{TASK_NAME}}", task_name)
+        content = content.replace("{{SESSION_ID}}", session_id)
+        content = content.replace("{{FEATURE_ID}}", feature_id)
+        content = content.replace("{{TIMESTAMP}}", datetime.now().isoformat())
+        plan_path = specs_dir / "plan.md"
+        safe_write_text_locked(plan_path, content)
+    else:
+        # Create minimal plan
+        plan_path = specs_dir / "plan.md"
+        content = f"""# Plan: {task_name}
+
+> **Provenance Header**
+> Generated-By: agentic-workflow
+> Session: {session_id}
+> Source-Spec: .specs/{feature_id}/spec.md
+> Timestamp: {datetime.now().isoformat()}
+
+---
+
+## Technical Context
+
+### Project Overview
+{task_description[:200]}
+
+### Technology Stack
+- **Language:** Python 3.11+
+- **Framework:** TBD
+
+---
+
+## Structure Decisions
+
+### Directory Structure
+```
+/
+├── src/
+├── tests/
+└── docs/
+```
+
+---
+
+## Constraints
+
+- [ ] **Tech Stack:** Python 3.11+
+- [ ] **Performance:** TBD
+
+---
+
+## Output Artifacts
+
+| Artifact | Source | Description |
+|----------|--------|-------------|
+| `.contract.json` | plan.md | Machine-readable contract |
+| `tasks.md` | plan.md | Task breakdown |
+
+---
+
+*This plan is generated from spec.md and drives task decomposition.*
+"""
+        safe_write_text_locked(plan_path, content)
+
+    return spec_path, plan_path
+
+
 def _phase_display_name(trigger_type: str, phase: str) -> str:
     if trigger_type == "DIRECT_ANSWER":
         return "DIRECT_ANSWER"
@@ -499,6 +629,106 @@ def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
     return tasks
 
 
+def parse_tasks_md(workdir: str = ".") -> List[Dict[str, Any]]:
+    """
+    Parse tasks.md (spec-kit style) from .specs/<feature_id>/tasks.md.
+
+    Returns structured tasks with owned_files, dependencies, and verification.
+
+    Supports the format:
+    - [ ] **TASK-US1-1:** Title [P]
+      - **Files:** `file1.py`, `file2.py`
+      - **Verification:** `[P]` pytest tests/ -v
+      - **Blocked-By:** TASK-US1-2
+    """
+    # Find the most recent .specs/<feature_id>/tasks.md
+    specs_dir = Path(workdir) / ".specs"
+    if not specs_dir.exists():
+        return []
+
+    # Get the most recent feature directory
+    feature_dirs = sorted(specs_dir.glob("*/"), key=lambda p: p.stat().st_mtime, reverse=True)
+    tasks_path = None
+    for feature_dir in feature_dirs:
+        tp = feature_dir / "tasks.md"
+        if tp.exists():
+            tasks_path = tp
+            break
+
+    if not tasks_path or not tasks_path.exists():
+        return []
+
+    tasks: List[Dict[str, Any]] = []
+    current_section = None
+
+    # Patterns for parsing
+    task_pattern = re.compile(r"^- \[\] \*\*(TASK-[^:]+):\*\* ([^\[]+)(?:\[P\])?")
+    file_pattern = re.compile(r"\*\*Files:\*\*\s*`?([^`]+)`?")
+    verification_pattern = re.compile(r"\*\*Verification:\*\*\s*(?:\[P\]\s*)?([^\n]+)")
+    blocked_by_pattern = re.compile(r"\*\*Blocked-By:\*\*\s*([^\n]+)")
+    section_pattern = re.compile(r"^## (.+)$")
+
+    current_task: Optional[Dict[str, Any]] = None
+
+    for line in tasks_path.read_text(encoding="utf-8").splitlines():
+        line = line.rstrip()
+
+        # Check for section headers
+        section_match = section_pattern.match(line)
+        if section_match:
+            current_section = section_match.group(1)
+            continue
+
+        # Try to match task line
+        task_match = task_pattern.match(line)
+        if task_match:
+            if current_task:
+                tasks.append(current_task)
+
+            task_id = task_match.group(1)
+            title = task_match.group(2).strip()
+
+            # Determine priority from section or task ID
+            priority = "P1"
+            if current_section in ("Setup", "Foundational"):
+                priority = "P0"
+            elif current_section == "Polish":
+                priority = "P2"
+
+            current_task = {
+                "id": task_id,
+                "title": title,
+                "status": "backlog",
+                "priority": priority,
+                "owned_files": [],
+                "dependencies": [],
+                "verification": "",
+                "section": current_section,
+            }
+            continue
+
+        # Parse fields for current task
+        if current_task:
+            file_match = file_pattern.search(line)
+            if file_match:
+                files_str = file_match.group(1)
+                current_task["owned_files"] = [f.strip() for f in files_str.split(",")]
+
+            verification_match = verification_pattern.search(line)
+            if verification_match:
+                current_task["verification"] = verification_match.group(1).strip()
+
+            blocked_match = blocked_by_pattern.search(line)
+            if blocked_match:
+                deps_str = blocked_match.group(1).strip()
+                current_task["dependencies"] = [d.strip() for d in deps_str.split(",")]
+
+    if current_task:
+        tasks.append(current_task)
+
+    return tasks
+
+
 def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
     """
     获取下一个应该执行的任务列表
@@ -509,7 +739,10 @@ def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
     - 状态 (只选 backlog 的)
     """
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, None: 9}
-    all_tasks = parse_task_plan(workdir)
+    # Prefer tasks.md (spec-kit style) over task_plan.md when available
+    all_tasks = parse_tasks_md(workdir)
+    if not all_tasks:
+        all_tasks = parse_task_plan(workdir)
     completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
 
     candidates = []
@@ -1137,14 +1370,27 @@ def initialize_workflow(
 
     plan_path: Optional[Path] = None
     contract_path: Optional[Path] = None
+    spec_path: Optional[Path] = None
     if auto_create_plan and current_phase == "PLANNING":
         plan_path = _create_plan_from_template(prompt, workdir)
         if plan_path is not None:
             # Register plan artifact (authoritative tracking via registry only)
             register_artifact(workdir, ArtifactType.PLAN, str(plan_path), current_phase, "system")
-        # Create Anthropic-style phase contract
+
+        # Create spec.md and plan.md in .specs/<feature_id>/ directory
         task_title = state.task.title if state.task else prompt[:50]
         task_desc = state.task.description if state.task else prompt
+        spec_path, plan_md_path = _create_spec_artifacts(
+            task_title, task_desc, workdir, state.session_id
+        )
+        if spec_path is not None:
+            register_artifact(workdir, ArtifactType.CUSTOM, str(spec_path), current_phase, "system",
+                           metadata={"deliverable": "spec", "type": "spec.md"})
+        if plan_md_path is not None:
+            register_artifact(workdir, ArtifactType.CUSTOM, str(plan_md_path), current_phase, "system",
+                           metadata={"deliverable": "plan", "type": "plan.md"})
+
+        # Create Anthropic-style phase contract
         contract_path = _create_phase_contract(task_title, task_desc, workdir)
         if contract_path is not None:
             register_artifact(workdir, "contract", str(contract_path), current_phase, "system",
