@@ -2433,6 +2433,7 @@ def main() -> int:
     parser.add_argument("--error", help="error message for handle-failure")
     parser.add_argument("--strategy", default="retry", choices=["retry", "debugging", "abort"], help="failure handling strategy")
     parser.add_argument("--max-retries", type=int, default=3, help="max retry count")
+    parser.add_argument("--use-real-agent", action="store_true", help="use real AI subagents in team-run (requires claude CLI)")
     args = parser.parse_args()
 
     if args.op == "init":
@@ -2566,7 +2567,13 @@ def main() -> int:
 
         # Create and run team - tasks come from frontier/contract, not hardcoded
         phase_name = state.phase.get("current", "EXECUTING") if state and state.phase else "EXECUTING"
-        team = TeamAgent(args.workdir, task=task_title, contract=contract, frontier=frontier)
+        team = TeamAgent(
+            args.workdir,
+            task=task_title,
+            contract=contract,
+            frontier=frontier,
+            use_real_agent=getattr(args, 'use_real_agent', False),
+        )
         team_result = team.run(phase=phase_name, register_artifacts=True)
 
         print(json.dumps({
@@ -2574,6 +2581,7 @@ def main() -> int:
             "tasks_completed": team_result["tasks_completed"],
             "tasks_failed": team_result["tasks_failed"],
             "outputs": team_result["outputs"],
+            "used_real_agent": getattr(args, 'use_real_agent', False),
         }, ensure_ascii=False, indent=2))
         return 0
 

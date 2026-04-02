@@ -37,6 +37,21 @@ import search_adapter
 from safe_io import safe_write_text_locked
 from unified_state import register_artifact
 
+# Optional real agent runner (lazy import to avoid hard dependency)
+_subagent_runner = None
+
+
+def _get_subagent_runner():
+    """Lazy-load SubAgentRunner to avoid circular imports."""
+    global _subagent_runner
+    if _subagent_runner is None:
+        try:
+            from subagent_runner import SubAgentRunner
+            _subagent_runner = SubAgentRunner
+        except ImportError:
+            _subagent_runner = False  # Not available
+    return _subagent_runner
+
 
 # ============================================================================
 # Worker Type Definitions
@@ -145,10 +160,11 @@ class WorkerAgent:
     - Debugger: 调试修复
     """
 
-    def __init__(self, worker_type: WorkerType, workdir: str = "."):
+    def __init__(self, worker_type: WorkerType, workdir: str = ".", use_real_agent: bool = False):
         self.worker_type = worker_type
         self.workdir = Path(workdir)
         self.session_id = f"{worker_type.value}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        self.use_real_agent = use_real_agent
 
     def execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> WorkerResult:
         """
@@ -219,8 +235,22 @@ class WorkerAgent:
 
     def _do_code(self, task: str, context: Optional[Dict[str, Any]]) -> tuple[str, List[str]]:
         """Coder worker: 代码实现 (生成代码片段/建议)"""
-        # 注意: 实际代码实现由 EXECUTING phase 负责
-        # 这里只生成实现建议
+        # 如果 use_real_agent，使用 SubAgentRunner 执行真实 AI
+        if self.use_real_agent:
+            SubAgentRunner = _get_subagent_runner()
+            if SubAgentRunner:
+                runner = SubAgentRunner(workdir=str(self.workdir))
+                result = runner.run(
+                    phase="EXECUTING",
+                    task=task,
+                    session_id=self.session_id,
+                    context=context,
+                )
+                if result.success:
+                    return result.output, result.artifacts
+                # Fall through to template if real agent failed
+
+        # 默认: 生成实现建议模板
         output = f"# Code Implementation Plan\n\nTask: {task}\n\n"
 
         if context and context.get("owned_files"):
@@ -304,6 +334,7 @@ class TeamAgent:
         task: Optional[str] = None,
         contract: Optional[Dict[str, Any]] = None,
         frontier: Optional[Dict[str, Any]] = None,
+        use_real_agent: bool = False,
     ):
         self.workdir = Path(workdir)
         self.task = task or "Untitled task"
@@ -312,6 +343,7 @@ class TeamAgent:
         self.session_id = f"team-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self.tasks: Dict[str, TeamTask] = {}
         self.messages: List[TeamMessage] = []
+        self.use_real_agent = use_real_agent
 
     def add_task(self, description: str, worker_type: Optional[WorkerType] = None) -> str:
         """添加任务"""
@@ -343,7 +375,7 @@ class TeamAgent:
         if not task.assigned_worker:
             raise ValueError(f"Task {task_id} has no assigned worker")
 
-        worker = WorkerAgent(task.assigned_worker, str(self.workdir))
+        worker = WorkerAgent(task.assigned_worker, str(self.workdir), use_real_agent=self.use_real_agent)
         result = worker.execute(task.description, context=self.contract)
 
         task.result = result

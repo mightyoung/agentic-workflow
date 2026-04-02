@@ -334,6 +334,7 @@ class ExecutionLoop:
         self,
         workdir: str = ".",
         config: Optional[LoopConfig] = None,
+        use_real_agent: bool = False,
     ):
         self.workdir = Path(workdir)
         self.config = config or LoopConfig()
@@ -342,6 +343,8 @@ class ExecutionLoop:
         self._phase_steps: Dict[str, int] = {}  # phase -> step count
         self._start_time: Optional[float] = None
         self._current_phase: str = "IDLE"
+        self.use_real_agent = use_real_agent
+        self._subagent_runner = None
 
     def _should_stop(self) -> Tuple[bool, str]:
         """
@@ -690,9 +693,12 @@ class ExecutionLoop:
         Returns:
             LoopResult
         """
-        # 默认执行器
+        # 选择执行器：用户提供的 > 真实AI > 模拟
         if executor is None:
-            executor = self._default_executor
+            if self.use_real_agent:
+                executor = self._real_executor
+            else:
+                executor = self._default_executor
 
         # 根据模式执行
         if self.config.mode == LoopMode.ITERATIVE:
@@ -716,6 +722,48 @@ class ExecutionLoop:
         time.sleep(0.1)  # 模拟执行
 
         step.observation = f"{phase} 执行完成"
+        return step
+
+    def _get_real_executor(self):
+        """Get or create a real executor using SubAgentRunner."""
+        if self._subagent_runner is not None:
+            return self._subagent_runner
+
+        try:
+            from subagent_runner import SubAgentRunner
+            self._subagent_runner = SubAgentRunner(workdir=str(self.workdir))
+        except ImportError:
+            self._subagent_runner = None
+        return self._subagent_runner
+
+    def _real_executor(self, phase: str, step: LoopStep) -> LoopStep:
+        """Real executor using SubAgentRunner for actual AI execution."""
+        runner = self._get_real_executor()
+        if runner is None:
+            step.observation = "SubAgentRunner not available - falling back to mock"
+            return self._default_executor(phase, step)
+
+        # Use step.action as the task
+        task = step.action or step.thought or f"Execute {phase}"
+
+        try:
+            result = runner.run(
+                phase=phase,
+                task=task,
+                session_id=step.step_id,
+            )
+            if result.success:
+                step.observation = result.output
+                step.status = StepStatus.COMPLETED
+            else:
+                step.observation = f"Error: {result.error}"
+                step.status = StepStatus.FAILED
+                step.error = result.error
+        except Exception as e:
+            step.observation = f"Exception: {str(e)}"
+            step.status = StepStatus.FAILED
+            step.error = str(e)
+
         return step
 
     def get_trajectory(self) -> Dict[str, Any]:
