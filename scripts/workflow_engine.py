@@ -36,6 +36,12 @@ from unified_state import (
 )
 from skill_loader import load_skill, SkillPromptFormatter
 from team_agent import TeamAgent
+from contract_manager import (
+    _create_phase_contract,
+    parse_phase_contract,
+    update_contract_json,
+    validate_contract_gate,
+)
 
 # 存储当前活跃的 TrajectoryLogger 实例
 _active_loggers: Dict[str, TrajectoryLogger] = {}
@@ -242,101 +248,6 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
 """
         safe_write_text_locked(destination, content)
         return destination
-
-
-def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path:
-    """
-    Create a phase contract artifact (Anthropic-style written contract).
-
-    This artifact establishes explicit negotiated agreement between planner and executor:
-    - Goals for this phase/sprint
-    - Verification methods (how to know when done)
-    - Owned files (what will be produced/modified)
-    - Failure threshold (when to abort/retry)
-
-    Produced by PLANNING, consumed by EXECUTING and REVIEWING.
-
-    Creates two files:
-    - phase_contract.md: Human-readable contract
-    - .contract.json: Machine-readable structured contract (authoritative)
-    """
-    contract_path = Path(workdir) / "phase_contract.md"
-    json_contract_path = Path(workdir) / ".contract.json"
-
-    # If both exist, contract is already created
-    if contract_path.exists() and json_contract_path.exists():
-        return contract_path
-
-    # Create machine-readable JSON contract (authoritative)
-    json_contract = {
-        "version": "1.0",
-        "task": task_name,
-        "description": task_desc,
-        "created": datetime.now().isoformat(),
-        "goals": [],
-        "verification_methods": [],
-        "owned_files": [],
-        "failure_threshold": {
-            "hard_failure": [],
-            "soft_failure": [],
-            "retry_strategy": "max_3_retries",
-        },
-        "status": "draft",  # draft -> active -> fulfilled -> broken
-    }
-
-    # Write JSON contract
-    import json
-    safe_write_text_locked(json_contract_path, json.dumps(json_contract, indent=2, ensure_ascii=False))
-
-    # Create human-readable markdown contract
-    content = f"""# Phase Contract
-
-## Session
-- Task: {task_name}
-- Description: {task_desc}
-- Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Goals
-
-- [ ] Goal 1: (to be filled by planner)
-
-## Verification Methods
-
-How will we know the goals are achieved?
-
-1. **Automated verification**: (e.g., `pytest tests/`, `python3 -m mypy`)
-2. **Manual verification**: (e.g., code review, integration test)
-3. **Success criteria**: (e.g., all tests pass, no type errors)
-
-## Owned Files
-
-Files to be produced or modified:
-
-- `src/` (list specific files if known)
-
-## Failure Threshold
-
-When should we abort or escalate?
-
-- **Hard failure**: (e.g., quality gate fails, P0 tasks incomplete)
-- **Soft failure**: (e.g., P1 tasks incomplete, warnings present)
-- **Retry strategy**: (e.g., max 3 retries before escalating)
-
-## Review Contract
-
-REVIEWING phase will validate:
-
-1. All verification methods pass
-2. Owned files match actual changes
-3. No hard failures detected
-4. Code quality meets baseline standards
-
----
-*This contract is negotiated during PLANNING phase and binding for EXECUTING and REVIEWING.*
-*Machine-readable contract: .contract.json*
-"""
-    safe_write_text_locked(contract_path, content)
-    return contract_path
 
 
 def _phase_display_name(trigger_type: str, phase: str) -> str:
