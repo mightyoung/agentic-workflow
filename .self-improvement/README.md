@@ -30,3 +30,4 @@ run_id=<timestamp> hypothesis=<what> files_changed=<paths> checks_passed=<summar
 - Prefer Zone B changes before Zone A
 - Roll back immediately on hard gate failure
 - Record every run in the ledger
+e2e test record
