@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 
 @dataclass
@@ -71,6 +71,7 @@ class AnalyzeGate:
 
         # Run all validations
         self._check_spec_exists(result)
+        self._check_needs_clarification(result)
         self._check_tasks_has_provenance(result)
         self._check_story_task_mapping(result)
         self._check_p0_p1_has_verification(result)
@@ -97,6 +98,47 @@ class AnalyzeGate:
         # Check for placeholder content
         if "[Title]" in content or "[Task title]" in content:
             result.add_warning(f"spec.md at {spec_file} still has placeholder content. Fill in actual details.")
+
+    def _check_needs_clarification(self, result: AnalyzeResult) -> None:
+        """Check if spec.md needs clarification (ambiguous or incomplete)."""
+        spec_dirs = list(self.specs_dir.glob("*/spec.md"))
+        if not spec_dirs:
+            return  # Already reported by _check_spec_exists
+
+        spec_file = spec_dirs[0]
+        content = spec_file.read_text(encoding="utf-8")
+
+        # Check for explicit NEEDS CLARIFICATION marker
+        if "[NEEDS CLARIFICATION]" in content or "[needs clarification]" in content.lower():
+            result.add_error("spec.md contains [NEEDS CLARIFICATION] marker. Clarify requirements before proceeding.")
+
+        # Check for empty acceptance criteria (after Story N: but before next section)
+        story_blocks = re.split(r"### Story \d+:", content)
+        for i, block in enumerate(story_blocks[1:], start=1):  # Skip first (intro content)
+            # Find acceptance criteria in this block
+            acceptance_match = re.search(r"\*\*Acceptance Criteria:\*\*\s*\n((?:\s*-\s*[^\n]+\n)+)", block)
+            if acceptance_match:
+                criteria_text = acceptance_match.group(1)
+                # Check if all criteria are placeholders
+                if all(
+                    re.match(r"^\s*-\s*\[?\s*[xX ]?\s*\]?\s*\[?[^\]]*\]?\s*$", line) or
+                    re.search(r"\[verifiable outcome\]", line, re.IGNORECASE)
+                    for line in criteria_text.split("\n") if line.strip()
+                ):
+                    result.add_error(f"User Story {i} has only placeholder acceptance criteria. Provide real criteria.")
+            else:
+                # No acceptance criteria found - check if this looks like a real story
+                # (has As a / I want / So that)
+                if re.search(r"\*\*As a\*\*", block) and not re.search(r"\*\*Acceptance Criteria:\*\*", block):
+                    result.add_error(f"User Story {i} is missing acceptance criteria. Add concrete, testable criteria.")
+
+        # Check for ambiguous phrases
+        ambiguous_phrases = ["TBD", "to be determined", "to be decided", "flexible", "optional"]
+        for phrase in ambiguous_phrases:
+            if phrase.lower() in content.lower():
+                # Only error if in critical sections (User Stories, Success Criteria)
+                if "user story" in content.lower() or "success criteria" in content.lower():
+                    result.add_warning(f"spec.md contains '{phrase}' - clarify for precise requirements.")
 
     def _check_tasks_has_provenance(self, result: AnalyzeResult) -> None:
         """Check that tasks.md has provenance header."""
@@ -239,6 +281,178 @@ class AnalyzeGate:
         for dir_path, files in dir_to_files.items():
             if len(files) > 3:
                 result.add_warning(f"Directory {dir_path} has {len(files)} files claimed. Ensure conflicts are intentional.")
+
+
+def generate_spec_checklist(workdir: str = ".") -> Dict[str, Any]:
+    """
+    Generate a checklist for spec/plan validation.
+
+    Returns a dict with:
+    - spec_checklist: list of (criterion, passed, details) tuples
+    - plan_checklist: list of (criterion, passed, details) tuples
+    - overall_score: float (0.0 to 1.0)
+    - recommendations: list of strings
+    """
+    gate = AnalyzeGate(workdir)
+    result = gate.validate()
+
+    checklist = {
+        "spec_checklist": [],
+        "plan_checklist": [],
+        "overall_score": 1.0 if result.passed else 0.0,
+        "recommendations": [],
+    }
+
+    # Spec quality criteria
+    spec_dirs = list(Path(workdir).glob(".specs/*/spec.md"))
+    if spec_dirs:
+        spec_content = spec_dirs[0].read_text(encoding="utf-8")
+
+        # Check 1: Has user stories
+        has_stories = bool(re.search(r"### Story \d+:", spec_content))
+        checklist["spec_checklist"].append({
+            "criterion": "Has user stories",
+            "passed": has_stories,
+            "details": f"Found {len(re.findall(r'### Story \d+:', spec_content))} user stories" if has_stories else "No user stories found",
+        })
+
+        # Check 2: User stories have acceptance criteria
+        story_blocks = re.split(r"### Story \d+:", spec_content)
+        stories_with_criteria = 0
+        for block in story_blocks[1:]:
+            if re.search(r"\*\*Acceptance Criteria:\*\*", block):
+                stories_with_criteria += 1
+        checklist["spec_checklist"].append({
+            "criterion": "Stories have acceptance criteria",
+            "passed": stories_with_criteria == len(story_blocks) - 1,
+            "details": f"{stories_with_criteria}/{len(story_blocks) - 1} stories have acceptance criteria",
+        })
+
+        # Check 3: Has success criteria
+        has_sc = bool(re.search(r"## Success Criteria", spec_content, re.IGNORECASE))
+        checklist["spec_checklist"].append({
+            "criterion": "Has success criteria",
+            "passed": has_sc,
+            "details": "Has Success Criteria section" if has_sc else "No Success Criteria section found",
+        })
+
+        # Check 4: No placeholder titles
+        has_placeholders = "[Title]" in spec_content or "[Task title]" in spec_content
+        checklist["spec_checklist"].append({
+            "criterion": "No placeholder content",
+            "passed": not has_placeholders,
+            "details": "Contains placeholders" if has_placeholders else "No placeholders found",
+        })
+
+        # Check 5: Has constraints or assumptions
+        has_constraints = bool(re.search(r"## (Constraints|Assumptions)", spec_content, re.IGNORECASE))
+        checklist["spec_checklist"].append({
+            "criterion": "Has constraints/assumptions",
+            "passed": has_constraints,
+            "details": "Has Constraints or Assumptions section" if has_constraints else "No constraints/assumptions found",
+        })
+
+    # Calculate score
+    if checklist["spec_checklist"]:
+        passed = sum(1 for c in checklist["spec_checklist"] if c["passed"])
+        total = len(checklist["spec_checklist"])
+        checklist["overall_score"] = passed / total if total > 0 else 0.0
+
+    # Generate recommendations based on failures
+    for item in checklist["spec_checklist"]:
+        if not item["passed"]:
+            checklist["recommendations"].append(f"Fix: {item['criterion']} - {item['details']}")
+
+    return checklist
+
+
+def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dict[str, Any]:
+    """
+    Check for drift between repo SKILL.md and installed SKILL.md.
+
+    Args:
+        repo_skill_path: Path to the repo's SKILL.md
+        installed_skill_path: Path to the installed skill's SKILL.md
+
+    Returns:
+        Dict with:
+        - has_drift: bool
+        - drift_details: list of (field, repo_value, installed_value) tuples
+        - repo_hash: str (hash of repo version)
+        - installed_hash: str (hash of installed version)
+    """
+    import hashlib
+
+    def hash_file(path: str) -> str:
+        """Compute SHA256 hash of a file."""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return hashlib.sha256(content.encode()).hexdigest()[:12]
+        except (OSError, IOError):
+            return "not-found"
+
+    result = {
+        "has_drift": False,
+        "drift_details": [],
+        "repo_hash": hash_file(repo_skill_path),
+        "installed_hash": hash_file(installed_skill_path),
+    }
+
+    try:
+        with open(repo_skill_path, "r", encoding="utf-8") as f:
+            repo_content = f.read()
+        with open(installed_skill_path, "r", encoding="utf-8") as f:
+            installed_content = f.read()
+
+        if repo_content != installed_content:
+            result["has_drift"] = True
+
+            # Compare key sections
+            repo_lines = repo_content.split("\n")
+            installed_lines = installed_content.split("\n")
+
+            # Check for missing sections
+            repo_sections = set()
+            installed_sections = set()
+            for line in repo_lines:
+                if line.startswith("# ") and len(line) > 2:
+                    repo_sections.add(line[2:].strip())
+            for line in installed_lines:
+                if line.startswith("# ") and len(line) > 2:
+                    installed_sections.add(line[2:].strip())
+
+            missing_in_installed = repo_sections - installed_sections
+            extra_in_installed = installed_sections - repo_sections
+
+            if missing_in_installed:
+                result["drift_details"].append({
+                    "type": "missing_sections",
+                    "details": f"Sections in repo but not installed: {', '.join(missing_in_installed)}",
+                })
+            if extra_in_installed:
+                result["drift_details"].append({
+                    "type": "extra_sections",
+                    "details": f"Sections in installed but not repo: {', '.join(extra_in_installed)}",
+                })
+
+            # Check version field
+            repo_version = re.search(r"version:\s*(\d+\.\d+\.\d+)", repo_content)
+            installed_version = re.search(r"version:\s*(\d+\.\d+\.\d+)", installed_content)
+            if repo_version and installed_version:
+                if repo_version.group(1) != installed_version.group(1):
+                    result["drift_details"].append({
+                        "type": "version_mismatch",
+                        "details": f"Repo version {repo_version.group(1)} vs installed {installed_version.group(1)}",
+                    })
+
+    except (OSError, IOError) as e:
+        result["drift_details"].append({
+            "type": "read_error",
+            "details": str(e),
+        })
+
+    return result
 
 
 def validate_analyze_gate(workdir: str = ".") -> AnalyzeResult:
