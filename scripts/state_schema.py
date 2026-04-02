@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Unified State Schema - 统一状态Schema定义
+Unified State Schema - Unified Workflow Schema Definition
 
-定义了workflow的核心数据类型和验证规则。
-所有状态文件必须符合此schema。
+Defines core data types and validation rules for the workflow system.
+All state files must conform to this schema.
 
-Schema版本: 1.0
+Schema Version: 1.0
 """
 
 from __future__ import annotations

@@ -1957,7 +1957,7 @@ def log_workflow_decision(
     decision: str,
     reason: str = "",
 ) -> Dict[str, Any]:
-    """记录工作流决策到 trajectory"""
+    """Log workflow decision to trajectory"""
     state = load_state(workdir)
     if state is None:
         raise ValueError("workflow state not found")
@@ -1975,7 +1975,7 @@ def log_workflow_file_change(
     file_path: str,
     action: str,
 ) -> Dict[str, Any]:
-    """记录文件变更到 trajectory"""
+    """Log file change to trajectory"""
     state = load_state(workdir)
     if state is None:
         raise ValueError("workflow state not found")

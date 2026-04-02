@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Unified State Management - 统一状态管理
+Unified State Management
 
-基于state_schema.py定义的统一schema进行状态管理。
-提供单一真相来源，减少markdown解析的脆弱性。
+Manages workflow state based on the unified schema defined in state_schema.py.
+Provides a single source of truth, reducing fragility from markdown parsing.
 """
 
 from __future__ import annotations

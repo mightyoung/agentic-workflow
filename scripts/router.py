@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Router - 路由决策辅助工具
+Router - Routing Decision Assistant
 
-支持两种路由模式:
-1. 语义路由 (Semantic Router) - 使用嵌入向量相似度
-2. 关键词路由 (Keyword Router) - 轻量级关键词匹配
+Supports two routing modes:
+1. Semantic Router - Uses embedding similarity
+2. Keyword Router - Lightweight keyword matching
 
-行为顺序：
-1. 负面触发过滤，直接走 DIRECT_ANSWER
-2. 强制触发词，直接走 FULL_WORKFLOW
-3. 语义路由 (如果可用且置信度足够)
-4. 关键词路由作为降级方案
-5. 无匹配时默认 EXECUTING
+Behavior order:
+1. Negative trigger filter -> DIRECT_ANSWER
+2. Force trigger -> FULL_WORKFLOW
+3. Semantic routing (if available and confidence sufficient)
+4. Keyword routing as fallback
+5. Default to EXECUTING if no match
 
-用法:
-    python3 router.py "用户消息"
-    python3 router.py --semantic "用户消息"  # 强制使用语义路由
+Usage:
+    python3 router.py "user message"
+    python3 router.py --semantic "user message"  # Force semantic routing
 """
 
 import re
