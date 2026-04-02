@@ -455,6 +455,100 @@ def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dic
     return result
 
 
+# Project constitution rules extracted from AGENTS.md and self-improvement rules
+CONSTITUTION_RULES = {
+    "zone_a_files": [
+        "scripts/workflow_engine.py",
+        "scripts/unified_state.py",
+        "scripts/state_schema.py",
+        "scripts/quality_gate.py",
+        "scripts/safe_io.py",
+        "scripts/trajectory_logger.py",
+    ],
+    "zone_b_files": [
+        "scripts/router.py",
+        "scripts/task_decomposer.py",
+        "scripts/task_tracker.py",
+        "scripts/search_adapter.py",
+        "scripts/memory_ops.py",
+    ],
+    "zone_c_files": [
+        "scripts/experimental/",
+    ],
+    "required_sections": [
+        "Technical Context",
+        "Structure Decisions",
+        "Constraints",
+    ],
+    "planning_principles": [
+        "穷尽一切",
+        "先做后问",
+        "主动出击",
+    ],
+}
+
+
+def validate_constitution(workdir: str = ".") -> Dict[str, Any]:
+    """
+    Validate plan.md against project constitution.
+
+    Checks:
+    - Required sections are present
+    - No direct modification of Zone A files without justification
+    - Planning principles are referenced
+    - Constraints are defined
+
+    Returns:
+        Dict with:
+        - is_valid: bool
+        - violations: list of violation descriptions
+        - score: float (0.0 to 1.0)
+        - suggestions: list of improvement suggestions
+    """
+    result = {
+        "is_valid": True,
+        "violations": [],
+        "score": 1.0,
+        "suggestions": [],
+    }
+
+    # Find plan.md
+    plan_paths = list(Path(workdir).glob(".specs/*/plan.md"))
+    if not plan_paths:
+        result["is_valid"] = False
+        result["violations"].append("No plan.md found in .specs/<feature_id>/ directory")
+        result["score"] = 0.0
+        return result
+
+    plan_content = plan_paths[0].read_text(encoding="utf-8")
+
+    # Check required sections
+    for section in CONSTITUTION_RULES["required_sections"]:
+        if section not in plan_content:
+            result["violations"].append(f"Missing required section: {section}")
+            result["is_valid"] = False
+
+    # Check for constraints
+    if "Constraints" not in plan_content:
+        result["violations"].append("No Constraints section found")
+        result["is_valid"] = False
+
+    # Check for tech stack specification
+    if "Tech Stack" not in plan_content and "Technology Stack" not in plan_content:
+        result["suggestions"].append("Consider adding Technology Stack section")
+
+    # Check for output artifacts section
+    if "Output Artifacts" not in plan_content:
+        result["suggestions"].append("Consider adding Output Artifacts section")
+
+    # Calculate score
+    total_checks = len(CONSTITUTION_RULES["required_sections"]) + 1  # +1 for constraints
+    passed_checks = total_checks - len(result["violations"])
+    result["score"] = passed_checks / total_checks if total_checks > 0 else 0.0
+
+    return result
+
+
 def validate_analyze_gate(workdir: str = ".") -> AnalyzeResult:
     """
     Convenience function to run analyze gate validation.

@@ -780,8 +780,13 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
     - executable_frontier: backlog tasks with all dependencies satisfied
     - parallel_candidates: within frontier, tasks WITHOUT ownership conflicts can run concurrently (parallel-ready, not yet parallel execution)
     - conflict_groups: tasks with overlapping owned_files that must be serialized
+
+    Prefers tasks.md (spec-kit style) over task_plan.md when available for richer owned_files semantics.
     """
-    all_tasks = parse_task_plan(workdir)
+    # Prefer tasks.md (spec-kit style) over task_plan.md when available
+    all_tasks = parse_tasks_md(workdir)
+    if not all_tasks:
+        all_tasks = parse_task_plan(workdir)
     if not all_tasks:
         return {
             "executable_frontier": [],
