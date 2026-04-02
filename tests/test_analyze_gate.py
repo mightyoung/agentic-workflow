@@ -5,8 +5,8 @@ Tests for analyze_gate module.
 
 import json
 import os
-import sys
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from analyze_gate import AnalyzeGate, validate_analyze_gate
+from analyze_gate import AnalyzeGate, validate_analyze_gate  # noqa: E402
 
 
 class TestAnalyzeGate(unittest.TestCase):
