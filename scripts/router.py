@@ -24,6 +24,11 @@ from typing import Optional, Tuple
 
 # 路由关键词配置
 ROUTE_KEYWORDS = {
+    "ANALYZING": [
+        "分析需求", "需求分析", "分析一下", "分析这个",
+        "需求梳理", "梳理需求", "理解需求", "需求理解",
+        "analyze", "analysis", "需求"
+    ],
     "RESEARCH": [
         "帮我搜索", "查找最佳实践", "调研一下", "调研", "搜索一下",
         "网络上搜索", "在网上搜索", "最佳实践", "有什么", "有哪些",
@@ -161,6 +166,7 @@ def detect_stage(text: str) -> str:
         "REFINING": 5,
         "EXPLORING": 5,
         "OFFICE_HOURS": 5,
+        "ANALYZING": 4,
         "THINKING": 4,
         "PLANNING": 3,
         "RESEARCH": 2,

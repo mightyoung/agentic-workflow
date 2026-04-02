@@ -1272,7 +1272,9 @@ def recommend_next_phases(current_phase: str, trigger_type: Optional[str] = None
     if current_phase == "DIRECT_ANSWER":
         return ["COMPLETE"]
     if current_phase == "PLANNING":
-        return ["EXECUTING", "RESEARCH", "THINKING"]
+        return ["ANALYZING", "EXECUTING", "RESEARCH", "THINKING"]
+    if current_phase == "ANALYZING":
+        return ["EXECUTING", "PLANNING"]
     if current_phase == "RESEARCH":
         return ["THINKING", "PLANNING"]
     if current_phase == "THINKING":
