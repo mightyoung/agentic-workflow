@@ -324,3 +324,38 @@ class TestNewPhases(unittest.TestCase):
         # Already in OFFICE_HOURS from routing
         result = workflow_engine.advance_workflow("PLANNING", workdir=self.temp_dir)
         self.assertEqual(result["phase"], "PLANNING")
+
+    def test_analyzing_phase_transition(self):
+        """Test ANALYZING phase is reachable and transitions correctly."""
+        workflow_engine.initialize_workflow("分析需求", workdir=self.temp_dir)
+        # Should route to ANALYZING automatically
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "ANALYZING")
+
+    def test_planning_to_analyzing_transition(self):
+        """Test PLANNING can transition to ANALYZING."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        result = workflow_engine.advance_workflow("ANALYZING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "ANALYZING")
+
+    def test_analyzing_to_executing_requires_analyze_gate(self):
+        """Test ANALYZING -> EXECUTING requires passing analyze gate."""
+        workflow_engine.initialize_workflow("分析需求", workdir=self.temp_dir)
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "ANALYZING")
+
+        # Without spec files, analyze gate should fail
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
+        self.assertIn("analyze gate failed", str(ctx.exception))
+
+    def test_analyze_gate_blocks_planning_to_executing(self):
+        """Test PLANNING -> EXECUTING is blocked without analyze gate."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        state = unified_state.load_state(self.temp_dir)
+        self.assertEqual(state.phase.get("current"), "PLANNING")
+
+        # Without going through ANALYZING, going directly to EXECUTING should still check gate
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
+        self.assertIn("analyze gate failed", str(ctx.exception))

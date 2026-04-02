@@ -18,29 +18,30 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import memory_ops
 import router
-import task_tracker
 import search_adapter
-from safe_io import safe_write_json, safe_write_text_locked
-from trajectory_logger import TrajectoryLogger
-from unified_state import (
-    create_initial_state,
-    load_state,
-    save_state,
-    transition_phase,
-    can_transition,
-    get_allowed_transitions,
-    workflow_state_path,
-    trajectory_dir_path,
-    register_artifact,
-    ArtifactType,
-)
-from skill_loader import load_skill, SkillPromptFormatter
-from team_agent import TeamAgent
+import task_tracker
+from analyze_gate import validate_analyze_gate
 from contract_manager import (
     _create_phase_contract,
     parse_phase_contract,
     update_contract_json,
     validate_contract_gate,
+)
+from safe_io import safe_write_json, safe_write_text_locked
+from skill_loader import SkillPromptFormatter, load_skill
+from team_agent import TeamAgent
+from trajectory_logger import TrajectoryLogger
+from unified_state import (
+    ArtifactType,
+    can_transition,
+    create_initial_state,
+    get_allowed_transitions,
+    load_state,
+    register_artifact,
+    save_state,
+    trajectory_dir_path,
+    transition_phase,
+    workflow_state_path,
 )
 
 # 存储当前活跃的 TrajectoryLogger 实例
@@ -105,7 +106,7 @@ def _generate_and_register_summary(
     Returns:
         Path to the summary file
     """
-    from unified_state import _load_artifact_registry, register_artifact, ArtifactType
+    from unified_state import ArtifactType, _load_artifact_registry, register_artifact
     registry = _load_artifact_registry(workdir)
     artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
 
@@ -204,7 +205,7 @@ def _generate_and_register_summary(
                 for t in tasks_with_qg[:5]:  # Limit to first 5
                     qg_passed = t.get("quality_gates_passed")
                     task_info += f"- {t.get('id')}: {'Passed' if qg_passed else 'Failed'}\n"
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     safe_write_text_locked(summary_path, task_info)
@@ -268,8 +269,8 @@ def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
         Dict with keys: goals (list), verification_methods (list),
         owned_files (list), failure_threshold (dict), review_contract (dict)
     """
-    import re
     import json as json_lib
+    import re
 
     # Try JSON contract first (authoritative)
     json_contract_path = Path(workdir) / ".contract.json"
@@ -779,7 +780,7 @@ def conditional_checkpoint(
     try:
         plan_tasks = parse_task_plan(workdir)
         next_tasks = next_plan_tasks(workdir)
-    except Exception as e:
+    except Exception:
         plan_tasks = []
         next_tasks = []
 
@@ -1203,6 +1204,16 @@ def advance_workflow(
             logger.log_decision(f"Transition: {current_phase} -> {phase}", note)
         logger.enter_phase(phase)
 
+    # Analyze gate validation: PLANNING/ANALYZING -> EXECUTING requires passing analyze gate
+    if phase == "EXECUTING" and current_phase in ("PLANNING", "ANALYZING"):
+        analyze_result = validate_analyze_gate(workdir)
+        if not analyze_result.passed:
+            errors_str = "; ".join(analyze_result.errors)
+            raise ValueError(f"analyze gate failed: {errors_str}")
+        # Log warnings but don't block
+        if analyze_result.warnings:
+            logger.warning(f"analyze gate warnings: {'; '.join(analyze_result.warnings)}") if state.session_id in _active_loggers else None
+
     # Transition phase using unified_state
     state = transition_phase(state, phase, reason=note or "advance_workflow")
 
@@ -1254,7 +1265,7 @@ def advance_workflow(
     # Register phase-specific business artifacts on phase EXIT (not entry)
     # This ensures artifacts represent completed work, not just entry into a phase
     # Artifacts are generated when LEAVING RESEARCH/REVIEWING, not when entering
-    from unified_state import register_artifact, ArtifactType
+    from unified_state import ArtifactType, register_artifact
     session_id = state.session_id or "unknown"
     if current_phase == "RESEARCH" and phase != "RESEARCH":
         # Generating findings when leaving RESEARCH phase (completing research work)
@@ -1986,7 +1997,7 @@ def resume_workflow(
     Returns:
         恢复结果
     """
-    from trajectory_logger import resume_from_point, list_trajectories
+    from trajectory_logger import list_trajectories, resume_from_point
 
     # 如果没有指定 session_id，找到最新的中断工作流
     if session_id is None:
@@ -2013,6 +2024,7 @@ def resume_workflow(
     if state is not None:
         # 记录恢复决策
         from datetime import datetime
+
         from state_schema import Decision
         state.decisions.append(Decision(
             timestamp=datetime.now().isoformat(),
@@ -2134,6 +2146,7 @@ def handle_workflow_failure(
         Handling result
     """
     from datetime import datetime
+
     from state_schema import Decision
 
     state = load_state(workdir)
