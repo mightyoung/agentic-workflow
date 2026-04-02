@@ -274,8 +274,8 @@ def decompose(
     ts = base_timestamp or datetime.now().strftime("%Y%m%d%H%M%S")
     tasks: list[DecomposedTask] = []
 
-    # 简单的基于关键词的任务拆分
-    # 实际实现应该使用LLM进行更智能的拆分
+    # 简单的基于关键词的任务拆分 - 仅作为fallback保留
+    # 优先使用 decompose_from_spec() 进行基于用户故事的智能拆分
     sections = _split_into_sections(prompt)
 
     for i, section in enumerate(sections):
