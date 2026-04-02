@@ -35,7 +35,7 @@ from typing import Any, TypedDict
 
 import search_adapter
 from safe_io import safe_write_text_locked
-from unified_state import register_artifact
+from unified_state import ArtifactType, register_artifact
 
 # Optional real agent runner (lazy import to avoid hard dependency)
 _subagent_runner = None
@@ -264,7 +264,14 @@ class WorkerAgent:
         output += "\n## Implementation Notes\n"
         output += "TDD approach recommended:\n1. Write failing test\n2. Implement minimal code\n3. Refactor\n"
 
-        return output, []
+        # Write code artifact
+        code_path = self.workdir / f"code_{self.session_id}.md"
+        safe_write_text_locked(code_path, output)
+        # Register artifact
+        register_artifact(str(self.workdir), ArtifactType.CODE, str(code_path), self.worker_type.value, "team-agent",
+                          metadata={"task": task, "session_id": self.session_id})
+
+        return output, [str(code_path)]
 
     def _do_review(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Reviewer worker: 代码审查"""
@@ -280,7 +287,14 @@ class WorkerAgent:
             for f in context["owned_files"]:
                 output += f"- {f}\n"
 
-        return output, []
+        # Write review artifact
+        review_path = self.workdir / f"review_{self.session_id}.md"
+        safe_write_text_locked(review_path, output)
+        # Register artifact
+        register_artifact(str(self.workdir), ArtifactType.REVIEW, str(review_path), self.worker_type.value, "team-agent",
+                          metadata={"task": task, "session_id": self.session_id})
+
+        return output, [str(review_path)]
 
     def _do_debug(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Debugger worker: 调试修复"""
@@ -295,7 +309,14 @@ class WorkerAgent:
         if context and context.get("error"):
             output += f"\n## Error Context\n{context['error']}\n"
 
-        return output, []
+        # Write debug artifact
+        debug_path = self.workdir / f"debug_{self.session_id}.md"
+        safe_write_text_locked(debug_path, output)
+        # Register artifact
+        register_artifact(str(self.workdir), ArtifactType.DEBUG, str(debug_path), self.worker_type.value, "team-agent",
+                          metadata={"task": task, "session_id": self.session_id})
+
+        return output, [str(debug_path)]
 
 
 # ============================================================================

@@ -47,6 +47,8 @@ class ArtifactType:
     PROGRESS = "progress"
     SESSION = "session"
     TRACKER = "tracker"
+    CODE = "code"
+    DEBUG = "debug"
     CUSTOM = "custom"
 
 

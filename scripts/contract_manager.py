@@ -64,14 +64,17 @@ def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path
         return contract_path
 
     # Create machine-readable JSON contract (authoritative)
-    json_contract = {
+    json_contract: dict[str, Any] = {
         "version": "1.0",
         "task": task_name,
         "description": task_desc,
         "created": datetime.now().isoformat(),
         "goals": [],
+        "goal_status": {},  # goal_id -> "pending" | "in_progress" | "fulfilled"
         "verification_methods": [],
+        "verification_results": {},  # method -> "passed" | "failed" | "not_run"
         "owned_files": [],
+        "review_evidence": None,  # path to review artifact if completed
         "failure_threshold": {
             "hard_failure": [],
             "soft_failure": [],
@@ -244,8 +247,11 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
     Checks:
     1. status != 'draft' (contract is active/fulfilled)
     2. If goals exist, they are not placeholder text
-    3. If owned_files exist, they match actual file_changes
-    4. If verification_methods exist, they are not placeholder text
+    3. If goals have goal_status, at least one is fulfilled
+    4. If owned_files exist, they match actual file_changes
+    5. If verification_methods exist, they are not placeholder text
+    6. If verification_results exist, at least one verification passed
+    7. If review_evidence is set, review was completed
 
     Args:
         workdir: Working directory
@@ -280,7 +286,14 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         if not has_real_goals:
             return False, "Contract goals are placeholders - fill in actual goals"
 
-    # Check 3: owned_files should match actual file_changes
+    # Check 3: If goal_status exists, at least one goal should be fulfilled
+    goal_status = contract.get("goal_status", {})
+    if goal_status:
+        fulfilled_goals = [g for g, s in goal_status.items() if s == "fulfilled"]
+        if not fulfilled_goals:
+            return False, "No goals marked as fulfilled - complete at least one goal before completing"
+
+    # Check 4: owned_files should match actual file_changes
     owned_files = contract.get("owned_files", [])
     if owned_files:
         actual_paths = set()
@@ -296,7 +309,7 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
             # Some owned files should match actual changes
             pass  # Currently permissive
 
-    # Check 4: verification_methods should not be placeholders
+    # Check 5: verification_methods should not be placeholders
     verification_methods = contract.get("verification_methods", [])
     if verification_methods:
         has_real_verification = any(
@@ -305,5 +318,19 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         )
         if not has_real_verification:
             return False, "Contract verification_methods are placeholders"
+
+    # Check 6: If verification_results exist, at least one should be passed
+    verification_results = contract.get("verification_results", {})
+    if verification_results:
+        passed_verifications = [v for v, r in verification_results.items() if r == "passed"]
+        if not passed_verifications:
+            return False, "No verifications passed - run at least one verification successfully"
+
+    # Check 7: If review_evidence is set, review was completed
+    review_evidence = contract.get("review_evidence")
+    if review_evidence is not None:
+        review_path = Path(workdir) / review_evidence if not Path(review_evidence).is_absolute() else Path(review_evidence)
+        if not review_path.exists():
+            return False, f"Review evidence file not found: {review_evidence}"
 
     return True, ""

@@ -38,6 +38,9 @@ Thumbs.db
 .vscode/
 *.code-workspace
 
+# Claude Code
+.claude/
+
 # Build outputs
 dist/
 build/

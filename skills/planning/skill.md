@@ -41,22 +41,28 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 
 ## Exit Criteria
 
-满足以下条件时退出：
+满足以下条件时退出 PLANNING：
 
-- `task_plan.md` 已创建
+- `.specs/<feature>/spec.md` 已创建（用户故事 + 验收标准）
+- `.specs/<feature>/plan.md` 已创建（技术方案 + 约束）
+- `.specs/<feature>/tasks.md` 已创建（可执行任务清单）
+- `.contract.json` 已创建（非 draft 状态）
 - 任务至少按优先级拆分为可执行项
-- 每个关键任务都有验收方式
-- 已明确非目标范围，避免过度设计
+- 每个关键任务都有验收方式和 owned_files
 
 ## Current File Conventions
 
-当前仓库统一使用项目内文件：
+**正式规划链** (spec-kit):
 
-- `task_plan.md`
-- `SESSION-STATE.md`
-- `progress.md`
+| 阶段 | 文件 | 说明 |
+|------|------|------|
+| 需求 | `.specs/<feature>/spec.md` | 用户故事、验收标准 |
+| 方案 | `.specs/<feature>/plan.md` | 技术方案、约束 |
+| 任务 | `.specs/<feature>/tasks.md` | 可执行任务清单 |
+| 履约 | `.contract.json` | 履约契约 |
 
-不再把 `task_plan_YYYY-MM-DD.md` 或 `~/.gstack/...` 视为默认标准。
+**兼容投影层** (legacy, 只读):
+- `task_plan.md` - 旧 runtime 仍可读取
 
 ## Core Process
 
@@ -82,35 +88,50 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 - `owned_files`
 - `verification`
 
-### 3. Create The Plan File
+### 3. Create Spec Artifacts
 
-推荐命令：
+使用 workflow_engine 创建规范文件：
 
 ```bash
-bash scripts/create_plan.sh "任务名称" .
+python3 scripts/workflow_engine.py --op init --prompt "任务描述"
 ```
 
-该命令会生成项目内的 `task_plan.md`，并基于模板填入任务名称和时间戳。
+或手动创建规范链：
 
-### 4. Refine Manually
+```bash
+mkdir -p .specs/<feature>/
+# 创建 spec.md, plan.md, tasks.md
+```
 
-脚本生成的是最小骨架，随后应根据真实任务补充：
+### 4. Create Contract
 
-- 任务分解
-- owned files
-- 风险
-- 验证命令
+基于 plan.md 和 tasks.md 创建履约契约：
+
+```bash
+python3 -c "from contract_manager import create_phase_contract; create_phase_contract('任务名', '描述', '.')"
+```
 
 ## Minimal Plan Schema
 
-`task_plan.md` 应至少包含：
+**spec.md** 应包含：
 
-- `Summary`
-- `Goals`
-- `Non-Goals`
-- `Task Breakdown`
-- `Risks`
-- `Verification`
+- 用户故事 (### Story N:)
+- 验收标准 (**Acceptance Criteria:**)
+- 成功标准 (## Success Criteria)
+- 约束条件 (## Constraints)
+
+**plan.md** 应包含：
+
+- ## Goals
+- ## Technical Context
+- ## Structure Decisions
+- ## Constraints
+
+**tasks.md** 应包含：
+
+- ## User Story 1
+- ## User Story 2
+- 每个任务含 Files, Verification, Blocked-By
 
 ## Validation
 

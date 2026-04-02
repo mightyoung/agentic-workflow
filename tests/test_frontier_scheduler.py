@@ -476,5 +476,102 @@ class TestTeamRunIntegration(unittest.TestCase):
         self.assertIn("placeholder", error.lower())
 
 
+class TestTeamArtifactPersistence(unittest.TestCase):
+    """Tests for team artifact persistence and recovery"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_coder_produces_artifact(self):
+        """Coder worker produces artifact file"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        task_id = team.add_task("Implement feature", WorkerType.CODER)
+        result = team.execute_task(task_id)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(result.artifacts), 0)
+        # Check artifact file exists
+        for artifact_path in result.artifacts:
+            self.assertTrue(Path(artifact_path).exists())
+
+    def test_reviewer_produces_artifact(self):
+        """Reviewer worker produces artifact file"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        task_id = team.add_task("Review code", WorkerType.REVIEWER)
+        result = team.execute_task(task_id)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(result.artifacts), 0)
+        for artifact_path in result.artifacts:
+            self.assertTrue(Path(artifact_path).exists())
+
+    def test_debugger_produces_artifact(self):
+        """Debugger worker produces artifact file"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        task_id = team.add_task("Debug issue", WorkerType.DEBUGGER)
+        result = team.execute_task(task_id)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(result.artifacts), 0)
+        for artifact_path in result.artifacts:
+            self.assertTrue(Path(artifact_path).exists())
+
+    def test_researcher_produces_artifact(self):
+        """Researcher worker produces artifact file"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        task_id = team.add_task("Research best practices", WorkerType.RESEARCHER)
+        result = team.execute_task(task_id)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(result.artifacts), 0)
+        for artifact_path in result.artifacts:
+            self.assertTrue(Path(artifact_path).exists())
+
+    def test_team_snapshot_is_recoverable(self):
+        """Team snapshot can be saved to .team_registry.json"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        team.add_task("Task 1", WorkerType.CODER)
+        team.add_task("Task 2", WorkerType.CODER)
+
+        # Save snapshot
+        team.save_snapshot(self.temp_dir)
+
+        # Check registry file exists and contains session data
+        registry_path = Path(self.temp_dir) / ".team_registry.json"
+        self.assertTrue(registry_path.exists())
+
+        import json
+        registry = json.loads(registry_path.read_text())
+        self.assertIn("team_sessions", registry)
+        self.assertGreater(len(registry["team_sessions"]), 0)
+
+        # Latest session should be ours
+        latest = registry["team_sessions"][-1]
+        self.assertEqual(latest["session_id"], team.session_id)
+        self.assertEqual(latest["task"], "Test task")
+        self.assertEqual(latest["total_tasks"], 2)
+
+    def test_team_run_registers_artifacts(self):
+        """TeamAgent.run() registers worker artifacts"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        team.add_task("Research task", WorkerType.RESEARCHER)
+        team.add_task("Code task", WorkerType.CODER)
+
+        # Run with register_artifacts=True
+        result = team.run(register_artifacts=True)
+
+        # Check results have artifacts
+        self.assertGreater(len(result["artifacts"]), 0)
+
+        # Check artifacts are registered
+        from unified_state import get_artifacts
+        all_artifacts = get_artifacts(self.temp_dir)
+        self.assertGreater(len(all_artifacts), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
