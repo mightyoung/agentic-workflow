@@ -1,11 +1,11 @@
 ---
 name: planning
-version: 1.1.0
+version: 1.2.0
 status: implemented
 description: |
   规划阶段 - 任务拆分和计划制定
-  当前版本对齐项目内 task_plan.md 与真实脚本 create_plan.sh
-  注意: 自动任务分解(ID/依赖/优先级)能力在 task_decomposer.py 中实现
+  正式规划链: .specs/<feature>/spec.md → plan.md → tasks.md → .contract.json
+  task_plan.md 已降级为兼容投影层，供旧 runtime/frontier 读取
 tags: [phase, planning]
 requires:
   tools: [Bash, Read, Write, Grep, Glob]
@@ -19,13 +19,17 @@ requires:
 
 ## Overview
 
-PLANNING 阶段负责把任务拆成可以执行和验证的步骤，并生成项目内的 [task_plan.md](/Users/muyi/Downloads/dev/agentic-workflow/task_plan.md)。
+PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 
-当前真实实现以以下文件为准：
+**正式规划链** (spec-kit):
+1. `.specs/<feature>/spec.md` - 用户故事和需求
+2. `.specs/<feature>/plan.md` - 技术方案和约束
+3. `.specs/<feature>/tasks.md` - 可执行任务清单
+4. `.contract.json` - 履约契约（goals/verification/owned_files）
 
-- [scripts/create_plan.sh](/Users/muyi/Downloads/dev/agentic-workflow/scripts/create_plan.sh)
-- [scripts/win/create_plan.bat](/Users/muyi/Downloads/dev/agentic-workflow/scripts/win/create_plan.bat)
-- [references/templates/task_plan.md](/Users/muyi/Downloads/dev/agentic-workflow/references/templates/task_plan.md)
+**兼容投影层** (legacy):
+- `task_plan.md` - 仍可读取，供旧 runtime/frontier 使用
+- 不再作为主要输出
 
 ## Entry Criteria
 

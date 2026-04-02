@@ -6,9 +6,9 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.12.0
+**Current Version**: 5.13.0
 
-## Current Capabilities (v5.12.0)
+## Current Capabilities (v5.13.0)
 
 This section describes what actually works **today** via the scripts layer.
 
@@ -21,7 +21,7 @@ This section describes what actually works **today** via the scripts layer.
 | EXPLORING | ✅ | — | Socratic deep exploration |
 | RESEARCH | ✅ | findings_{session}.md | Web search → findings report (falls back to keyword-based if search unavailable) |
 | THINKING | ✅ | — | Expert reasoning |
-| PLANNING | ✅ | task_plan.md | Task breakdown with task_plan.md |
+| PLANNING | ✅ | .specs/<feat>/spec+plan+tasks.md | Task breakdown with spec-kit chain (.specs/*/spec.md → plan.md → tasks.md) |
 | EXECUTING | ✅ | — | TDD-driven implementation |
 | REVIEWING | ✅ | review_{session}.md | Real code analysis when files present (falls back to template-based risk assessment) |
 | DEBUGGING | ✅ | — | 5-step systematic debugging |

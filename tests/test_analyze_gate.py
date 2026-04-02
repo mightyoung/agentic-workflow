@@ -14,7 +14,13 @@ from pathlib import Path
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from analyze_gate import AnalyzeGate, validate_analyze_gate  # noqa: E402
+from analyze_gate import (  # noqa: E402
+    AnalyzeGate,
+    check_template_drift,
+    generate_spec_checklist,
+    validate_analyze_gate,
+    validate_constitution,
+)
 
 
 class TestAnalyzeGate(unittest.TestCase):
@@ -210,6 +216,158 @@ class TestValidateAnalyzeGateFunction(unittest.TestCase):
         self.assertTrue(hasattr(result, 'errors'))
         self.assertTrue(hasattr(result, 'warnings'))
         self.assertTrue(hasattr(result, 'passed'))
+
+
+class TestGenerateSpecChecklist(unittest.TestCase):
+    """Tests for generate_spec_checklist function."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.specs_dir = Path(self.temp_dir) / ".specs"
+        self.specs_dir.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_generate_spec_checklist_returns_dict(self):
+        """Test generate_spec_checklist returns expected structure."""
+        result = generate_spec_checklist(self.temp_dir)
+        self.assertIsInstance(result, dict)
+        self.assertIn("spec_checklist", result)
+        self.assertIn("plan_checklist", result)
+        self.assertIn("overall_score", result)
+        self.assertIn("recommendations", result)
+
+    def test_generate_spec_checklist_no_spec(self):
+        """Test checklist when no spec exists."""
+        result = generate_spec_checklist(self.temp_dir)
+        self.assertEqual(result["overall_score"], 0.0)
+
+    def test_generate_spec_checklist_with_spec(self):
+        """Test checklist with proper spec."""
+        feature_dir = self.specs_dir / "test_feature"
+        feature_dir.mkdir()
+        spec_file = feature_dir / "spec.md"
+        spec_file.write_text(
+            "# Spec: Test Feature\n\n"
+            + "x" * 200 + "\n\n"
+            + "## User Stories\n\n"
+            + "### Story 1: Test User\n"
+            + "**As a** user\n"
+            + "**I want** feature\n"
+            + "**So that** value\n\n"
+            + "**Acceptance Criteria:**\n"
+            + "- Criterion 1: Works correctly\n\n"
+            + "## Success Criteria\n\n"
+            + "- Criteria 1: Feature works\n\n"
+            + "## Constraints\n\n"
+            + "- Constraint 1: Must be fast\n",
+            encoding="utf-8"
+        )
+        result = generate_spec_checklist(self.temp_dir)
+        self.assertIsInstance(result["spec_checklist"], list)
+        self.assertGreater(len(result["spec_checklist"]), 0)
+
+
+class TestValidateConstitution(unittest.TestCase):
+    """Tests for validate_constitution function."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.specs_dir = Path(self.temp_dir) / ".specs"
+        self.specs_dir.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_validate_constitution_returns_dict(self):
+        """Test validate_constitution returns expected structure."""
+        result = validate_constitution(self.temp_dir)
+        self.assertIsInstance(result, dict)
+        self.assertIn("is_valid", result)
+        self.assertIn("violations", result)
+        self.assertIn("score", result)
+        self.assertIn("suggestions", result)
+
+    def test_validate_constitution_no_plan(self):
+        """Test constitution fails when no plan.md exists."""
+        result = validate_constitution(self.temp_dir)
+        self.assertFalse(result["is_valid"])
+        self.assertIn("No plan.md found", result["violations"][0])
+
+    def test_validate_constitution_with_plan(self):
+        """Test constitution passes with proper plan."""
+        feature_dir = self.specs_dir / "test_feature"
+        feature_dir.mkdir()
+        plan_file = feature_dir / "plan.md"
+        plan_file.write_text(
+            "# Plan: Test Feature\n\n"
+            + "## Goals\n\n"
+            + "- Goal 1\n\n"
+            + "## Technical Context\n\n"
+            + "- Context 1\n\n"
+            + "## Structure Decisions\n\n"
+            + "- Decision 1\n\n"
+            + "## Constraints\n\n"
+            + "- Constraint 1\n\n"
+            + "## Tech Stack\n\n"
+            + "- Python\n\n"
+            + "## Output Artifacts\n\n"
+            + "- artifact1.py\n",
+            encoding="utf-8"
+        )
+        result = validate_constitution(self.temp_dir)
+        self.assertTrue(result["is_valid"])
+        self.assertEqual(result["score"], 1.0)
+
+
+class TestCheckTemplateDrift(unittest.TestCase):
+    """Tests for check_template_drift function."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_check_template_drift_returns_dict(self):
+        """Test check_template_drift returns expected structure."""
+        result = check_template_drift(
+            str(Path(self.temp_dir) / "repo_skill.md"),
+            str(Path(self.temp_dir) / "installed_skill.md")
+        )
+        self.assertIsInstance(result, dict)
+        self.assertIn("has_drift", result)
+        self.assertIn("drift_details", result)
+        self.assertIn("repo_hash", result)
+        self.assertIn("installed_hash", result)
+
+    def test_check_template_drift_no_drift(self):
+        """Test no drift when files are identical."""
+        skill_file = Path(self.temp_dir) / "skill.md"
+        skill_file.write_text("# Skill\n\ncontent", encoding="utf-8")
+        result = check_template_drift(str(skill_file), str(skill_file))
+        self.assertFalse(result["has_drift"])
+
+    def test_check_template_drift_with_drift(self):
+        """Test drift detection when files differ."""
+        repo_file = Path(self.temp_dir) / "repo.md"
+        repo_file.write_text("# Repo Skill\n\nversion: 1.0.0", encoding="utf-8")
+        installed_file = Path(self.temp_dir) / "installed.md"
+        installed_file.write_text("# Installed Skill\n\nversion: 2.0.0", encoding="utf-8")
+        result = check_template_drift(str(repo_file), str(installed_file))
+        self.assertTrue(result["has_drift"])
+        self.assertGreater(len(result["drift_details"]), 0)
+
+    def test_check_template_drift_missing_file(self):
+        """Test handling of missing files."""
+        result = check_template_drift(
+            str(Path(self.temp_dir) / "nonexistent.md"),
+            str(Path(self.temp_dir) / "also_nonexistent.md")
+        )
+        self.assertFalse(result["has_drift"])  # No content to compare
+        self.assertEqual(result["repo_hash"], "not-found")
+        self.assertEqual(result["installed_hash"], "not-found")
 
 
 if __name__ == "__main__":
