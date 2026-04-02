@@ -12,21 +12,21 @@ Failure Handling Tests - 失败处理专项测试
 
 import os
 import shutil
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+from state_schema import Decision
 from workflow_engine import (
-    initialize_workflow,
-    handle_workflow_failure,
     classify_error,
+    handle_workflow_failure,
+    initialize_workflow,
     load_state,
 )
-from state_schema import Decision
 
 
 class TestFailureHandling(unittest.TestCase):

@@ -17,15 +17,15 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
 from wal_scanner import (
+    PROMOTION_THRESHOLD,
+    WAL_PATTERNS,
+    get_pattern_key,
+    get_pending_promotions,
+    increment_pattern_count,
+    load_patterns,
+    promote_pattern,
     scan_wal_triggers,
     should_update_session_state,
-    load_patterns,
-    increment_pattern_count,
-    get_pending_promotions,
-    promote_pattern,
-    get_pattern_key,
-    WAL_PATTERNS,
-    PROMOTION_THRESHOLD
 )
 
 
@@ -124,7 +124,7 @@ class TestWALScanner(unittest.TestCase):
     def test_promotion_threshold(self):
         """测试晋升阈值达到3次"""
         # 达到晋升阈值
-        for i in range(PROMOTION_THRESHOLD):
+        for _i in range(PROMOTION_THRESHOLD):
             count, should_promote = increment_pattern_count('correction', '不是', self.temp_file)
 
         self.assertEqual(count, PROMOTION_THRESHOLD)
@@ -133,7 +133,7 @@ class TestWALScanner(unittest.TestCase):
     def test_pending_promotions(self):
         """测试待晋升列表"""
         # 添加一个达到晋升阈值的模式
-        for i in range(PROMOTION_THRESHOLD):
+        for _i in range(PROMOTION_THRESHOLD):
             increment_pattern_count('decision', '用', self.temp_file)
 
         pending = get_pending_promotions(self.temp_file)
@@ -143,7 +143,7 @@ class TestWALScanner(unittest.TestCase):
     def test_promote_pattern(self):
         """测试模式晋升"""
         # 先添加模式
-        for i in range(PROMOTION_THRESHOLD):
+        for _i in range(PROMOTION_THRESHOLD):
             increment_pattern_count('correction', '不是', self.temp_file)
 
         # 晋升

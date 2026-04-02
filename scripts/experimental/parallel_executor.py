@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable
 
 # ============================================================================
 # Band Configuration (from parallel-execution.md)
@@ -45,7 +45,7 @@ class PhaseBand(Enum):
 
 
 # Band 配置
-BAND_CONFIG: Dict[PhaseBand, Dict[str, Any]] = {
+BAND_CONFIG: dict[PhaseBand, dict[str, Any]] = {
     PhaseBand.BAND_0_ROUTER: {
         "name": "ROUTER",
         "phases": ["ROUTER"],
@@ -96,11 +96,11 @@ class PhaseResult:
     """Phase 执行结果"""
     phase: str
     status: str  # pending, running, completed, failed, skipped
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
     duration: float = 0.0
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 @dataclass
@@ -108,22 +108,22 @@ class BandResult:
     """Band 执行结果"""
     band: PhaseBand
     status: str  # pending, running, completed, failed, skipped
-    phase_results: Dict[str, PhaseResult] = field(default_factory=dict)
+    phase_results: dict[str, PhaseResult] = field(default_factory=dict)
     duration: float = 0.0
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 # ============================================================================
 # Phase Dependency Graph
 # ============================================================================
 
-PHASE_TO_BAND: Dict[str, PhaseBand] = {}
+PHASE_TO_BAND: dict[str, PhaseBand] = {}
 for band, config in BAND_CONFIG.items():
     for phase in config["phases"]:
         PHASE_TO_BAND[phase] = band
 
-BAND_PHASES: Dict[PhaseBand, List[str]] = {}
+BAND_PHASES: dict[PhaseBand, list[str]] = {}
 for band, config in BAND_CONFIG.items():
     BAND_PHASES[band] = config["phases"]
 
@@ -133,7 +133,7 @@ def get_phase_band(phase: str) -> PhaseBand:
     return PHASE_TO_BAND.get(phase, PhaseBand.BAND_2_PLAN)
 
 
-def get_band_phases(band: PhaseBand) -> List[str]:
+def get_band_phases(band: PhaseBand) -> list[str]:
     """获取 band 包含的所有 phases"""
     return BAND_PHASES.get(band, [])
 
@@ -148,13 +148,13 @@ def can_parallel(phase1: str, phase2: str) -> bool:
     return parallel
 
 
-def get_band_dependencies(band: PhaseBand) -> List[PhaseBand]:
+def get_band_dependencies(band: PhaseBand) -> list[PhaseBand]:
     """获取 band 的依赖"""
-    deps: List[PhaseBand] = BAND_CONFIG.get(band, {}).get("dependencies", [])
+    deps: list[PhaseBand] = BAND_CONFIG.get(band, {}).get("dependencies", [])
     return deps
 
 
-def are_dependencies_met(band: PhaseBand, completed_bands: Set[PhaseBand]) -> bool:
+def are_dependencies_met(band: PhaseBand, completed_bands: set[PhaseBand]) -> bool:
     """检查 band 的依赖是否都已完成"""
     deps = get_band_dependencies(band)
     return all(dep in completed_bands for dep in deps)
@@ -186,9 +186,9 @@ class ParallelExecutor:
         self.max_workers = max_workers
         self.default_timeout = default_timeout
         self._lock = threading.RLock()
-        self._band_results: Dict[PhaseBand, BandResult] = {}
-        self._phase_callbacks: Dict[str, Callable] = {}
-        self._completed_bands: Set[PhaseBand] = set()
+        self._band_results: dict[PhaseBand, BandResult] = {}
+        self._phase_callbacks: dict[str, Callable] = {}
+        self._completed_bands: set[PhaseBand] = set()
 
     def set_phase_callback(self, phase: str, callback: Callable[[], Any]):
         """设置 phase 执行回调"""
@@ -197,8 +197,8 @@ class ParallelExecutor:
     def execute_band(
         self,
         band: PhaseBand,
-        phases: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        phases: list[str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> BandResult:
         """
         执行一个 band
@@ -250,8 +250,8 @@ class ParallelExecutor:
     def _execute_parallel(
         self,
         band: PhaseBand,
-        phases: List[str],
-        context: Optional[Dict[str, Any]],
+        phases: list[str],
+        context: dict[str, Any] | None,
         result: BandResult,
     ):
         """并行执行多个 phases"""
@@ -276,8 +276,8 @@ class ParallelExecutor:
     def _execute_sequential(
         self,
         band: PhaseBand,
-        phases: List[str],
-        context: Optional[Dict[str, Any]],
+        phases: list[str],
+        context: dict[str, Any] | None,
         result: BandResult,
     ):
         """串行执行多个 phases"""
@@ -289,7 +289,7 @@ class ParallelExecutor:
             if phase_result.status == "failed":
                 break
 
-    def _execute_phase(self, phase: str, context: Optional[Dict[str, Any]]) -> PhaseResult:
+    def _execute_phase(self, phase: str, context: dict[str, Any] | None) -> PhaseResult:
         """执行单个 phase"""
         result = PhaseResult(
             phase=phase,
@@ -321,10 +321,10 @@ class ParallelExecutor:
 
     def execute_workflow(
         self,
-        phases: List[str],
-        context: Optional[Dict[str, Any]] = None,
+        phases: list[str],
+        context: dict[str, Any] | None = None,
         stop_on_failure: bool = True,
-    ) -> Dict[PhaseBand, BandResult]:
+    ) -> dict[PhaseBand, BandResult]:
         """
         执行完整工作流（自动处理 band 依赖）
 
@@ -337,10 +337,10 @@ class ParallelExecutor:
             {band: BandResult}
         """
         results = {}
-        completed_bands: Set[PhaseBand] = set()
+        completed_bands: set[PhaseBand] = set()
 
         # 按 band 分组
-        band_phases: Dict[PhaseBand, List[str]] = {}
+        band_phases: dict[PhaseBand, list[str]] = {}
         for phase in phases:
             band = get_phase_band(phase)
             if band not in band_phases:
@@ -377,7 +377,7 @@ class ParallelExecutor:
 
         return results
 
-    def get_ready_bands(self, completed_bands: Set[PhaseBand]) -> List[PhaseBand]:
+    def get_ready_bands(self, completed_bands: set[PhaseBand]) -> list[PhaseBand]:
         """获取当前可以执行的 bands"""
         ready = []
         for band in PhaseBand:
@@ -387,7 +387,7 @@ class ParallelExecutor:
                 ready.append(band)
         return ready
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """获取执行状态"""
         return {
             "band_results": {
@@ -422,8 +422,8 @@ class BandAwareWorkflow:
     def __init__(self, workdir: str = "."):
         self.workdir = Path(workdir)
         self.executor = ParallelExecutor(workdir)
-        self._completed_bands: Set[PhaseBand] = set()
-        self._phase_states: Dict[str, str] = {}  # phase -> status
+        self._completed_bands: set[PhaseBand] = set()
+        self._phase_states: dict[str, str] = {}  # phase -> status
 
     def register_phase_handler(self, phase: str, handler: Callable):
         """注册 phase 处理函数"""
@@ -470,7 +470,7 @@ class BandAwareWorkflow:
         band = get_phase_band(phase)
         return are_dependencies_met(band, self._completed_bands)
 
-    def get_next_executable_phases(self) -> List[str]:
+    def get_next_executable_phases(self) -> list[str]:
         """获取下一个可执行的 phases"""
         ready_bands = self.executor.get_ready_bands(self._completed_bands)
         phases = []
@@ -486,7 +486,7 @@ class BandAwareWorkflow:
         """标记 band 完成"""
         self._completed_bands.add(band)
 
-    def get_workflow_status(self) -> Dict[str, Any]:
+    def get_workflow_status(self) -> dict[str, Any]:
         """获取工作流状态"""
         return {
             "completed_bands": [b.value for b in self._completed_bands],

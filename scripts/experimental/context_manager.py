@@ -26,8 +26,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # ============================================================================
 # Context Checkpoint
@@ -39,15 +38,15 @@ class ContextCheckpoint:
     checkpoint_id: str
     phase: str
     session_id: str
-    accomplished: List[str]  # 已完成的工作
-    pending_work: List[str]  # 待完成的工作
-    key_decisions: List[str]  # 关键决策
-    artifacts: Dict[str, str]  # 关键产物路径
+    accomplished: list[str]  # 已完成的工作
+    pending_work: list[str]  # 待完成的工作
+    key_decisions: list[str]  # 关键决策
+    artifacts: dict[str, str]  # 关键产物路径
     context_summary: str  # 上下文摘要
     token_estimate: int  # 估计的 token 数
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "checkpoint_id": self.checkpoint_id,
             "phase": self.phase,
@@ -62,7 +61,7 @@ class ContextCheckpoint:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ContextCheckpoint":
+    def from_dict(cls, data: dict[str, Any]) -> ContextCheckpoint:
         return cls(
             checkpoint_id=data["checkpoint_id"],
             phase=data["phase"],
@@ -87,9 +86,9 @@ class HandoffDocument:
     checkpoint_id: str
     for_phase: str  # 即将进入的 phase
     summary: str
-    accomplished: List[str]
-    pending_work: List[str]
-    key_decisions: List[str]
+    accomplished: list[str]
+    pending_work: list[str]
+    key_decisions: list[str]
     context_for_next_agent: str  # 给下一个 Agent 的上下文
 
     def to_markdown(self) -> str:
@@ -154,7 +153,7 @@ class ContextManager:
         """估计文本的 token 数"""
         return int(len(text) / self.CHARS_PER_TOKEN)
 
-    def should_reset(self, trajectory: List[Dict[str, Any]], current_context: str) -> bool:
+    def should_reset(self, trajectory: list[dict[str, Any]], current_context: str) -> bool:
         """
         检查是否应该重置上下文
 
@@ -185,9 +184,9 @@ class ContextManager:
         self,
         phase: str,
         session_id: str,
-        trajectory: List[Dict[str, Any]],
+        trajectory: list[dict[str, Any]],
         current_context: str,
-        accomplishments: Optional[List[str]] = None,
+        accomplishments: list[str] | None = None,
     ) -> ContextCheckpoint:
         """
         创建检查点
@@ -232,7 +231,7 @@ class ContextManager:
             token_estimate=self.estimate_tokens(current_context),
         )
 
-    def save_checkpoint(self, checkpoint: ContextCheckpoint) -> Dict[str, Any]:
+    def save_checkpoint(self, checkpoint: ContextCheckpoint) -> dict[str, Any]:
         """
         保存检查点
 
@@ -259,7 +258,7 @@ class ContextManager:
         except Exception as e:
             return {"success": False, "path": "", "error": str(e)}
 
-    def load_checkpoint(self, checkpoint_id: str) -> Optional[ContextCheckpoint]:
+    def load_checkpoint(self, checkpoint_id: str) -> ContextCheckpoint | None:
         """加载检查点"""
         path = self.checkpoint_dir / f"{checkpoint_id}.json"
         if not path.exists():
@@ -297,7 +296,7 @@ class ContextManager:
     def reset_and_resume(
         self,
         checkpoint: ContextCheckpoint,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         重置并恢复
 
@@ -316,7 +315,7 @@ class ContextManager:
             "context_for_resume": self._build_agent_context(checkpoint, checkpoint.phase),
         }
 
-    def _extract_accomplishments(self, trajectory: List[Dict[str, Any]]) -> List[str]:
+    def _extract_accomplishments(self, trajectory: list[dict[str, Any]]) -> list[str]:
         """从轨迹提取已完成的工作"""
         accomplishments = []
         for entry in trajectory:
@@ -329,7 +328,7 @@ class ContextManager:
                     accomplishments.append(f"完成 {phase}")
         return accomplishments
 
-    def _extract_pending_work(self, trajectory: List[Dict[str, Any]]) -> List[str]:
+    def _extract_pending_work(self, trajectory: list[dict[str, Any]]) -> list[str]:
         """从轨迹提取待完成的工作"""
         pending = []
         for entry in trajectory:
@@ -338,14 +337,14 @@ class ContextManager:
                 pending.append(f"继续 {phase}")
         return pending
 
-    def _extract_key_decisions(self, trajectory: List[Dict[str, Any]]) -> List[str]:
+    def _extract_key_decisions(self, trajectory: list[dict[str, Any]]) -> list[str]:
         """从轨迹提取关键决策"""
         decisions = []
         for entry in trajectory:
             decisions.extend(entry.get("decisions", []))
         return decisions[-10:]  # 只保留最近 10 个
 
-    def _extract_artifacts(self, trajectory: List[Dict[str, Any]]) -> Dict[str, str]:
+    def _extract_artifacts(self, trajectory: list[dict[str, Any]]) -> dict[str, str]:
         """从轨迹提取关键产物"""
         artifacts = {}
         for entry in trajectory:
@@ -355,11 +354,11 @@ class ContextManager:
     def _generate_summary(
         self,
         phase: str,
-        trajectory: List[Dict[str, Any]],
+        trajectory: list[dict[str, Any]],
         current_context: str,
     ) -> str:
         """生成上下文摘要"""
-        phases_completed: List[str] = [e.get("phase", "") for e in trajectory if e.get("status") == "completed" and e.get("phase")]
+        phases_completed: list[str] = [e.get("phase", "") for e in trajectory if e.get("status") == "completed" and e.get("phase")]
 
         summary_parts = [
             f"当前 Phase: {phase}",

@@ -158,7 +158,7 @@ class TestE2EBusinessChains(unittest.TestCase):
             tasks = tracker.get("tasks", [])
             # 检查是否有任务状态不是 backlog 的
             return any(t.get("status") != "backlog" for t in tasks)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return False
 
     def _check_artifact_content(self, artifact_type: str, task_desc: str = None) -> bool:
@@ -679,7 +679,7 @@ class TestTrajectoryPersistence(TestE2EBusinessChains):
 
     def test_trajectory_list_and_resume(self):
         """测试轨迹列表和恢复功能"""
-        from trajectory_logger import TrajectoryLogger, list_trajectories, get_resume_point
+        from trajectory_logger import TrajectoryLogger, get_resume_point, list_trajectories
 
         # 创建测试轨迹
         logger = TrajectoryLogger(self.workdir)

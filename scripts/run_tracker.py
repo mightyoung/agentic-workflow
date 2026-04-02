@@ -18,7 +18,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
 from safe_io import safe_write_json
 
@@ -38,19 +38,19 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def load_tracker(path: str = DEFAULT_TRACKER_FILE) -> Dict:
+def load_tracker(path: str = DEFAULT_TRACKER_FILE) -> dict:
     """加载追踪数据"""
     if not _validate_path(path):
         return {"runs": [], "version": "1.0"}
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             if isinstance(data, dict):
                 return data
     return {"runs": [], "version": "1.0"}
 
 
-def save_tracker(path: str, data: Dict) -> None:
+def save_tracker(path: str, data: dict) -> None:
     """保存追踪数据"""
     if not _validate_path(path):
         return
@@ -116,7 +116,7 @@ def record_step(run_id: str, step_name: str, tokens: int = 0,
     return False
 
 
-def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> Dict:
+def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> dict:
     """结束执行追踪"""
     tracker = load_tracker(path)
     runs = tracker.get("runs", [])
@@ -155,7 +155,7 @@ def finish_run(run_id: str, success: bool, path: str = DEFAULT_TRACKER_FILE) -> 
     return {}
 
 
-def get_run_stats(run_id: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> Dict:
+def get_run_stats(run_id: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> dict:
     """获取执行统计"""
     tracker = load_tracker(path)
 

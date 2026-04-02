@@ -30,8 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import Any
 
 # ============================================================================
 # Grading Criteria
@@ -53,8 +52,8 @@ class GradingRubric:
     criteria: QualityCriteria
     weight: float  # 权重 (0-1)
     description: str
-    check_questions: List[str]  # 检查问题列表
-    penalty_patterns: List[str]  # 扣分模式
+    check_questions: list[str]  # 检查问题列表
+    penalty_patterns: list[str]  # 扣分模式
 
 
 # 默认评分规则
@@ -162,13 +161,13 @@ class SprintContract:
     """
     task_id: str
     task_description: str
-    generator_commitments: List[str]  # Generator 承诺的实现
-    evaluator_criteria: List[str]  # Evaluator 的评估标准
+    generator_commitments: list[str]  # Generator 承诺的实现
+    evaluator_criteria: list[str]  # Evaluator 的评估标准
     rejection_threshold: float  # 拒绝阈值 (0-1)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     negotiated: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "task_description": self.task_description,
@@ -180,7 +179,7 @@ class SprintContract:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SprintContract":
+    def from_dict(cls, data: dict[str, Any]) -> SprintContract:
         return cls(
             task_id=data["task_id"],
             task_description=data["task_description"],
@@ -209,8 +208,8 @@ class CriteriaScore:
     """单标准评分"""
     criteria: QualityCriteria
     score: float  # 0-1
-    feedback: List[str]  # 反馈列表
-    issues: List[str]  # 问题列表
+    feedback: list[str]  # 反馈列表
+    issues: list[str]  # 问题列表
 
 
 @dataclass
@@ -218,13 +217,13 @@ class EvaluationResult:
     """评估结果"""
     status: EvaluationStatus
     overall_score: float  # 0-1
-    criteria_scores: List[CriteriaScore]
+    criteria_scores: list[CriteriaScore]
     feedback: str  # 总体反馈
-    issues: List[str]  # 问题列表
-    recommendations: List[str]  # 建议
+    issues: list[str]  # 问题列表
+    recommendations: list[str]  # 建议
     evaluated_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status.value,
             "overall_score": self.overall_score,
@@ -266,7 +265,7 @@ class WorkflowEvaluator:
 
     def __init__(
         self,
-        rubrics: Optional[List[GradingRubric]] = None,
+        rubrics: list[GradingRubric] | None = None,
         default_threshold: float = 0.7,
     ):
         self.rubrics = rubrics or DEFAULT_RUBRICS
@@ -274,8 +273,8 @@ class WorkflowEvaluator:
 
     def evaluate(
         self,
-        output: Dict[str, Any],
-        contract: Optional[SprintContract] = None,
+        output: dict[str, Any],
+        contract: SprintContract | None = None,
     ) -> EvaluationResult:
         """
         评估输出
@@ -329,9 +328,9 @@ class WorkflowEvaluator:
 
     def _evaluate_criteria(
         self,
-        output: Dict[str, Any],
+        output: dict[str, Any],
         rubric: GradingRubric,
-    ) -> Tuple[float, List[str], List[str]]:
+    ) -> tuple[float, list[str], list[str]]:
         """
         评估单个标准
 
@@ -361,7 +360,7 @@ class WorkflowEvaluator:
 
         return score, feedback, issues
 
-    def _generate_recommendations(self, criteria_scores: List[CriteriaScore]) -> List[str]:
+    def _generate_recommendations(self, criteria_scores: list[CriteriaScore]) -> list[str]:
         """生成改进建议"""
         recommendations = []
 
@@ -378,9 +377,9 @@ class WorkflowEvaluator:
 
     def evaluate_and_decide(
         self,
-        output: Dict[str, Any],
-        contract: Optional[SprintContract] = None,
-    ) -> Tuple[EvaluationResult, bool]:
+        output: dict[str, Any],
+        contract: SprintContract | None = None,
+    ) -> tuple[EvaluationResult, bool]:
         """
         评估并决定是否接受
 
@@ -405,14 +404,14 @@ class ContractNegotiator:
     在 Generator 和 Evaluator 之间协商成功标准
     """
 
-    def __init__(self, evaluator: Optional[WorkflowEvaluator] = None):
+    def __init__(self, evaluator: WorkflowEvaluator | None = None):
         self.evaluator = evaluator or WorkflowEvaluator()
 
     def negotiate(
         self,
         task_description: str,
         generator_spec: str,
-        evaluator_spec: Optional[str] = None,
+        evaluator_spec: str | None = None,
     ) -> SprintContract:
         """
         协商契约
@@ -444,7 +443,7 @@ class ContractNegotiator:
             negotiated=True,
         )
 
-    def _extract_commitments(self, spec: str) -> List[str]:
+    def _extract_commitments(self, spec: str) -> list[str]:
         """从规格说明提取承诺"""
         # 简单的行提取
         commitments = []
@@ -456,11 +455,11 @@ class ContractNegotiator:
                 commitments.append(line)
         return commitments if commitments else [spec[:200]]
 
-    def _extract_criteria(self, spec: str) -> List[str]:
+    def _extract_criteria(self, spec: str) -> list[str]:
         """从 Evaluator 规格提取标准"""
         return self._extract_commitments(spec)
 
-    def _generate_criteria(self, task_description: str) -> List[str]:
+    def _generate_criteria(self, task_description: str) -> list[str]:
         """生成默认标准"""
         return [
             f"功能完整性: 实现 {task_description} 的所有需求",

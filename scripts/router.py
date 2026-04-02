@@ -20,7 +20,7 @@ Usage:
 
 import re
 import sys
-from typing import Optional, Tuple
+from typing import Optional
 
 # 路由关键词配置
 ROUTE_KEYWORDS = {
@@ -187,7 +187,7 @@ def detect_stage(text: str) -> str:
     return "EXECUTING"  # 默认
 
 
-def route(text: str, use_semantic: bool = False) -> Tuple[str, str]:
+def route(text: str, use_semantic: bool = False) -> tuple[str, str]:
     """
     执行路由决策
 
@@ -229,7 +229,7 @@ def route(text: str, use_semantic: bool = False) -> Tuple[str, str]:
     return ("STAGE", stage)
 
 
-def format_output(result: Tuple[str, str], text: str, format: str = 'simple') -> str:
+def format_output(result: tuple[str, str], text: str, format: str = 'simple') -> str:
     """格式化输出"""
     trigger_type, stage = result
 

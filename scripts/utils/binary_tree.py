@@ -10,7 +10,7 @@
 实现方式: 递归实现 (简洁直观)
 """
 
-from typing import Optional, List
+from typing import Optional
 
 
 class TreeNode:
@@ -37,7 +37,7 @@ class TreeNode:
         return f"TreeNode({self.val})"
 
 
-def preorder_traversal(root: Optional[TreeNode]) -> List[int]:
+def preorder_traversal(root: Optional[TreeNode]) -> list[int]:
     """
     前序遍历 (Pre-order): 根-左-右
 
@@ -57,7 +57,7 @@ def preorder_traversal(root: Optional[TreeNode]) -> List[int]:
         >>> preorder_traversal(root)
         [1, 2, 3]
     """
-    result: List[int] = []
+    result: list[int] = []
 
     def traverse(node: Optional[TreeNode]) -> None:
         if node is None:
@@ -70,7 +70,7 @@ def preorder_traversal(root: Optional[TreeNode]) -> List[int]:
     return result
 
 
-def inorder_traversal(root: Optional[TreeNode]) -> List[int]:
+def inorder_traversal(root: Optional[TreeNode]) -> list[int]:
     """
     中序遍历 (In-order): 左-根-右
 
@@ -90,7 +90,7 @@ def inorder_traversal(root: Optional[TreeNode]) -> List[int]:
         >>> inorder_traversal(root)
         [2, 1, 3]
     """
-    result: List[int] = []
+    result: list[int] = []
 
     def traverse(node: Optional[TreeNode]) -> None:
         if node is None:
@@ -103,7 +103,7 @@ def inorder_traversal(root: Optional[TreeNode]) -> List[int]:
     return result
 
 
-def postorder_traversal(root: Optional[TreeNode]) -> List[int]:
+def postorder_traversal(root: Optional[TreeNode]) -> list[int]:
     """
     后序遍历 (Post-order): 左-右-根
 
@@ -123,7 +123,7 @@ def postorder_traversal(root: Optional[TreeNode]) -> List[int]:
         >>> postorder_traversal(root)
         [2, 3, 1]
     """
-    result: List[int] = []
+    result: list[int] = []
 
     def traverse(node: Optional[TreeNode]) -> None:
         if node is None:

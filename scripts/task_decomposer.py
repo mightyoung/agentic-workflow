@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from safe_io import safe_write_json
 
@@ -30,15 +30,15 @@ class DecomposedTask:
     description: str = ""
     status: str = "backlog"
     priority: str = "P1"
-    owned_files: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    owned_files: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     verification: str = ""
     created_at: str = ""
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     progress: int = 0
     phase: str = "EXECUTING"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "title": self.title,
@@ -55,7 +55,7 @@ class DecomposedTask:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DecomposedTask:
+    def from_dict(cls, data: dict[str, Any]) -> DecomposedTask:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -69,7 +69,7 @@ FILE_PATTERNS = {
 }
 
 
-def detect_file_types(text: str) -> Set[str]:
+def detect_file_types(text: str) -> set[str]:
     """从文本中检测文件类型"""
     found = set()
     text_lower = text.lower()
@@ -82,7 +82,7 @@ def detect_file_types(text: str) -> Set[str]:
     return found
 
 
-def extract_owned_files(text: str) -> List[str]:
+def extract_owned_files(text: str) -> list[str]:
     """从文本中提取可能涉及的文件"""
     files = set()
 
@@ -130,16 +130,16 @@ def suggest_verification(task: DecomposedTask) -> str:
     return ""
 
 
-def generate_task_id(counter: int, base_timestamp: Optional[str] = None) -> str:
+def generate_task_id(counter: int, base_timestamp: str | None = None) -> str:
     """生成任务ID"""
     ts = base_timestamp or datetime.now().strftime("%Y%m%d%H%M%S")
     return f"T{ts}-{counter:03d}"
 
 
 def detect_dependencies(
-    tasks: List[DecomposedTask],
+    tasks: list[DecomposedTask],
     all_text: str,
-) -> List[DecomposedTask]:
+) -> list[DecomposedTask]:
     """
     检测任务之间的依赖关系
 
@@ -149,7 +149,7 @@ def detect_dependencies(
     3. 任务描述中的引用
     """
     # 构建文件->任务的映射
-    file_to_tasks: Dict[str, List[str]] = {}
+    file_to_tasks: dict[str, list[str]] = {}
     for task in tasks:
         for f in task.owned_files:
             normalized = f.lower().replace("\\", "/")
@@ -191,13 +191,13 @@ def detect_dependencies(
     return tasks
 
 
-def detect_file_conflicts(tasks: List[DecomposedTask]) -> List[Dict[str, Any]]:
+def detect_file_conflicts(tasks: list[DecomposedTask]) -> list[dict[str, Any]]:
     """
     检测文件冲突
 
     同一文件被多个任务修改可能需要串行执行
     """
-    file_tasks: Dict[str, List[str]] = {}
+    file_tasks: dict[str, list[str]] = {}
 
     for task in tasks:
         for f in task.owned_files:
@@ -257,9 +257,9 @@ def auto_priority(task: DecomposedTask, index: int, total: int) -> str:
 
 def decompose(
     prompt: str,
-    base_timestamp: Optional[str] = None,
-    existing_files: Optional[List[str]] = None,
-) -> List[DecomposedTask]:
+    base_timestamp: str | None = None,
+    existing_files: list[str] | None = None,
+) -> list[DecomposedTask]:
     """
     分解任务
 
@@ -272,7 +272,7 @@ def decompose(
         分解后的任务列表
     """
     ts = base_timestamp or datetime.now().strftime("%Y%m%d%H%M%S")
-    tasks: List[DecomposedTask] = []
+    tasks: list[DecomposedTask] = []
 
     # 简单的基于关键词的任务拆分
     # 实际实现应该使用LLM进行更智能的拆分
@@ -311,7 +311,7 @@ def decompose(
     return tasks
 
 
-def _split_into_sections(prompt: str) -> List[str]:
+def _split_into_sections(prompt: str) -> list[str]:
     """
     将prompt拆分成多个可独立执行的部分
 
@@ -369,7 +369,7 @@ def _extract_title(section: str) -> str:
     return title
 
 
-def render_task_plan(tasks: List[DecomposedTask], prompt: str) -> str:
+def render_task_plan(tasks: list[DecomposedTask], prompt: str) -> str:
     """
     将任务渲染为task_plan.md格式
     """
@@ -389,7 +389,7 @@ def render_task_plan(tasks: List[DecomposedTask], prompt: str) -> str:
     ]
 
     # 按优先级分组
-    by_priority: Dict[str, List[DecomposedTask]] = {"P0": [], "P1": [], "P2": [], "P3": []}
+    by_priority: dict[str, list[DecomposedTask]] = {"P0": [], "P1": [], "P2": [], "P3": []}
     for task in tasks:
         p = task.priority if task.priority in by_priority else "P2"
         by_priority[p].append(task)
@@ -425,7 +425,7 @@ def render_task_plan(tasks: List[DecomposedTask], prompt: str) -> str:
     return "\n".join(lines)
 
 
-def save_tasks_json(tasks: List[DecomposedTask], workdir: str, session_id: str) -> Path:
+def save_tasks_json(tasks: list[DecomposedTask], workdir: str, session_id: str) -> Path:
     """保存任务为JSON格式"""
     path = Path(workdir) / f".tasks_{session_id}.json"
 
@@ -441,7 +441,7 @@ def save_tasks_json(tasks: List[DecomposedTask], workdir: str, session_id: str) 
     return path
 
 
-def load_tasks_json(workdir: str, session_id: str) -> List[DecomposedTask]:
+def load_tasks_json(workdir: str, session_id: str) -> list[DecomposedTask]:
     """加载JSON格式的任务"""
     path = Path(workdir) / f".tasks_{session_id}.json"
     if not path.exists():
@@ -453,7 +453,7 @@ def load_tasks_json(workdir: str, session_id: str) -> List[DecomposedTask]:
     return [DecomposedTask.from_dict(t) for t in data.get("tasks", [])]
 
 
-def extract_user_stories(spec_content: str) -> List[Dict[str, str]]:
+def extract_user_stories(spec_content: str) -> list[dict[str, Any]]:
     """
     Extract user stories from spec.md content.
 
@@ -509,7 +509,7 @@ def extract_user_stories(spec_content: str) -> List[Dict[str, str]]:
     return stories
 
 
-def decompose_from_spec(workdir: str, feature_id: str = "default") -> List[DecomposedTask]:
+def decompose_from_spec(workdir: str, feature_id: str = "default") -> list[DecomposedTask]:
     """
     Decompose tasks from spec.md using user story based splitting.
 
@@ -535,7 +535,7 @@ def decompose_from_spec(workdir: str, feature_id: str = "default") -> List[Decom
     stories = extract_user_stories(spec_content)
 
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    tasks: List[DecomposedTask] = []
+    tasks: list[DecomposedTask] = []
 
     # Counter for task IDs
     counter = 1
@@ -639,7 +639,7 @@ def decompose_from_spec(workdir: str, feature_id: str = "default") -> List[Decom
             found_idx = i
             break
 
-    for i, t in enumerate(tasks):
+    for _i, t in enumerate(tasks):
         if t.title.startswith("User Story"):
             if found_idx is not None and not t.dependencies:
                 t.dependencies.append(tasks[found_idx].task_id)
@@ -653,7 +653,7 @@ def decompose_from_spec(workdir: str, feature_id: str = "default") -> List[Decom
     return tasks
 
 
-def generate_tasks_md(tasks: List[DecomposedTask], spec_path: str, session_id: str, feature_id: str) -> str:
+def generate_tasks_md(tasks: list[DecomposedTask], spec_path: str, session_id: str, feature_id: str) -> str:
     """
     Generate tasks.md content following spec-kit template.
 
@@ -706,7 +706,7 @@ def generate_tasks_md(tasks: List[DecomposedTask], spec_path: str, session_id: s
             lines.append("")
 
     # Group story tasks by story ID
-    story_groups: Dict[str, List[DecomposedTask]] = {}
+    story_groups: dict[str, list[DecomposedTask]] = {}
     for task in story_tasks:
         story_match = re.match(r"US(\d+)", task.task_id)
         if story_match:

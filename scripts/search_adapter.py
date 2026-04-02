@@ -6,10 +6,10 @@ Provides actual web search capabilities for the RESEARCH phase, with fallback
 to template-based findings when search is unavailable.
 """
 
-import subprocess
 import json
-from typing import List, Optional
+import subprocess
 from dataclasses import dataclass
+from typing import Optional
 from urllib.parse import quote_plus
 
 
@@ -29,7 +29,7 @@ class SearchResult:
 class SearchResponse:
     """Complete search response"""
     query: str
-    results: List[SearchResult]
+    results: list[SearchResult]
     total_results: int
     search_engine: str
     error: Optional[str] = None
@@ -43,7 +43,7 @@ class SearchResponse:
     def has_results(self) -> bool:
         return len(self.results) > 0 and self.error is None
 
-    def get_high_confidence_results(self, min_reliability: str = "B") -> List[SearchResult]:
+    def get_high_confidence_results(self, min_reliability: str = "B") -> list[SearchResult]:
         """Return results with reliability >= min_reliability"""
         reliability_order = {"A": 4, "B": 3, "C": 2, "D": 1}
         min_level = reliability_order.get(min_reliability, 0)
@@ -97,7 +97,7 @@ def classify_source_reliability(url: str) -> str:
     return "D"
 
 
-def _get_reliability_dist(results: List[SearchResult]) -> dict:
+def _get_reliability_dist(results: list[SearchResult]) -> dict:
     """Get distribution of reliability grades in results"""
     dist = {"A": 0, "B": 0, "C": 0, "D": 0}
     for r in results:

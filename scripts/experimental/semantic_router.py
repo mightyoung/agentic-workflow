@@ -27,7 +27,6 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # Optional: numpy can be used for vector operations if available
 HAS_NUMPY = False
@@ -42,12 +41,12 @@ class PhaseInfo:
     """Phase 详细信息"""
     name: str
     description: str
-    keywords: List[str]  # 降级用关键词
-    examples: List[str]  # 示例输入
+    keywords: list[str]  # 降级用关键词
+    examples: list[str]  # 示例输入
     triggers_workflow: bool = True  # 是否触发完整工作流
 
 
-PHASES: Dict[str, PhaseInfo] = {
+PHASES: dict[str, PhaseInfo] = {
     "ROUTER": PhaseInfo(
         name="ROUTER",
         description="路由决策 - 分析用户意图并选择合适的执行路径",
@@ -134,7 +133,7 @@ EmbedBackend = EmbeddingProvider  # Alias for backward compatibility
 @dataclass
 class EmbeddingResult:
     """嵌入结果"""
-    embedding: List[float]
+    embedding: list[float]
     provider: EmbeddingProvider
     model: str
     tokens: int = 0
@@ -204,8 +203,8 @@ class EmbeddingGenerator:
 
     def _embed_ollama(self, text: str, model: str) -> EmbeddingResult:
         """使用 Ollama 生成嵌入"""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         payload = {"model": model, "prompt": text}
         data = json.dumps(payload).encode("utf-8")
@@ -231,8 +230,8 @@ class EmbeddingGenerator:
 
     def _embed_openai(self, text: str, model: str) -> EmbeddingResult:
         """使用 OpenAI API 生成嵌入"""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         api_key = os.getenv("OPENAI_API_KEY")
         payload = {"input": text, "model": model}
@@ -277,7 +276,7 @@ class EmbeddingGenerator:
         words = [w for w in text if len(w) > 1 and w not in stop_words]
 
         # 统计词频
-        freq: Dict[str, int] = {}
+        freq: dict[str, int] = {}
         for w in words:
             freq[w] = freq.get(w, 0) + 1
 
@@ -310,7 +309,7 @@ class EmbeddingGenerator:
 # Semantic Similarity
 # ============================================================================
 
-def cosine_similarity(a: List[float], b: List[float]) -> float:
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     """计算余弦相似度"""
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x * x for x in a))
@@ -322,7 +321,7 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def euclidean_distance(a: List[float], b: List[float]) -> float:
+def euclidean_distance(a: list[float], b: list[float]) -> float:
     """计算欧氏距离"""
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
 
@@ -337,7 +336,7 @@ class RouteResult:
     trigger_type: str  # FULL_WORKFLOW, STAGE, DIRECT_ANSWER
     phase: str
     confidence: float  # 0.0 - 1.0
-    all_scores: Dict[str, float] = field(default_factory=dict)  # 所有 phase 得分
+    all_scores: dict[str, float] = field(default_factory=dict)  # 所有 phase 得分
     provider: str = "unknown"
     method: str = "semantic"  # semantic 或 keyword
 
@@ -382,8 +381,8 @@ class SemanticRouter:
         self.embedding_provider = EmbeddingGenerator(embedding_provider)
         self.cache_dir = Path(cache_dir)
         self.confidence_threshold = confidence_threshold
-        self._phase_embeddings: Dict[str, EmbeddingResult] = {}
-        self._keyword_scores: Dict[str, int] = {}
+        self._phase_embeddings: dict[str, EmbeddingResult] = {}
+        self._keyword_scores: dict[str, int] = {}
 
         # 预计算 phase 嵌入
         self._init_phase_embeddings()
@@ -448,14 +447,14 @@ class SemanticRouter:
 
         return False
 
-    def _check_force(self, text: str) -> Optional[str]:
+    def _check_force(self, text: str) -> str | None:
         """检查强制触发"""
         for trigger in self.FORCE_TRIGGERS:
             if trigger in text:
                 return "FULL_WORKFLOW"
         return None
 
-    def _compute_keyword_scores(self, text: str) -> Dict[str, float]:
+    def _compute_keyword_scores(self, text: str) -> dict[str, float]:
         """计算关键词匹配分数"""
         text_lower = text.lower()
         scores = {}
@@ -601,7 +600,7 @@ class SemanticRouter:
         # Step 4: 降级到关键词路由
         return self._keyword_route(text)
 
-    def get_all_scores(self, text: str) -> Dict[str, float]:
+    def get_all_scores(self, text: str) -> dict[str, float]:
         """获取所有 phase 的得分"""
         result = self.route(text)
         return result.all_scores
@@ -612,7 +611,7 @@ class SemanticRouter:
 # ============================================================================
 
 # 全局路由器实例
-_global_router: Optional[SemanticRouter] = None
+_global_router: SemanticRouter | None = None
 
 
 def get_router() -> SemanticRouter:
@@ -623,7 +622,7 @@ def get_router() -> SemanticRouter:
     return _global_router
 
 
-def route_semantic(text: str) -> Tuple[str, str]:
+def route_semantic(text: str) -> tuple[str, str]:
     """
     语义路由便捷函数
 

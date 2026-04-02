@@ -22,7 +22,6 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Dict, List
 
 # 默认长期记忆文件
 DEFAULT_MEMORY_FILE = "MEMORY.md"
@@ -63,7 +62,7 @@ def add_experience(experience: str, filepath: str = DEFAULT_MEMORY_FILE) -> bool
     """添加核心经验"""
     ensure_memory_exists(filepath)
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         content = f.read()
 
     # 在核心经验章节添加
@@ -96,7 +95,7 @@ def add_pattern(pattern_name: str, description: str, filepath: str = DEFAULT_MEM
     """添加模式记录"""
     ensure_memory_exists(filepath)
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         content = f.read()
 
     new_pattern = f"- **{pattern_name}**: {description}\n"
@@ -121,13 +120,13 @@ def add_pattern(pattern_name: str, description: str, filepath: str = DEFAULT_MEM
     return True
 
 
-def search_memory(query: str, filepath: str = DEFAULT_MEMORY_FILE) -> List[str]:
+def search_memory(query: str, filepath: str = DEFAULT_MEMORY_FILE) -> list[str]:
     """搜索记忆内容"""
     if not os.path.exists(filepath):
         print(f"长期记忆文件不存在: {filepath}")
         return []
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         content = f.read()
 
     results = []
@@ -150,7 +149,7 @@ def show_memory(filepath: str = DEFAULT_MEMORY_FILE) -> None:
         print(f"长期记忆文件不存在: {filepath}")
         return
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         print(f.read())
 
 
@@ -169,7 +168,7 @@ def refine_from_daily_logs(days: int = 7, memory_dir: str = "memory",
         date = (end_date - timedelta(days=i)).strftime('%Y-%m-%d')
         log_file = os.path.join(memory_dir, f"{date}.md")
         if os.path.exists(log_file):
-            with open(log_file, 'r', encoding='utf-8') as f:
+            with open(log_file, encoding='utf-8') as f:
                 recent_logs.append(f.read())
 
     if not recent_logs:
@@ -210,7 +209,7 @@ def read_task_history(limit: int = 100) -> list:
 
     records = []
     try:
-        with open(history_file, 'r', encoding='utf-8') as f:
+        with open(history_file, encoding='utf-8') as f:
             for line_num, line in enumerate(f):
                 if line_num >= limit:
                     break
@@ -220,7 +219,7 @@ def read_task_history(limit: int = 100) -> list:
                         records.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
-    except (IOError, OSError):
+    except OSError:
         return []
 
     return records
@@ -307,7 +306,7 @@ def generate_weekly_report(days: int = 7, output_format: str = "text") -> str:
                 lessons.append(lesson)
 
     # 统计常见模式
-    status_counts: Dict[str, int] = {}
+    status_counts: dict[str, int] = {}
     for r in recent_records:
         status = r.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1

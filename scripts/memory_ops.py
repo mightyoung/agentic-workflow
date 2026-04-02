@@ -20,7 +20,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Any, Optional
 
 from safe_io import safe_append_jsonl, safe_write_text_locked
 
@@ -106,7 +106,7 @@ def update_task_info(path: str, task: str, phase: str = "PLANNING") -> bool:
     if not ensure_session_state_exists(path) and not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     # 更新任务描述
@@ -130,7 +130,7 @@ def add_correction(path: str, original: str, corrected: str) -> bool:
     if not ensure_session_state_exists(path) and not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -155,7 +155,7 @@ def add_preference(path: str, preference_type: str, value: str) -> bool:
     if not ensure_session_state_exists(path) and not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     if preference_type == 'style':
@@ -182,7 +182,7 @@ def add_decision(path: str, decision: str, reason: str = "") -> bool:
     if not ensure_session_state_exists(path) and not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -205,7 +205,7 @@ def add_value(path: str, value_type: str, value: str) -> bool:
     if not ensure_session_state_exists(path) and not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     new_row = f"| {value_type} | {value} |\n"
@@ -232,7 +232,7 @@ def update_resume_point(path: str, phase: str, progress: int) -> bool:
     if not os.path.exists(path):
         return False
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     # 更新中断点
@@ -265,7 +265,7 @@ def get_info(path: str, key: str) -> Optional[str]:
     if not os.path.exists(path):
         return None
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         content = f.read()
 
     if key == 'task':
@@ -288,7 +288,7 @@ def get_info(path: str, key: str) -> Optional[str]:
     return None
 
 
-def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> Dict[str, Any]:
+def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> dict[str, Any]:
     """
     检查会话空闲状态
 
@@ -304,7 +304,7 @@ def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> Dict[str, 
             "task_info": {"phase": "...", "progress": N}
         }
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "is_idle": False,
         "idle_minutes": 0,
         "last_active": None,
@@ -315,7 +315,7 @@ def check_idle_status(path: str, idle_threshold_minutes: int = 30) -> Dict[str, 
         return result
 
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             content = f.read()
 
         # 解析最后活跃时间（从"开始时间"字段）
@@ -406,7 +406,7 @@ def show_session_state(path: str = DEFAULT_SESSION_STATE) -> None:
         print("使用 --op=init 初始化")
         return
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         print(f.read())
 
 
@@ -445,7 +445,7 @@ def main():
         elif args.key == 'phase':
             # 特殊处理 phase
             ensure_session_state_exists(args.path)
-            with open(args.path, 'r', encoding='utf-8') as f:
+            with open(args.path, encoding='utf-8') as f:
                 content = f.read()
             pattern = r'(\*\*阶段\*\*: )(.*)(\n)'
             content = re.sub(pattern, f'\\1{args.value}\\3', content)

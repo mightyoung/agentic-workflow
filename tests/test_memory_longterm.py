@@ -17,10 +17,7 @@ from datetime import datetime, timedelta
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
-from memory_longterm import (
-    read_task_history,
-    generate_weekly_report
-)
+from memory_longterm import generate_weekly_report, read_task_history
 
 
 class TestTaskHistory(unittest.TestCase):

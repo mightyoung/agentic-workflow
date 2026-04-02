@@ -24,10 +24,9 @@ import json as json_lib
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from safe_io import safe_write_text_locked
-
 
 # Placeholder patterns for validation
 PLACEHOLDER_PATTERNS = ["to be filled", "(to be", "placeholder", "tbd", "tdd"]
@@ -135,7 +134,7 @@ REVIEWING phase will validate:
     return contract_path
 
 
-def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
+def parse_phase_contract(workdir: str = ".") -> dict[str, Any]:
     """
     Parse phase contract into a structured dict.
 
@@ -172,7 +171,7 @@ def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
         return {}
 
     content = contract_path.read_text(encoding="utf-8")
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "goals": [],
         "verification_methods": [],
         "owned_files": [],
@@ -201,7 +200,7 @@ def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
             file_path = line.replace("-", "").strip().replace("`", "")
             if file_path:
                 result["owned_files"].append(file_path)
-        elif current_section == "verification_methods" and line.startswith("1."):
+        elif current_section == "verification_methods" and re.match(r"^\d+\.", line):
             # Parse verification method
             method = re.sub(r"^\d+\.\s*\*\*.*?\*\*:\s*", "", line)
             result["verification_methods"].append(method)
@@ -238,7 +237,7 @@ def update_contract_json(workdir: str = ".", **kwargs) -> bool:
         return False
 
 
-def validate_contract_gate(workdir: str, state: Any) -> Tuple[bool, str]:
+def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
     """
     Validate contract fulfillment for completion gate.
 

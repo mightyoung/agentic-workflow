@@ -31,8 +31,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # Template variable pattern: {{variable_name}}
 TEMPLATE_PATTERN = re.compile(r"\{\{(\w+)\}\}")
@@ -45,16 +44,16 @@ class SkillMetadata:
     version: str
     status: str  # "implemented", "experimental", "planned"
     description: str
-    tags: List[str] = field(default_factory=list)
-    requires: Dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    requires: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ExitCriteria:
     """Machine-readable exit criteria"""
-    conditions: List[str] = field(default_factory=list)  # Human-readable conditions
+    conditions: list[str] = field(default_factory=list)  # Human-readable conditions
     # For programmatic checking, each condition can have a check function
-    required_artifacts: List[str] = field(default_factory=list)
+    required_artifacts: list[str] = field(default_factory=list)
     required_decisions: int = 0  # Minimum number of decisions to have made
 
 
@@ -101,7 +100,7 @@ class SkillLoader:
     def __init__(self, skills_dir: str = "skills"):
         self.skills_dir = Path(skills_dir)
 
-    def load_skill(self, phase_name: str) -> Optional[Skill]:
+    def load_skill(self, phase_name: str) -> Skill | None:
         """
         Load a skill by phase name.
 
@@ -118,9 +117,9 @@ class SkillLoader:
         content = skill_path.read_text(encoding="utf-8")
         return self.parse_skill_md(phase_name.upper(), content)
 
-    def load_all_skills(self) -> Dict[str, Skill]:
+    def load_all_skills(self) -> dict[str, Skill]:
         """Load all available skills."""
-        skills = {}
+        skills: dict[str, Skill] = {}
         if not self.skills_dir.exists():
             return skills
 
@@ -132,7 +131,7 @@ class SkillLoader:
 
         return skills
 
-    def parse_skill_md(self, phase_name: str, content: str) -> Optional[Skill]:
+    def parse_skill_md(self, phase_name: str, content: str) -> Skill | None:
         """
         Parse skill.md content into a Skill object.
 
@@ -185,9 +184,9 @@ class SkillLoader:
             raw_content=markdown,
         )
 
-    def _parse_frontmatter(self, frontmatter: str) -> Optional[SkillMetadata]:
+    def _parse_frontmatter(self, frontmatter: str) -> SkillMetadata | None:
         """Parse YAML frontmatter into SkillMetadata."""
-        metadata = {
+        metadata: dict[str, Any] = {
             "name": "",
             "version": "1.0.0",
             "status": "unknown",
@@ -240,11 +239,11 @@ class SkillLoader:
             requires=metadata["requires"],
         )
 
-    def _extract_sections(self, markdown: str) -> Dict[str, str]:
+    def _extract_sections(self, markdown: str) -> dict[str, str]:
         """Extract ## headers and their content as sections."""
-        sections = {}
-        current_section = None
-        current_content = []
+        sections: dict[str, str] = {}
+        current_section: str | None = None
+        current_content: list[str] = []
 
         for line in markdown.split("\n"):
             if line.startswith("## "):
@@ -269,7 +268,7 @@ class SkillLoader:
         phase_name: str,
         overview: str,
         core_process: str,
-        sections: Dict[str, str],
+        sections: dict[str, str],
     ) -> str:
         """
         Build a prompt template from skill sections.
@@ -370,9 +369,9 @@ class SkillPromptFormatter:
         self,
         task: str,
         session_id: str = "",
-        context: Optional[Dict[str, Any]] = None,
-        artifacts: Optional[List[str]] = None,
-        decisions: Optional[List[str]] = None,
+        context: dict[str, Any] | None = None,
+        artifacts: list[str] | None = None,
+        decisions: list[str] | None = None,
         **extra_vars: Any,
     ) -> str:
         """
@@ -414,7 +413,7 @@ class SkillPromptFormatter:
 
         return prompt
 
-    def _format_context(self, context: Dict[str, Any]) -> str:
+    def _format_context(self, context: dict[str, Any]) -> str:
         """Format context dict as readable string."""
         if not context:
             return "No additional context"
@@ -423,14 +422,14 @@ class SkillPromptFormatter:
             parts.append(f"- {key}: {value}")
         return "\n".join(parts) if parts else "No additional context"
 
-    def _format_list(self, items: List[str]) -> str:
+    def _format_list(self, items: list[str]) -> str:
         """Format list as readable string."""
         if not items:
             return "None"
         return "\n".join(f"- {item}" for item in items)
 
 
-def load_skill(phase: str, skills_dir: str = "skills") -> Optional[Skill]:
+def load_skill(phase: str, skills_dir: str = "skills") -> Skill | None:
     """
     Convenience function to load a skill by phase name.
 
@@ -449,10 +448,10 @@ def format_skill_prompt(
     phase: str,
     task: str,
     session_id: str = "",
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
     skills_dir: str = "skills",
     **extra_vars: Any,
-) -> Optional[str]:
+) -> str | None:
     """
     Convenience function to load and format a skill prompt in one call.
 

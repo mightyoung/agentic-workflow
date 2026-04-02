@@ -3,6 +3,7 @@ Palindrome checker tests for WITHOUT Skill version.
 """
 
 import pytest
+
 from src.palindrome_without_skill import is_palindrome, is_palindrome_case_insensitive
 
 

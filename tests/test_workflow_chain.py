@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from router_helpers import load_router_module
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ROUTER = load_router_module()

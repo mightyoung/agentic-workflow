@@ -2,9 +2,9 @@ import fcntl
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from contextlib import contextmanager
 
 
 @contextmanager
@@ -176,9 +176,9 @@ def safe_read_json(path: str | Path) -> Any:
         return None
 
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return None
 
 

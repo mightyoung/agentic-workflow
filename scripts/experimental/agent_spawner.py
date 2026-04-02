@@ -36,8 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
-
+from typing import Any
 
 # ============================================================================
 # Domain & Agent Definitions (借鉴 ruflo domain-based routing)
@@ -62,7 +61,7 @@ AGENTS_DIR = "agents"
 class AgentCapability:
     """Agent能力描述"""
     domain: Domain
-    keywords: List[str]  # 触发关键词
+    keywords: list[str]  # 触发关键词
     priority: int = 0    # 同domain内的优先级
 
 
@@ -73,9 +72,9 @@ class AgentMetadata:
     domain: Domain
     description: str
     responsibility: str
-    triggers: List[str]
-    tools: List[str]
-    capabilities: List[AgentCapability] = field(default_factory=list)
+    triggers: list[str]
+    tools: list[str]
+    capabilities: list[AgentCapability] = field(default_factory=list)
     max_concurrent: int = 3
 
 
@@ -109,7 +108,7 @@ class AgentRegistration:
     """注册的Agent"""
     metadata: AgentMetadata
     health: AgentHealth
-    current_task: Optional[str] = None
+    current_task: str | None = None
 
 
 class AgentRegistry:
@@ -124,7 +123,7 @@ class AgentRegistry:
     """
 
     def __init__(self):
-        self._agents: Dict[str, AgentRegistration] = {}
+        self._agents: dict[str, AgentRegistration] = {}
         self._lock = threading.RLock()
         self._heartbeat_interval = 30  # 秒
         self._max_miss = 3
@@ -149,7 +148,7 @@ class AgentRegistry:
                 self._agents[name].health.state = AgentState.TERMINATED
                 del self._agents[name]
 
-    def get_agents_by_domain(self, domain: Domain) -> List[str]:
+    def get_agents_by_domain(self, domain: Domain) -> list[str]:
         """获取指定领域的Agent"""
         with self._lock:
             return [
@@ -158,7 +157,7 @@ class AgentRegistry:
                 reg.health.state in (AgentState.IDLE, AgentState.BUSY)
             ]
 
-    def get_available_agents(self) -> List[str]:
+    def get_available_agents(self) -> list[str]:
         """获取所有可用Agent"""
         with self._lock:
             return [
@@ -166,7 +165,7 @@ class AgentRegistry:
                 if reg.health.state == AgentState.IDLE
             ]
 
-    def update_state(self, name: str, state: AgentState, task_id: Optional[str] = None):
+    def update_state(self, name: str, state: AgentState, task_id: str | None = None):
         """更新Agent状态"""
         with self._lock:
             if name not in self._agents:
@@ -194,7 +193,7 @@ class AgentRegistry:
             reg.health.miss_count = 0
             return True
 
-    def check_health(self) -> Dict[str, bool]:
+    def check_health(self) -> dict[str, bool]:
         """检查所有Agent健康状态"""
         now = datetime.now()
         result = {}
@@ -212,7 +211,7 @@ class AgentRegistry:
                     result[name] = True
         return result
 
-    def score_agent(self, name: str) -> Dict[str, float]:
+    def score_agent(self, name: str) -> dict[str, float]:
         """
         5维度Agent评分 (借鉴 ruflo queen-coordinator)
 
@@ -247,7 +246,7 @@ class AgentRegistry:
                 "availability": avail,
             }
 
-    def select_best_agent(self, domain: Domain) -> Optional[str]:
+    def select_best_agent(self, domain: Domain) -> str | None:
         """
         基于5维度评分选择最佳Agent (借鉴 ruflo queen-coordinator)
         """
@@ -299,15 +298,15 @@ class OrchestratedTask:
     agent_type: str
     task: str
     domain: Domain
-    context: Optional[Dict[str, Any]] = None
-    dependencies: List[str] = field(default_factory=list)
-    dependents: List[str] = field(default_factory=list)  # 反向依赖
+    context: dict[str, Any] | None = None
+    dependencies: list[str] = field(default_factory=list)
+    dependents: list[str] = field(default_factory=list)  # 反向依赖
     state: TaskState = TaskState.PENDING
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 class CycleDetectedError(Exception):
@@ -327,9 +326,9 @@ class TaskOrchestrator:
     """
 
     def __init__(self):
-        self._tasks: Dict[str, OrchestratedTask] = {}
-        self._dependency_graph: Dict[str, Set[str]] = defaultdict(set)  # task -> dependencies
-        self._dependent_graph: Dict[str, Set[str]] = defaultdict(set)   # task -> dependents
+        self._tasks: dict[str, OrchestratedTask] = {}
+        self._dependency_graph: dict[str, set[str]] = defaultdict(set)  # task -> dependencies
+        self._dependent_graph: dict[str, set[str]] = defaultdict(set)   # task -> dependents
         self._lock = threading.RLock()
 
     def add_task(self, task: OrchestratedTask) -> str:
@@ -352,7 +351,7 @@ class TaskOrchestrator:
             self._tasks[task_id].dependencies.append(dependency)
             self._tasks[dependency].dependents.append(task_id)
 
-    def detect_cycle(self) -> Optional[List[str]]:
+    def detect_cycle(self) -> list[str] | None:
         """
         检测循环依赖 (DFS)
 
@@ -364,7 +363,7 @@ class TaskOrchestrator:
             rec_stack = set()
             path = []
 
-            def dfs(task_id: str) -> Optional[List[str]]:
+            def dfs(task_id: str) -> list[str] | None:
                 visited.add(task_id)
                 rec_stack.add(task_id)
                 path.append(task_id)
@@ -390,7 +389,7 @@ class TaskOrchestrator:
 
             return None
 
-    def get_execution_order(self) -> List[str]:
+    def get_execution_order(self) -> list[str]:
         """
         拓扑排序获取执行顺序 (Kahn算法)
 
@@ -425,7 +424,7 @@ class TaskOrchestrator:
 
             return result
 
-    def get_ready_tasks(self) -> List[str]:
+    def get_ready_tasks(self) -> list[str]:
         """获取所有依赖已满足的任务"""
         with self._lock:
             ready = []
@@ -440,7 +439,7 @@ class TaskOrchestrator:
                     ready.append(task_id)
             return ready
 
-    def mark_completed(self, task_id: str, result: Any = None, error: Optional[str] = None):
+    def mark_completed(self, task_id: str, result: Any = None, error: str | None = None):
         """标记任务完成"""
         with self._lock:
             if task_id not in self._tasks:
@@ -451,7 +450,7 @@ class TaskOrchestrator:
             task.error = error
             task.completed_at = datetime.now().isoformat()
 
-    def get_rollback_order(self) -> List[str]:
+    def get_rollback_order(self) -> list[str]:
         """获取回滚顺序 (反向依赖拓扑)"""
         with self._lock:
             completed = [
@@ -513,7 +512,7 @@ class MessageBus:
     """
 
     def __init__(self):
-        self._queues: Dict[MessagePriority, List[AgentMessage]] = {
+        self._queues: dict[MessagePriority, list[AgentMessage]] = {
             p: [] for p in MessagePriority
         }
         self._lock = threading.RLock()
@@ -538,7 +537,7 @@ class MessageBus:
             self._queues[priority].append(msg)
             return msg_id
 
-    def receive(self, agent: str, timeout: float = 1.0) -> Optional[AgentMessage]:
+    def receive(self, agent: str, timeout: float = 1.0) -> AgentMessage | None:
         """接收消息 (阻塞)"""
         start = time.time()
         while time.time() - start < timeout:
@@ -614,15 +613,15 @@ class ConsensusProtocol:
     def __init__(self, registry: AgentRegistry):
         self.registry = registry
 
-    def vote(self, agents: List[str], proposal: str,
-             mode: ConsensusMode = ConsensusMode.MAJORITY) -> tuple[bool, List[Vote]]:
+    def vote(self, agents: list[str], proposal: str,
+             mode: ConsensusMode = ConsensusMode.MAJORITY) -> tuple[bool, list[Vote]]:
         """
         投票决策
 
         Returns:
             (accepted, votes)
         """
-        votes: List[Vote] = []
+        votes: list[Vote] = []
 
         for agent in agents:
             scores = self.registry.score_agent(agent)
@@ -700,7 +699,7 @@ class QueenCoordinator:
             if metadata:
                 self.registry.register(metadata)
 
-    def _parse_agent_file(self, path: Path) -> Optional[AgentMetadata]:
+    def _parse_agent_file(self, path: Path) -> AgentMetadata | None:
         """解析Agent定义文件"""
         content = path.read_text(encoding="utf-8")
         name = path.stem
@@ -754,14 +753,14 @@ class QueenCoordinator:
         self._monitor_thread = threading.Thread(target=monitor, daemon=True)
         self._monitor_thread.start()
 
-    def decompose_task(self, task: str, prompt: str = "") -> List[OrchestratedTask]:
+    def decompose_task(self, task: str, prompt: str = "") -> list[OrchestratedTask]:
         """
         任务分解 (借鉴 ruflo)
 
         Returns:
             分解后的任务列表
         """
-        tasks: List[OrchestratedTask] = []
+        tasks: list[OrchestratedTask] = []
 
         # 简单的基于关键词的分解
         task_lower = task.lower()
@@ -823,7 +822,7 @@ class QueenCoordinator:
 
         return tasks
 
-    def select_agent_for_task(self, task: OrchestratedTask) -> Optional[str]:
+    def select_agent_for_task(self, task: OrchestratedTask) -> str | None:
         """为任务选择最佳Agent"""
         return self.registry.select_best_agent(task.domain)
 
@@ -852,14 +851,14 @@ class QueenCoordinator:
         # 执行
         return True
 
-    def get_bottlenecks(self) -> List[str]:
+    def get_bottlenecks(self) -> list[str]:
         """检测瓶颈 (某domain任务堆积)"""
-        domain_counts: Dict[Domain, int] = defaultdict(int)
+        domain_counts: dict[Domain, int] = defaultdict(int)
         for task in self.orchestrator._tasks.values():
             if task.state == TaskState.IN_PROGRESS:
                 domain_counts[task.domain] += 1
 
-        bottlenecks: List[str] = []
+        bottlenecks: list[str] = []
         for domain, count in domain_counts.items():
             if count > 3:  # 阈值
                 bottlenecks.append(f"{domain.value}: {count} tasks")
@@ -885,7 +884,7 @@ class AgentTask:
     """Agent任务"""
     agent_type: str
     task: str
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
     timeout: int = 300
     priority: int = 0
 
@@ -896,13 +895,13 @@ class AgentResult:
     agent_type: str
     task: str
     status: AgentStatus
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
     duration: float = 0.0
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "agent_type": self.agent_type,
             "task": self.task,
@@ -922,11 +921,11 @@ class AgentDefinition:
     description: str
     responsibility: str
     phase: str
-    triggers: List[str]
-    tools: List[str]
+    triggers: list[str]
+    tools: list[str]
 
     @classmethod
-    def from_file(cls, path: Path) -> Optional[AgentDefinition]:
+    def from_file(cls, path: Path) -> AgentDefinition | None:
         """从文件加载Agent定义"""
         if not path.exists():
             return None
@@ -935,8 +934,8 @@ class AgentDefinition:
         description = ""
         responsibility = ""
         phase = ""
-        triggers: List[str] = []
-        tools: List[str] = []
+        triggers: list[str] = []
+        tools: list[str] = []
 
         import re
         desc_match = re.search(r'description:\s*\|?\s*\n((?:[ \t]+.+\n?)+)', content)
@@ -975,7 +974,7 @@ class AgentSpawner:
     def __init__(self, workdir: str = "."):
         self.workdir = Path(workdir)
         self.agents_dir = self.workdir / AGENTS_DIR
-        self._agent_definitions: Dict[str, AgentDefinition] = {}
+        self._agent_definitions: dict[str, AgentDefinition] = {}
         self.coordinator = QueenCoordinator(workdir)
         self._load_agent_definitions()
 
@@ -991,16 +990,16 @@ class AgentSpawner:
             if definition:
                 self._agent_definitions[definition.name] = definition
 
-    def get_agent_definition(self, agent_type: str) -> Optional[AgentDefinition]:
+    def get_agent_definition(self, agent_type: str) -> AgentDefinition | None:
         """获取指定Agent的定义"""
         return self._agent_definitions.get(agent_type)
 
-    def list_agents(self) -> List[AgentDefinition]:
+    def list_agents(self) -> list[AgentDefinition]:
         """列出所有可用Agent"""
         return list(self._agent_definitions.values())
 
     def spawn_by_domain(self, domain: Domain, task: str,
-                        context: Optional[Dict[str, Any]] = None) -> AgentResult:
+                        context: dict[str, Any] | None = None) -> AgentResult:
         """领域路由执行"""
         best_agent = self.coordinator.registry.select_best_agent(domain)
         if not best_agent:
@@ -1010,7 +1009,7 @@ class AgentSpawner:
         return self.spawn(AgentTask(best_agent, task, context))
 
     def spawn(self, task: AgentTask,
-              context: Optional[Dict[str, Any]] = None) -> AgentResult:
+              context: dict[str, Any] | None = None) -> AgentResult:
         """派发单个Agent任务"""
         start_time = time.time()
         started_at = datetime.now().isoformat()
@@ -1040,12 +1039,12 @@ class AgentSpawner:
         result.duration = time.time() - start_time
         return result
 
-    def spawn_parallel(self, tasks: List[AgentTask],
-                      context: Optional[Dict[str, Any]] = None,
-                      max_workers: int = 3) -> List[AgentResult]:
+    def spawn_parallel(self, tasks: list[AgentTask],
+                      context: dict[str, Any] | None = None,
+                      max_workers: int = 3) -> list[AgentResult]:
         """并行派发多个Agent任务"""
         sorted_tasks = sorted(tasks, key=lambda t: t.priority, reverse=True)
-        results: List[AgentResult] = []
+        results: list[AgentResult] = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {
@@ -1068,10 +1067,10 @@ class AgentSpawner:
 
         return results
 
-    def spawn_sequential(self, tasks: List[AgentTask],
-                        context: Optional[Dict[str, Any]] = None) -> List[AgentResult]:
+    def spawn_sequential(self, tasks: list[AgentTask],
+                        context: dict[str, Any] | None = None) -> list[AgentResult]:
         """串行派发多个Agent任务"""
-        results: List[AgentResult] = []
+        results: list[AgentResult] = []
 
         for task in tasks:
             result = self.spawn(task, context)
@@ -1083,7 +1082,7 @@ class AgentSpawner:
 
     def spawn_with_orchestration(self, task_description: str,
                                  use_consensus: bool = True,
-                                 consensus_mode: ConsensusMode = ConsensusMode.MAJORITY) -> Dict[str, Any]:
+                                 consensus_mode: ConsensusMode = ConsensusMode.MAJORITY) -> dict[str, Any]:
         """
         完整编排流程 (借鉴 ruflo)
 
@@ -1106,7 +1105,7 @@ class AgentSpawner:
             }
 
         # 3. 执行
-        results: Dict[str, Dict[str, Any]] = {}
+        results: dict[str, dict[str, Any]] = {}
         for task_id in exec_order:
             task = self.coordinator.orchestrator._tasks[task_id]
 
@@ -1140,8 +1139,8 @@ class AgentSpawner:
         }
 
     def _build_instruction(self, task: AgentTask,
-                          context: Optional[Dict[str, Any]],
-                          definition: Optional[AgentDefinition]) -> str:
+                          context: dict[str, Any] | None,
+                          definition: AgentDefinition | None) -> str:
         """构建Agent执行指令"""
         instruction_parts = []
 
@@ -1163,7 +1162,7 @@ class AgentSpawner:
 
         return "\n".join(instruction_parts)
 
-    def _execute_agent(self, task: AgentTask, instruction: str) -> Dict[str, Any]:
+    def _execute_agent(self, task: AgentTask, instruction: str) -> dict[str, Any]:
         """执行Agent (模拟)"""
         time.sleep(0.1)
         return {
@@ -1190,9 +1189,9 @@ class MultiAgentCoordinator:
         self.workdir = Path(workdir)
         self.spawner = AgentSpawner(workdir)
         self.session_id = f"ma{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        self.results: List[AgentResult] = []
+        self.results: list[AgentResult] = []
 
-    def run_research_and_plan(self, query: str) -> Dict[str, Any]:
+    def run_research_and_plan(self, query: str) -> dict[str, Any]:
         """执行研究+规划流程"""
         result = self.spawner.spawn_with_orchestration(
             f"研究并规划: {query}",
@@ -1205,7 +1204,7 @@ class MultiAgentCoordinator:
             "result": result,
         }
 
-    def run_code_and_review(self, task_description: str) -> Dict[str, Any]:
+    def run_code_and_review(self, task_description: str) -> dict[str, Any]:
         """执行代码+审查流程"""
         result = self.spawner.spawn_with_orchestration(
             f"实现并审查: {task_description}",
@@ -1218,7 +1217,7 @@ class MultiAgentCoordinator:
             "result": result,
         }
 
-    def run_debug_and_fix(self, bug_description: str) -> Dict[str, Any]:
+    def run_debug_and_fix(self, bug_description: str) -> dict[str, Any]:
         """执行调试+修复流程"""
         result = self.spawner.spawn_with_orchestration(
             f"调试并修复: {bug_description}",

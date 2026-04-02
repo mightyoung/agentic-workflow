@@ -10,10 +10,10 @@ Schema Version: 1.0
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class PhaseStatus(Enum):
@@ -74,18 +74,18 @@ class PhaseEntry:
     """Phase历史条目"""
     phase: str
     entered_at: str
-    exited_at: Optional[str] = None
+    exited_at: str | None = None
     reason: str = ""
-    actions: List[Dict[str, Any]] = field(default_factory=list)
-    decisions: List[Dict[str, str]] = field(default_factory=list)
-    file_changes: List[Dict[str, str]] = field(default_factory=list)
-    error: Optional[str] = None
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    decisions: list[dict[str, str]] = field(default_factory=list)
+    file_changes: list[dict[str, str]] = field(default_factory=list)
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> PhaseEntry:
+    def from_dict(cls, data: dict[str, Any]) -> PhaseEntry:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -97,18 +97,18 @@ class Task:
     description: str = ""
     status: str = "backlog"
     priority: str = "P1"
-    owned_files: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    owned_files: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     verification: str = ""
     created_at: str = ""
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     progress: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Task:
+    def from_dict(cls, data: dict[str, Any]) -> Task:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -118,9 +118,9 @@ class Decision:
     timestamp: str
     decision: str
     reason: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         return result
 
@@ -132,7 +132,7 @@ class FileChange:
     action: str
     timestamp: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -148,12 +148,12 @@ class WorkflowState:
     session_id: str = ""
     created_at: str = ""
     updated_at: str = ""
-    task: Optional[Task] = None
-    phase: Dict[str, Any] = field(default_factory=dict)
+    task: Task | None = None
+    phase: dict[str, Any] = field(default_factory=dict)
     trigger_type: str = "FULL_WORKFLOW"  # 触发类型: DIRECT_ANSWER, FULL_WORKFLOW, STAGE
-    artifacts: Dict[str, str] = field(default_factory=dict)
-    decisions: List[Decision] = field(default_factory=list)
-    file_changes: List[FileChange] = field(default_factory=list)
+    artifacts: dict[str, str] = field(default_factory=dict)
+    decisions: list[Decision] = field(default_factory=list)
+    file_changes: list[FileChange] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.created_at:
@@ -163,7 +163,7 @@ class WorkflowState:
         if not self.session_id:
             self.session_id = f"s{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "version": self.version,
             "session_id": self.session_id,
@@ -181,7 +181,7 @@ class WorkflowState:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> WorkflowState:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowState:
         task = None
         if data.get("task"):
             task = Task.from_dict(data["task"])
@@ -213,13 +213,13 @@ class TrajectoryPhase:
     """轨迹中的Phase条目"""
     phase: str
     entered_at: str
-    exited_at: Optional[str] = None
-    actions: List[Dict[str, Any]] = field(default_factory=list)
-    decisions: List[Dict[str, str]] = field(default_factory=list)
-    file_changes: List[Dict[str, str]] = field(default_factory=list)
-    error: Optional[str] = None
+    exited_at: str | None = None
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    decisions: list[dict[str, str]] = field(default_factory=list)
+    file_changes: list[dict[str, str]] = field(default_factory=list)
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -229,18 +229,18 @@ class Trajectory:
     run_id: str
     session_id: str
     created_at: str = ""
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     prompt: str = ""
     trigger_type: str = ""
-    phases: List[TrajectoryPhase] = field(default_factory=list)
+    phases: list[TrajectoryPhase] = field(default_factory=list)
     final_state: str = "running"
-    failure_reason: Optional[str] = None
+    failure_reason: str | None = None
 
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "session_id": self.session_id,
@@ -254,7 +254,7 @@ class Trajectory:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Trajectory:
+    def from_dict(cls, data: dict[str, Any]) -> Trajectory:
         phases = [TrajectoryPhase(**p) for p in data.get("phases", [])]
         return cls(
             run_id=data["run_id"],
@@ -280,7 +280,7 @@ ALLOWED_TASK_STATUS = {s.value for s in TaskStatus}
 ALLOWED_PRIORITIES = {p.value for p in Priority}
 
 
-def validate_phase(phase: str) -> List[str]:
+def validate_phase(phase: str) -> list[str]:
     """验证phase是否合法"""
     errors = []
     if phase not in ALLOWED_PHASES:
@@ -288,7 +288,7 @@ def validate_phase(phase: str) -> List[str]:
     return errors
 
 
-def validate_trigger_type(trigger_type: str) -> List[str]:
+def validate_trigger_type(trigger_type: str) -> list[str]:
     """验证trigger_type是否合法"""
     errors = []
     if trigger_type not in ALLOWED_TRIGGERS:
@@ -296,7 +296,7 @@ def validate_trigger_type(trigger_type: str) -> List[str]:
     return errors
 
 
-def validate_task(task_data: Dict[str, Any]) -> List[str]:
+def validate_task(task_data: dict[str, Any]) -> list[str]:
     """验证任务数据"""
     errors = []
 
@@ -316,7 +316,7 @@ def validate_task(task_data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def validate_state(state_data: Dict[str, Any]) -> List[str]:
+def validate_state(state_data: dict[str, Any]) -> list[str]:
     """验证完整状态数据"""
     errors = []
 
@@ -367,7 +367,7 @@ def register_migration(from_version: str, to_version: str):
     return decorator
 
 
-def migrate_state(state_data: Dict[str, Any]) -> Dict[str, Any]:
+def migrate_state(state_data: dict[str, Any]) -> dict[str, Any]:
     """
     将状态数据迁移到最新版本
 
@@ -399,7 +399,7 @@ def migrate_state(state_data: Dict[str, Any]) -> Dict[str, Any]:
     return state_data
 
 
-def _get_next_version(version: str) -> Optional[str]:
+def _get_next_version(version: str) -> str | None:
     """获取下一个版本号"""
     version_order = ["1.0", "1.1", "2.0"]
     try:
@@ -413,7 +413,7 @@ def _get_next_version(version: str) -> Optional[str]:
 
 # 示例迁移函数
 @register_migration("1.0", "1.1")
-def migrate_1_0_to_1_1(state: Dict[str, Any]) -> Dict[str, Any]:
+def migrate_1_0_to_1_1(state: dict[str, Any]) -> dict[str, Any]:
     """迁移 1.0 -> 1.1: 添加新字段"""
     if "metadata" not in state:
         state["metadata"] = {}

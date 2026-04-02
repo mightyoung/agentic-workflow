@@ -5,8 +5,8 @@ TDD Red Phase: All tests below are written BEFORE implementation.
 """
 
 import pytest
-from src.palindrome_with_skill import is_palindrome, is_palindrome_case_insensitive
 
+from src.palindrome_with_skill import is_palindrome, is_palindrome_case_insensitive
 
 # ===== 基本功能测试 (RED - 等待实现) =====
 

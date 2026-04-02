@@ -10,9 +10,9 @@ Task Tracker 测试 - 测试 task_tracker.py 的功能
 - 数据迁移
 """
 
+import json
 import os
 import sys
-import json
 import tempfile
 import unittest
 
@@ -20,17 +20,17 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
 from task_tracker import (
-    load_tracker,
-    create_task,
-    start_task,
-    update_status,
+    check_circuit_state,
     check_task_budget,
-    update_quality_gate,
+    create_task,
     get_task,
     list_tasks,
+    load_tracker,
     record_step_failure,
-    check_circuit_state,
-    reset_circuit
+    reset_circuit,
+    start_task,
+    update_quality_gate,
+    update_status,
 )
 
 

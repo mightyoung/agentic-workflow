@@ -3,7 +3,6 @@ String Utilities - 字符串处理工具
 包含: 反转、压缩、全排列
 """
 
-from typing import List
 
 
 def string_reverse(s: str) -> str:
@@ -38,7 +37,7 @@ def string_compress(s: str) -> str:
     return compressed if len(compressed) < len(s) else s
 
 
-def string_permutation(s: str) -> List[str]:
+def string_permutation(s: str) -> list[str]:
     """
     字符串全排列 - 使用回溯法
     时间复杂度: O(n! * n)
@@ -50,7 +49,7 @@ def string_permutation(s: str) -> List[str]:
     result = []
     used = [False] * n
 
-    def backtrack(path: List[str]):
+    def backtrack(path: list[str]):
         if len(path) == n:
             result.append("".join(path))
             return

@@ -20,7 +20,7 @@ import unittest
 from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "utils"))
-from binary_tree import TreeNode, preorder_traversal, inorder_traversal, postorder_traversal
+from binary_tree import TreeNode, inorder_traversal, postorder_traversal, preorder_traversal
 
 
 def build_tree(values: list) -> Optional[TreeNode]:

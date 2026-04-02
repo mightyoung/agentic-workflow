@@ -44,9 +44,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
-
-
+from typing import Any, Callable
 
 # ============================================================================
 # Loop Mode Definition
@@ -90,10 +88,10 @@ class LoopStep:
     observation: str = ""       # Observation: 执行结果
     reflection: str = ""        # Reflection: 反思反馈
     status: StepStatus = StepStatus.PENDING
-    error: Optional[str] = None
+    error: str | None = None
     duration: float = 0.0
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
 
 
 @dataclass
@@ -114,11 +112,11 @@ class LoopResult:
     """循环执行结果"""
     status: str  # completed, failed, timeout, max_iterations
     final_phase: str
-    steps: List[LoopStep]
+    steps: list[LoopStep]
     total_iterations: int
     total_duration: float
-    error: Optional[str] = None
-    trajectory: Optional[Dict[str, Any]] = None
+    error: str | None = None
+    trajectory: dict[str, Any] | None = None
 
 
 # ============================================================================
@@ -133,12 +131,12 @@ class ReflectionEngine:
     """
 
     def __init__(self):
-        self.experience_store: List[Dict[str, Any]] = []
+        self.experience_store: list[dict[str, Any]] = []
 
     def reflect(
         self,
         step: LoopStep,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> str:
         """
         生成反思反馈
@@ -181,14 +179,14 @@ class ReflectionEngine:
 
         return " | ".join(reflections) if reflections else "继续执行"
 
-    def add_experience(self, experience: Dict[str, Any]):
+    def add_experience(self, experience: dict[str, Any]):
         """添加经验到存储"""
         self.experience_store.append({
             **experience,
             "timestamp": datetime.now().isoformat(),
         })
 
-    def get_relevant_experience(self, task: str, limit: int = 3) -> List[Dict[str, Any]]:
+    def get_relevant_experience(self, task: str, limit: int = 3) -> list[dict[str, Any]]:
         """获取相关经验"""
         # 简单关键词匹配
         task_lower = task.lower()
@@ -219,10 +217,10 @@ class PlanExecuteEngine:
 
     def __init__(self, executor: Callable):
         self.executor = executor
-        self.plan: List[Dict[str, Any]] = []
+        self.plan: list[dict[str, Any]] = []
         self.executed_count = 0
 
-    def create_plan(self, task: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def create_plan(self, task: str, context: dict[str, Any]) -> list[dict[str, Any]]:
         """
         生成任务计划
 
@@ -269,7 +267,7 @@ class PlanExecuteEngine:
         self.plan = plan
         return plan
 
-    def replan(self, completed_step: LoopStep, remaining_plan: List[Dict]) -> List[Dict[str, Any]]:
+    def replan(self, completed_step: LoopStep, remaining_plan: list[dict]) -> list[dict[str, Any]]:
         """
         重新规划 (仅在需要时调用)
 
@@ -293,7 +291,7 @@ class PlanExecuteEngine:
         # 如果成功，继续原计划
         return remaining_plan
 
-    def get_next_executable(self) -> Optional[Dict[str, Any]]:
+    def get_next_executable(self) -> dict[str, Any] | None:
         """获取下一个可执行的任务"""
         executed_ids = set()
         for i in range(self.executed_count):
@@ -333,20 +331,20 @@ class ExecutionLoop:
     def __init__(
         self,
         workdir: str = ".",
-        config: Optional[LoopConfig] = None,
+        config: LoopConfig | None = None,
         use_real_agent: bool = False,
     ):
         self.workdir = Path(workdir)
         self.config = config or LoopConfig()
         self.reflection_engine = ReflectionEngine()
-        self._steps: List[LoopStep] = []
-        self._phase_steps: Dict[str, int] = {}  # phase -> step count
-        self._start_time: Optional[float] = None
+        self._steps: list[LoopStep] = []
+        self._phase_steps: dict[str, int] = {}  # phase -> step count
+        self._start_time: float | None = None
         self._current_phase: str = "IDLE"
         self.use_real_agent = use_real_agent
         self._subagent_runner = None
 
-    def _should_stop(self) -> Tuple[bool, str]:
+    def _should_stop(self) -> tuple[bool, str]:
         """
         检查是否应该停止循环
 
@@ -384,7 +382,7 @@ class ExecutionLoop:
         self._current_phase = phase
         self._phase_steps[phase] = self._phase_steps.get(phase, 0) + 1
 
-    def _build_context(self) -> Dict[str, Any]:
+    def _build_context(self) -> dict[str, Any]:
         """构建执行上下文"""
         return {
             "steps": self._steps[-10:],  # 最近10步
@@ -563,7 +561,7 @@ class ExecutionLoop:
         基于自我反思进行迭代改进
         """
         self._start_time = time.time()
-        best_result: Optional[LoopStep] = None
+        best_result: LoopStep | None = None
         best_score = 0.0
         no_improvement_count = 0
         max_no_improvement = 3
@@ -662,7 +660,7 @@ class ExecutionLoop:
 
         return min(score, 1.0)
 
-    def _step_to_dict(self, step: LoopStep) -> Dict[str, Any]:
+    def _step_to_dict(self, step: LoopStep) -> dict[str, Any]:
         """将步骤转换为字典"""
         return {
             "step_id": step.step_id,
@@ -680,7 +678,7 @@ class ExecutionLoop:
         self,
         task: str,
         initial_phase: str = "THINKING",
-        executor: Optional[Callable[[str, LoopStep], LoopStep]] = None,
+        executor: Callable[[str, LoopStep], LoopStep] | None = None,
     ) -> LoopResult:
         """
         运行执行循环
@@ -766,7 +764,7 @@ class ExecutionLoop:
 
         return step
 
-    def get_trajectory(self) -> Dict[str, Any]:
+    def get_trajectory(self) -> dict[str, Any]:
         """获取执行轨迹"""
         return {
             "task": getattr(self, "_task", ""),

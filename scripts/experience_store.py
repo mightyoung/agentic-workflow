@@ -26,7 +26,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional
 
 from safe_io import safe_write_json
 
@@ -59,19 +59,19 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def load_store(path: str = DEFAULT_EXPERIENCE_FILE) -> Dict:
+def load_store(path: str = DEFAULT_EXPERIENCE_FILE) -> dict:
     """加载经验存储"""
     if not _validate_path(path):
         return {"experiences": [], "version": "1.0"}
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             if isinstance(data, dict):
                 return data
     return {"experiences": [], "version": "1.0"}
 
 
-def save_store(path: str, data: Dict) -> None:
+def save_store(path: str, data: dict) -> None:
     """保存经验存储"""
     if not _validate_path(path):
         return
@@ -118,7 +118,7 @@ def query_experiences(
     min_reward: Optional[float] = None,
     limit: int = 10,
     path: str = DEFAULT_EXPERIENCE_FILE
-) -> List[Dict]:
+) -> list[dict]:
     """查询经验"""
     store = load_store(path)
 
@@ -139,7 +139,7 @@ def query_experiences(
     return results[:limit]
 
 
-def get_category_stats(path: str = DEFAULT_EXPERIENCE_FILE) -> Dict:
+def get_category_stats(path: str = DEFAULT_EXPERIENCE_FILE) -> dict:
     """获取各类别的统计"""
     store = load_store(path)
 
@@ -172,7 +172,7 @@ def extract_success_patterns(
     category: Optional[str] = None,
     min_reward: float = 1.0,
     path: str = DEFAULT_EXPERIENCE_FILE
-) -> List[Dict]:
+) -> list[dict]:
     """从成功经验中提取可复用模式
 
     分析高奖励成功经验，提取共性模式：
@@ -219,14 +219,14 @@ def extract_success_patterns(
         "steps_range": [q1_steps, q3_steps],
         "median_tokens": median_tokens,
         "tokens_range": [q1_tokens, q3_tokens],
-        "success_rate": len([e for e in filtered]) / max(1, len(experiences))
+        "success_rate": len(list(filtered)) / max(1, len(experiences))
     }]
 
 
 def suggest_skill_improvements(
     category: Optional[str] = None,
     path: str = DEFAULT_EXPERIENCE_FILE
-) -> List[Dict]:
+) -> list[dict]:
     """基于历史数据生成技能改进建议
 
     分析低效模式，生成改进建议：
@@ -293,7 +293,7 @@ def suggest_skill_improvements(
 def analyze_category_improvement(
     category: str,
     path: str = DEFAULT_EXPERIENCE_FILE
-) -> Dict:
+) -> dict:
     """分析特定类别的改进空间
 
     对比该类别与总体平均，识别改进方向
@@ -331,7 +331,7 @@ def analyze_category_improvement(
     }
 
 
-def get_overall_stats(path: str = DEFAULT_EXPERIENCE_FILE) -> Dict:
+def get_overall_stats(path: str = DEFAULT_EXPERIENCE_FILE) -> dict:
     """获取总体统计"""
     store = load_store(path)
 
@@ -355,7 +355,7 @@ def get_overall_stats(path: str = DEFAULT_EXPERIENCE_FILE) -> Dict:
         "avg_steps": round(total_steps / total, 1),
         "avg_tokens": round(total_tokens / total, 0),
         "avg_reward": round(total_reward / total, 4),
-        "categories": len(set(e.get("task_category") for e in experiences))
+        "categories": len({e.get("task_category") for e in experiences})
     }
 
 

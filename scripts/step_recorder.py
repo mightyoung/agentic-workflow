@@ -19,7 +19,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 
 from safe_io import safe_write_json
 
@@ -39,19 +39,19 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def load_records(path: str = DEFAULT_STEP_FILE) -> Dict:
+def load_records(path: str = DEFAULT_STEP_FILE) -> dict:
     """加载记录数据"""
     if not _validate_path(path):
         return {"records": []}
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             if isinstance(data, dict):
                 return data
     return {"records": []}
 
 
-def save_records(path: str, data: Dict) -> None:
+def save_records(path: str, data: dict) -> None:
     """保存记录数据"""
     if not _validate_path(path):
         return
@@ -140,7 +140,7 @@ def end_phase(run_id: str, phase: str, output_tokens: int = 0,
     return False
 
 
-def get_phase_report(run_id: str, path: str = DEFAULT_STEP_FILE) -> Dict:
+def get_phase_report(run_id: str, path: str = DEFAULT_STEP_FILE) -> dict:
     """获取 phase 执行报告"""
     records = load_records(path)
 

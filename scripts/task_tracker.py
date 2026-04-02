@@ -19,7 +19,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional
 
 from safe_io import safe_write_json_locked
 
@@ -43,12 +43,12 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def load_tracker(path: str) -> Dict:
+def load_tracker(path: str) -> dict:
     """加载任务追踪数据（带旧数据迁移）"""
     if not _validate_path(path):
         return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
     else:
         return {"tasks": [], "version": "1.0", "created": datetime.now().isoformat()}
@@ -72,7 +72,7 @@ def load_tracker(path: str) -> Dict:
     return data
 
 
-def save_tracker(path: str, data: Dict) -> None:
+def save_tracker(path: str, data: dict) -> None:
     """保存任务追踪数据"""
     if not _validate_path(path):
         return
@@ -80,7 +80,7 @@ def save_tracker(path: str, data: Dict) -> None:
 
 
 def create_task(task_id: str, description: str, priority: str = "P2",
-                dependencies: Optional[List[str]] = None, path: str = DEFAULT_TRACKER_FILE,
+                dependencies: Optional[list[str]] = None, path: str = DEFAULT_TRACKER_FILE,
                 budget_seconds: int = 300) -> bool:
     """创建新任务（带预算控制）"""
     tracker = load_tracker(path)
@@ -328,7 +328,7 @@ def add_issue(task_id: str, issue: str, solution: str = "",
     return False
 
 
-def get_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> Optional[Dict]:
+def get_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> Optional[dict]:
     """获取任务详情"""
     tracker = load_tracker(path)
     tasks = tracker.get("tasks", [])
@@ -340,7 +340,7 @@ def get_task(task_id: str, path: str = DEFAULT_TRACKER_FILE) -> Optional[Dict]:
     return None
 
 
-def list_tasks(status: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> List[Dict]:
+def list_tasks(status: Optional[str] = None, path: str = DEFAULT_TRACKER_FILE) -> list[dict]:
     """列出任务"""
     tracker = load_tracker(path)
     tasks = tracker.get("tasks", [])

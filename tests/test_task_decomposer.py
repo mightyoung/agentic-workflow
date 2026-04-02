@@ -9,14 +9,21 @@ Task Decomposer Tests - 任务分解器专项测试
 4. Owned files追踪
 """
 
-import unittest
 import sys
+import unittest
 from pathlib import Path
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from task_decomposer import decompose, DecomposedTask, auto_priority, extract_user_stories, decompose_from_spec, generate_tasks_md
+from task_decomposer import (
+    DecomposedTask,
+    auto_priority,
+    decompose,
+    decompose_from_spec,
+    extract_user_stories,
+    generate_tasks_md,
+)
 
 
 class TestTaskDecomposer(unittest.TestCase):
@@ -169,8 +176,8 @@ class TestUserStoryDecomposition(unittest.TestCase):
 
     def test_decompose_from_spec_without_spec(self):
         """Test decompose_from_spec falls back when no spec exists"""
-        import tempfile
         import shutil
+        import tempfile
         temp_dir = tempfile.mkdtemp()
         try:
             tasks = decompose_from_spec(temp_dir)

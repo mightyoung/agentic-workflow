@@ -15,7 +15,6 @@ Reward Calculator - 多维度奖励计算器
 import argparse
 import json
 import sys
-from typing import Dict
 
 # 配置
 DEFAULT_MAX_STEPS = 20
@@ -71,7 +70,7 @@ def calculate_reward(
     max_tokens: int = DEFAULT_MAX_TOKENS,
     error_count: int = 0,
     quality_score: float = 0.0  # 0.0 - 1.0, from LLM judge
-) -> Dict:
+) -> dict:
     """计算总奖励
 
     总奖励 = task_completion + efficiency + quality + token_efficiency + penalty
@@ -116,7 +115,7 @@ def calculate_reward(
     }
 
 
-def print_reward_breakdown(reward: Dict) -> None:
+def print_reward_breakdown(reward: dict) -> None:
     """打印奖励分解"""
     print("\n" + "="*50)
     print("Reward Calculator - 奖励分解")

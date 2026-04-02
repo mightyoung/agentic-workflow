@@ -9,7 +9,7 @@ LRU Cache 实现 - 基于 OrderedDict 的 O(1) 实现
 """
 
 from collections import OrderedDict
-from typing import Any, Optional, Tuple, List, cast
+from typing import Any, Optional, cast
 
 
 class LRUCache:
@@ -99,15 +99,15 @@ class LRUCache:
         """清空缓存"""
         self._cache.clear()
 
-    def keys(self) -> List[int]:
+    def keys(self) -> list[int]:
         """返回所有 key 列表（按最近使用顺序）"""
         return list(self._cache.keys())
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         """返回所有 value 列表（按最近使用顺序）"""
         return list(self._cache.values())
 
-    def items(self) -> List[Tuple[int, Any]]:
+    def items(self) -> list[tuple[int, Any]]:
         """返回所有 (key, value) 列表（按最近使用顺序）"""
         return list(self._cache.items())
 
@@ -205,7 +205,7 @@ class LRUCacheManual:
     def size(self) -> int:
         return len(self._map)
 
-    def keys(self) -> List[int]:
+    def keys(self) -> list[int]:
         """返回所有 key 列表（按最近使用顺序）"""
         result = []
         curr: _Node = cast(_Node, self._head.next)

@@ -11,22 +11,22 @@ Artifact Registry Tests - 工件注册表专项测试
 
 import os
 import shutil
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from unified_state import (
-    register_artifact,
-    get_artifacts,
-    get_artifact_by_id,
+    ARTIFACT_REGISTRY_FILE,
     ArtifactType,
     _load_artifact_registry,
     _save_artifact_registry,
-    ARTIFACT_REGISTRY_FILE,
+    get_artifact_by_id,
+    get_artifacts,
+    register_artifact,
 )
 
 

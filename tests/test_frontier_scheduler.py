@@ -20,13 +20,13 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))  # noqa: E402
 
 import workflow_engine  # noqa: E402
-from workflow_engine import (  # noqa: E402
-    compute_frontier,
-    parse_phase_contract,
-    conditional_checkpoint,
-    CheckpointConfig,
-)
 from team_agent import TeamAgent, WorkerType  # noqa: E402
+from workflow_engine import (  # noqa: E402
+    CheckpointConfig,
+    compute_frontier,
+    conditional_checkpoint,
+    parse_phase_contract,
+)
 
 
 class TestComputeFrontier(unittest.TestCase):
@@ -468,7 +468,7 @@ class TestTeamRunIntegration(unittest.TestCase):
             "owned_files": [],
         }))
 
-        from workflow_engine import validate_contract_gate, load_state
+        from workflow_engine import load_state, validate_contract_gate
         state = load_state(self.temp_dir)
         is_valid, error = validate_contract_gate(self.temp_dir, state)
 

@@ -19,12 +19,12 @@ v4.9 新增: 3x 确认规则
     python wal_scanner.py --promote PATTERN_KEY  # 晋升指定模式
 """
 
-import re
-import sys
 import json
 import os
+import re
+import sys
 from datetime import datetime
-from typing import List, Dict, Tuple, Any
+from typing import Any
 
 from safe_io import safe_write_json
 
@@ -84,7 +84,7 @@ def get_pattern_key(trigger_type: str, match: str) -> str:
     return f"{trigger_type}_{normalized}"
 
 
-def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
+def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> dict:
     """加载已存储的模式数据"""
     if not _validate_path(path):
         return {
@@ -98,7 +98,7 @@ def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
 
     if os.path.exists(path):
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
             # Validate structure
             if isinstance(data, dict):
@@ -106,20 +106,20 @@ def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
                     data["patterns"] = {}
                 return data
             return default
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             # Invalid file - return default
             return default
     return default
 
 
-def save_patterns(patterns: Dict, path: str = DEFAULT_PATTERNS_FILE) -> None:
+def save_patterns(patterns: dict, path: str = DEFAULT_PATTERNS_FILE) -> None:
     """保存模式数据"""
     if not _validate_path(path):
         return
     safe_write_json(path, patterns)
 
 
-def increment_pattern_count(trigger_type: str, match: str, path: str = DEFAULT_PATTERNS_FILE) -> Tuple[int, bool]:
+def increment_pattern_count(trigger_type: str, match: str, path: str = DEFAULT_PATTERNS_FILE) -> tuple[int, bool]:
     """
     增加模式计数
 
@@ -151,7 +151,7 @@ def increment_pattern_count(trigger_type: str, match: str, path: str = DEFAULT_P
     return patterns["patterns"][pattern_key]["count"], should_promote
 
 
-def get_pending_promotions(path: str = DEFAULT_PATTERNS_FILE) -> List[Dict]:
+def get_pending_promotions(path: str = DEFAULT_PATTERNS_FILE) -> list[dict]:
     """获取待晋升的模式列表"""
     patterns = load_patterns(path)
     pending = []
@@ -183,7 +183,7 @@ def promote_pattern(pattern_key: str, path: str = DEFAULT_PATTERNS_FILE) -> bool
     return False
 
 
-def extract_correction_context(text: str) -> List[Tuple[str, str]]:
+def extract_correction_context(text: str) -> list[tuple[str, str]]:
     """
     提取修正上下文
 
@@ -200,7 +200,7 @@ def extract_correction_context(text: str) -> List[Tuple[str, str]]:
     return results
 
 
-def scan_wal_triggers(text: str) -> Dict[str, Any]:
+def scan_wal_triggers(text: str) -> dict[str, Any]:
     """
     扫描文本中的WAL触发条件
 
@@ -210,7 +210,7 @@ def scan_wal_triggers(text: str) -> Dict[str, Any]:
     Returns:
         触发结果字典 {trigger_type: [matches] 或 {values_dict}}
     """
-    triggers: Dict[str, Any] = {}
+    triggers: dict[str, Any] = {}
 
     # 检查WAL模式
     for pattern, trigger_type in WAL_PATTERNS:
@@ -231,7 +231,7 @@ def scan_wal_triggers(text: str) -> Dict[str, Any]:
     return triggers
 
 
-def should_update_session_state(triggers: Dict) -> bool:
+def should_update_session_state(triggers: dict) -> bool:
     """
     判断是否需要更新 SESSION-STATE
 
@@ -245,7 +245,7 @@ def should_update_session_state(triggers: Dict) -> bool:
     return len(triggers) > 0
 
 
-def format_output(triggers: Dict, format: str = 'json') -> str:
+def format_output(triggers: dict, format: str = 'json') -> str:
     """
     格式化输出
 

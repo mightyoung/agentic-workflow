@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import memory_ops
 import router
@@ -45,7 +45,7 @@ from unified_state import (
 )
 
 # 存储当前活跃的 TrajectoryLogger 实例
-_active_loggers: Dict[str, TrajectoryLogger] = {}
+_active_loggers: dict[str, TrajectoryLogger] = {}
 
 DEFAULT_CATEGORY = "WORKFLOW"
 
@@ -97,7 +97,7 @@ def _generate_and_register_summary(
     current_phase: str,
     final_state: str,
     session_id: str,
-    failure_reason: Optional[str] = None,
+    failure_reason: str | None = None,
 ) -> str:
     """
     Generate completion summary content and register artifact.
@@ -216,7 +216,7 @@ def _generate_and_register_summary(
     return str(summary_path)
 
 
-def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
+def _create_plan_from_template(task_name: str, workdir: str) -> Path | None:
     destination = Path(workdir) / "task_plan.md"
     if destination.exists():
         return destination
@@ -251,7 +251,7 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Optional[Path]:
         return destination
 
 
-def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Optional[Path], Optional[Path]]:
+def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Path | None, Path | None]:
     """
     Create spec.md and plan.md artifacts in .specs/<feature_id>/ directory.
 
@@ -389,186 +389,7 @@ def _phase_display_name(trigger_type: str, phase: str) -> str:
     return phase
 
 
-def parse_phase_contract(workdir: str = ".") -> Dict[str, Any]:
-    """
-    Parse phase contract into a structured dict.
-
-    Prefers .contract.json (machine-readable) over phase_contract.md.
-
-    Returns:
-        Dict with keys: goals (list), verification_methods (list),
-        owned_files (list), failure_threshold (dict), review_contract (dict)
-    """
-    import json as json_lib
-    import re
-
-    # Try JSON contract first (authoritative)
-    json_contract_path = Path(workdir) / ".contract.json"
-    if json_contract_path.exists():
-        try:
-            json_content = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
-            # Normalize to the same structure as the parsed markdown
-            return {
-                "goals": json_content.get("goals", []),
-                "verification_methods": json_content.get("verification_methods", []),
-                "owned_files": json_content.get("owned_files", []),
-                "failure_threshold": json_content.get("failure_threshold", {}),
-                "review_contract": json_content.get("review_contract", {}),
-                "status": json_content.get("status", "unknown"),
-                "version": json_content.get("version", "1.0"),
-            }
-        except (json_lib.JSONDecodeError, OSError):
-            pass  # Fall back to markdown parsing
-
-    # Fall back to markdown parsing
-    contract_path = Path(workdir) / "phase_contract.md"
-    if not contract_path.exists():
-        return {}
-
-    content = contract_path.read_text(encoding="utf-8")
-    result: Dict[str, Any] = {
-        "goals": [],
-        "verification_methods": [],
-        "owned_files": [],
-        "failure_threshold": {},
-        "review_contract": {},
-    }
-
-    current_section = None
-    for line in content.split("\n"):
-        line = line.rstrip()
-        # Reset section on any ## header
-        if line.startswith("## "):
-            section_name = line[3:].strip()
-            # Normalize section names (handle Variations like "Verification Methods")
-            if section_name.lower() in ("goals", "verification", "verification methods", "owned files", "failure threshold", "review contract"):
-                current_section = section_name.lower().replace(" ", "_").replace("verification_methods", "verification")
-            else:
-                current_section = None  # Unknown section, reset
-            continue
-
-        if current_section == "goals" and line.strip().startswith("- [ ]"):
-            goal = line.strip()[6:].strip()
-            if goal:
-                result["goals"].append(goal)
-        elif current_section == "verification" and (line.strip().startswith("1.") or line.strip().startswith("2.") or line.strip().startswith("3.")):
-            result["verification_methods"].append(line.strip())
-        elif current_section == "owned_files" and line.strip().startswith("- `"):
-            file_match = re.search(r'- `([^`]+)`', line)
-            if file_match:
-                result["owned_files"].append(file_match.group(1))
-
-    return result
-
-
-def update_contract_json(workdir: str = ".", **kwargs) -> bool:
-    """
-    Update .contract.json with new values.
-
-    Args:
-        workdir: Working directory
-        **kwargs: Fields to update (goals, verification_methods, owned_files, status, etc.)
-
-    Returns:
-        True if updated successfully, False otherwise
-    """
-    import json as json_lib
-    json_contract_path = Path(workdir) / ".contract.json"
-
-    if not json_contract_path.exists():
-        return False
-
-    try:
-        contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
-        # Update fields
-        for key, value in kwargs.items():
-            if key in ("goals", "verification_methods", "owned_files", "status"):
-                contract[key] = value
-        # Write back
-        safe_write_text_locked(json_contract_path, json_lib.dumps(contract, indent=2, ensure_ascii=False))
-        return True
-    except (json_lib.JSONDecodeError, OSError):
-        return False
-
-
-def validate_contract_gate(workdir: str, state: Any) -> Tuple[bool, str]:
-    """
-    Validate contract fulfillment for completion gate.
-
-    Checks:
-    1. status != 'draft' (contract is active/fulfilled)
-    2. If goals exist, they are not placeholder text
-    3. If owned_files exist, they match actual file_changes
-    4. If verification_methods exist, they are not placeholder text
-
-    Returns:
-        (is_valid, error_message)
-    """
-    import json as json_lib
-    json_contract_path = Path(workdir) / ".contract.json"
-
-    if not json_contract_path.exists():
-        return True, ""  # No contract = no gate
-
-    try:
-        contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
-    except (json_lib.JSONDecodeError, OSError):
-        return True, ""  # Can't read = skip gate
-
-    # Check 1: status must not be draft
-    status = contract.get("status", "unknown")
-    if status == "draft":
-        return False, "Contract status is 'draft' - update to 'active' or 'fulfilled'"
-
-    # Check 2: goals should not be empty placeholder
-    goals = contract.get("goals", [])
-    if goals:
-        # Check goals are not all placeholders
-        placeholder_patterns = ["to be filled", "(to be", "placeholder", "tbd", "tdd"]
-        has_real_goals = any(
-            not any(p.lower() in g.lower() for p in placeholder_patterns)
-            for g in goals
-        )
-        if not has_real_goals:
-            return False, "Contract goals are placeholders - fill in actual goals"
-
-    # Check 3: owned_files should match actual file_changes
-    owned_files = contract.get("owned_files", [])
-    if owned_files:
-        actual_paths = set()
-        for fc in (state.file_changes or []):
-            if hasattr(fc, 'path'):
-                actual_paths.add(fc.path)
-            elif isinstance(fc, dict):
-                actual_paths.add(fc.get("path", ""))
-
-        # Check if any owned files are in actual changes
-        has_matching_files = any(
-            owned in actual_paths or any(owned in p for p in actual_paths)
-            for owned in owned_files
-        )
-        # If we have owned_files specified, at least verify some exist in the project
-        if owned_files and not has_matching_files:
-            # Soft check: warn but don't block if files exist in workdir
-            for owned in owned_files:
-                if not (Path(workdir) / owned).exists():
-                    return False, f"Contract owned_files '{owned}' not found in actual file changes"
-
-    # Check 4: verification_methods should not be placeholder
-    verification_methods = contract.get("verification_methods", [])
-    if verification_methods:
-        placeholder_patterns = ["to be filled", "(e.g.", "example", "placeholder", "tbd"]
-        has_real_methods = any(
-            not any(p.lower() in m.lower() for p in placeholder_patterns)
-            for m in verification_methods
-        )
-        if not has_real_methods:
-            return False, "Contract verification_methods are placeholders - fill in actual methods"
-
-    return True, ""
-
-
-def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
+def parse_task_plan(workdir: str = ".") -> list[dict[str, Any]]:
     """
     解析 task_plan.md 为结构化任务列表
 
@@ -586,9 +407,9 @@ def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
     if not plan_path.exists():
         return []
 
-    tasks: List[Dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
     current_priority = None
-    current_task: Optional[Dict[str, Any]] = None
+    current_task: dict[str, Any] | None = None
     task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
     field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+): (?P<value>.+)$")
 
@@ -629,7 +450,7 @@ def parse_task_plan(workdir: str = ".") -> List[Dict[str, Any]]:
     return tasks
 
 
-def parse_tasks_md(workdir: str = ".") -> List[Dict[str, Any]]:
+def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
     """
     Parse tasks.md (spec-kit style) from .specs/<feature_id>/tasks.md.
 
@@ -658,7 +479,7 @@ def parse_tasks_md(workdir: str = ".") -> List[Dict[str, Any]]:
     if not tasks_path or not tasks_path.exists():
         return []
 
-    tasks: List[Dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
     current_section = None
 
     # Patterns for parsing
@@ -668,7 +489,7 @@ def parse_tasks_md(workdir: str = ".") -> List[Dict[str, Any]]:
     blocked_by_pattern = re.compile(r"\*\*Blocked-By:\*\*\s*([^\n]+)")
     section_pattern = re.compile(r"^## (.+)$")
 
-    current_task: Optional[Dict[str, Any]] = None
+    current_task: dict[str, Any] | None = None
 
     for line in tasks_path.read_text(encoding="utf-8").splitlines():
         line = line.rstrip()
@@ -729,7 +550,7 @@ def parse_tasks_md(workdir: str = ".") -> List[Dict[str, Any]]:
     return tasks
 
 
-def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
+def next_plan_tasks(workdir: str = ".", limit: int = 3) -> list[dict[str, Any]]:
     """
     获取下一个应该执行的任务列表
 
@@ -761,7 +582,7 @@ def next_plan_tasks(workdir: str = ".", limit: int = 3) -> List[Dict[str, Any]]:
     return candidates[:limit]
 
 
-def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
+def compute_frontier(workdir: str = ".") -> dict[str, Any]:
     """
     Compute the executable task frontier from task_plan.md.
 
@@ -813,7 +634,7 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
 
     # Ownership conflict detection
     # Build a map: file -> [task_ids] that own it
-    file_owner_map: Dict[str, List[str]] = {}
+    file_owner_map: dict[str, list[str]] = {}
     for task in frontier_tasks:
         owned = task.get("owned_files", [])
         if isinstance(owned, list):
@@ -823,8 +644,8 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
                 file_owner_map[f].append(task["id"])
 
     # Find conflicting task pairs (share owned files)
-    conflicts: List[Tuple[str, str]] = []
-    for file_path, owners in file_owner_map.items():
+    conflicts: list[tuple[str, str]] = []
+    for _file_path, owners in file_owner_map.items():
         if len(owners) > 1:
             for i in range(len(owners)):
                 for j in range(i + 1, len(owners)):
@@ -833,7 +654,7 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
                         conflicts.append(pair)
 
     # Build conflict groups
-    conflict_graph: Dict[str, set] = {}
+    conflict_graph: dict[str, set] = {}
     for t1, t2 in conflicts:
         if t1 not in conflict_graph:
             conflict_graph[t1] = set()
@@ -843,11 +664,11 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
         conflict_graph[t2].add(t1)
 
     # Find maximal independent sets for parallel execution
-    parallel_groups: List[List[Dict[str, Any]]] = []
+    parallel_groups: list[list[dict[str, Any]]] = []
     assigned_ids: set = set()
 
     # First, assign tasks that have conflicts to conflict_groups (serial execution)
-    conflict_groups: List[List[Dict[str, Any]]] = []
+    conflict_groups: list[list[dict[str, Any]]] = []
     for task in frontier_tasks:
         if task["id"] in conflict_graph and task["id"] not in assigned_ids:
             # This task has conflicts, find all its conflict partners
@@ -876,7 +697,7 @@ def compute_frontier(workdir: str = ".") -> Dict[str, Any]:
 
     # Handle dependency chains within non-conflicting tasks
     frontier_ids = {t["id"] for t in frontier_tasks}
-    dep_graph: Dict[str, set] = {}
+    dep_graph: dict[str, set] = {}
     for task in frontier_tasks:
         task_deps = task.get("dependencies", [])
         relevant_deps = {d for d in task_deps if d in frontier_ids}
@@ -910,8 +731,8 @@ class CheckpointConfig:
 
 def should_checkpoint(
     workdir: str,
-    config: Optional[CheckpointConfig] = None,
-) -> Tuple[bool, str]:
+    config: CheckpointConfig | None = None,
+) -> tuple[bool, str]:
     """
     Determine if a checkpoint should be triggered based on conditions.
 
@@ -962,8 +783,8 @@ def should_checkpoint(
 
 def conditional_checkpoint(
     workdir: str,
-    config: Optional[CheckpointConfig] = None,
-) -> Dict[str, Any]:
+    config: CheckpointConfig | None = None,
+) -> dict[str, Any]:
     """
     Save a checkpoint if conditions are met.
 
@@ -1040,11 +861,9 @@ def conditional_checkpoint(
     # Write checkpoint JSON - track success/failure explicitly
     checkpoint_file = checkpoints_dir / f"{checkpoint_id}.json"
     handoff_file = workdir_path / f"handoff_{checkpoint_id}.md"
-    checkpoint_json_written = False
 
     try:
         safe_write_json(checkpoint_file, checkpoint_data)
-        checkpoint_json_written = True
     except Exception as e:
         # Checkpoint JSON write failed - return failure without claiming success
         return {
@@ -1156,7 +975,7 @@ python3 scripts/workflow_engine.py --op resume --session-id {session_id} --workd
     }
 
 
-def validate_task_plan(workdir: str = ".") -> Tuple[bool, List[str]]:
+def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
     """
     验证任务计划的合法性
 
@@ -1208,7 +1027,7 @@ def update_task_status_in_plan(
     workdir: str,
     task_id: str,
     status: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     更新 task_plan.md 中任务的状态
 
@@ -1264,11 +1083,11 @@ def update_task_status_in_plan(
     return {"success": True, "task_id": task_id, "status": status}
 
 
-def allowed_next_phases(phase: str) -> List[str]:
+def allowed_next_phases(phase: str) -> list[str]:
     return sorted(get_allowed_transitions(phase))
 
 
-def recommend_next_phases(current_phase: str, trigger_type: Optional[str] = None) -> List[str]:
+def recommend_next_phases(current_phase: str, trigger_type: str | None = None) -> list[str]:
     if current_phase == "DIRECT_ANSWER":
         return ["COMPLETE"]
     if current_phase == "PLANNING":
@@ -1300,9 +1119,9 @@ def validate_transition(current_phase: str, next_phase: str) -> None:
 def initialize_workflow(
     prompt: str,
     workdir: str = ".",
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     auto_create_plan: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     workdir_path = Path(workdir)
     workdir_path.mkdir(parents=True, exist_ok=True)
 
@@ -1375,9 +1194,9 @@ def initialize_workflow(
         task_tracker.start_task(task_id, str(tracker_path))
         task_tracker.update_status(task_id, "in_progress", progress=0, path=str(tracker_path))
 
-    plan_path: Optional[Path] = None
-    contract_path: Optional[Path] = None
-    spec_path: Optional[Path] = None
+    plan_path: Path | None = None
+    contract_path: Path | None = None
+    spec_path: Path | None = None
     if auto_create_plan and current_phase == "PLANNING":
         plan_path = _create_plan_from_template(prompt, workdir)
         if plan_path is not None:
@@ -1433,9 +1252,9 @@ def advance_workflow(
     phase: str,
     workdir: str = ".",
     progress: int = 0,
-    task_status: Optional[str] = None,
+    task_status: str | None = None,
     note: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     state = load_state(workdir)
     if state is None:
         raise ValueError("workflow state not found, please run init first")
@@ -1465,7 +1284,7 @@ def advance_workflow(
             raise ValueError(f"analyze gate failed: {errors_str}")
         # Log warnings but don't block
         if analyze_result.warnings:
-            logger.warning(f"analyze gate warnings: {'; '.join(analyze_result.warnings)}") if state.session_id in _active_loggers else None
+            logger.log_decision(f"analyze gate warnings: {'; '.join(analyze_result.warnings)}") if state.session_id in _active_loggers else None
 
     # Transition phase using unified_state
     state = transition_phase(state, phase, reason=note or "advance_workflow")
@@ -1678,7 +1497,7 @@ def advance_workflow(
         # Try to read actual code files from workdir
         workdir_path = Path(workdir)
         code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.c', '.cpp'}
-        code_files: List[Path] = []
+        code_files: list[Path] = []
         for ext in code_extensions:
             code_files.extend(workdir_path.rglob(f'*{ext}'))
 
@@ -2031,8 +1850,8 @@ def advance_workflow(
 def complete_workflow(
     workdir: str = ".",
     final_state: str = "completed",
-    failure_reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    failure_reason: str | None = None,
+) -> dict[str, Any]:
     """
     完成工作流并结束 trajectory 记录
 
@@ -2131,7 +1950,7 @@ def log_workflow_decision(
     workdir: str,
     decision: str,
     reason: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Log workflow decision to trajectory"""
     state = load_state(workdir)
     if state is None:
@@ -2149,7 +1968,7 @@ def log_workflow_file_change(
     workdir: str,
     file_path: str,
     action: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Log file change to trajectory"""
     state = load_state(workdir)
     if state is None:
@@ -2185,7 +2004,7 @@ def request_revision(
     workdir: str,
     reason: str,
     feedback: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Request revision from REVIEWING back to EXECUTING.
 
@@ -2238,8 +2057,8 @@ def request_revision(
 
 def resume_workflow(
     workdir: str,
-    session_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    session_id: str | None = None,
+) -> dict[str, Any]:
     """
     从中断点恢复工作流
 
@@ -2338,7 +2157,7 @@ _ERROR_TYPE_PATTERNS = {
 }
 
 
-def classify_error(error: str) -> Tuple[str, float]:
+def classify_error(error: str) -> tuple[str, float]:
     """
     Classify error type and return (error_type, confidence).
 
@@ -2349,7 +2168,7 @@ def classify_error(error: str) -> Tuple[str, float]:
         Tuple of (error_type, confidence_score)
     """
     error_lower = error.lower()
-    scores: Dict[str, float] = {}
+    scores: dict[str, float] = {}
 
     for error_type, patterns in _ERROR_TYPE_PATTERNS.items():
         score = sum(1 for p in patterns if p.lower() in error_lower)
@@ -2360,11 +2179,11 @@ def classify_error(error: str) -> Tuple[str, float]:
         return ("unknown", 1.0)
 
     # Return highest scoring type
-    best_type = max(scores, key=scores.get)
+    best_type = max(scores, key=lambda k: scores[k])
     return (best_type, scores[best_type])
 
 
-def _get_error_history(state) -> List[Dict[str, Any]]:
+def _get_error_history(state) -> list[dict[str, Any]]:
     """Extract error history from state decisions."""
     history = []
     for decision in state.decisions:
@@ -2382,7 +2201,7 @@ def handle_workflow_failure(
     error: str,
     strategy: str = "retry",
     max_retries: int = 3,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Handle workflow failure with intelligent error classification and retry strategy.
 
@@ -2520,7 +2339,7 @@ def handle_workflow_failure(
     return {"success": False, "error": f"Unknown strategy: {strategy}"}
 
 
-def _extract_quality_gate_details(workdir: str) -> Optional[Dict[str, Any]]:
+def _extract_quality_gate_details(workdir: str) -> dict[str, Any] | None:
     """Extract quality gate failure details from latest gate report."""
     import json
     gate_files = list(Path(workdir).glob(".quality_gate_*.json"))
@@ -2539,7 +2358,7 @@ def _extract_quality_gate_details(workdir: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_workflow_snapshot(workdir: str = ".") -> Dict[str, Any]:
+def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     state = load_state(workdir)
     tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
     task = None

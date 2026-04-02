@@ -32,7 +32,7 @@ class TestRunTracker(unittest.TestCase):
             os.remove(self.temp_file)
 
     def test_start_run(self):
-        from run_tracker import start_run, load_tracker
+        from run_tracker import load_tracker, start_run
         result = start_run('R001', 'DEBUGGING', 'Test run', self.temp_file)
         self.assertTrue(result)
 
@@ -41,7 +41,7 @@ class TestRunTracker(unittest.TestCase):
         self.assertEqual(tracker['runs'][0]['run_id'], 'R001')
 
     def test_record_step(self):
-        from run_tracker import start_run, record_step, load_tracker
+        from run_tracker import load_tracker, record_step, start_run
         start_run('R001', 'DEBUGGING', path=self.temp_file)
         result = record_step('R001', 'THINKING', 500, False, self.temp_file)
         self.assertTrue(result)
@@ -52,7 +52,7 @@ class TestRunTracker(unittest.TestCase):
         self.assertEqual(run['steps'][0]['step'], 'THINKING')
 
     def test_finish_run(self):
-        from run_tracker import start_run, finish_run
+        from run_tracker import finish_run, start_run
         start_run('R001', 'DEBUGGING', path=self.temp_file)
         result = finish_run('R001', True, self.temp_file)
         self.assertIn('duration_ms', result)
@@ -71,7 +71,7 @@ class TestStepRecorder(unittest.TestCase):
             os.remove(self.temp_file)
 
     def test_start_phase(self):
-        from step_recorder import start_phase, load_records
+        from step_recorder import load_records, start_phase
         result = start_phase('R001', 'THINKING', 500, self.temp_file)
         self.assertTrue(result)
 
@@ -79,13 +79,13 @@ class TestStepRecorder(unittest.TestCase):
         self.assertEqual(len(records['records']), 1)
 
     def test_end_phase(self):
-        from step_recorder import start_phase, end_phase
+        from step_recorder import end_phase, start_phase
         start_phase('R001', 'THINKING', 500, self.temp_file)
         result = end_phase('R001', 'THINKING', 300, path=self.temp_file)
         self.assertTrue(result)
 
     def test_phase_report(self):
-        from step_recorder import start_phase, end_phase, get_phase_report
+        from step_recorder import end_phase, get_phase_report, start_phase
         start_phase('R001', 'THINKING', 500, self.temp_file)
         end_phase('R001', 'THINKING', 300, path=self.temp_file)
 

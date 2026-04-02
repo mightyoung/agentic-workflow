@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, TypedDict
 
 import search_adapter
 from safe_io import safe_write_text_locked
@@ -66,7 +66,7 @@ class WorkerType(Enum):
     LEAD = "lead"              # 领导协调
 
 
-WORKER_DESCRIPTIONS: Dict[WorkerType, str] = {
+WORKER_DESCRIPTIONS: dict[WorkerType, str] = {
     WorkerType.RESEARCHER: "信息搜索、最佳实践调研、技术方案研究",
     WorkerType.CODER: "代码实现、TDD驱动开发、功能实现",
     WorkerType.REVIEWER: "代码审查、质量门禁、验收测试",
@@ -81,8 +81,8 @@ class TeamRunResults(TypedDict):
     task: str
     tasks_completed: int
     tasks_failed: int
-    outputs: List[Dict[str, Any]]
-    artifacts: List[str]
+    outputs: list[dict[str, Any]]
+    artifacts: list[str]
 
 
 # ============================================================================
@@ -104,12 +104,12 @@ class TeamMessage:
     id: str
     msg_type: MessageType
     from_worker: WorkerType
-    to_worker: Optional[WorkerType]  # None = broadcast
-    content: Dict[str, Any]
+    to_worker: WorkerType | None  # None = broadcast
+    content: dict[str, Any]
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    parent_id: Optional[str] = None  # for tracing
+    parent_id: str | None = None  # for tracing
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": self.msg_type.value,
@@ -121,7 +121,7 @@ class TeamMessage:
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> TeamMessage:
+    def from_dict(cls, d: dict[str, Any]) -> TeamMessage:
         return cls(
             id=d["id"],
             msg_type=MessageType(d["type"]),
@@ -144,8 +144,8 @@ class WorkerResult:
     task: str
     output: str
     success: bool
-    artifacts: List[str] = field(default_factory=list)
-    error: Optional[str] = None
+    artifacts: list[str] = field(default_factory=list)
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -166,7 +166,7 @@ class WorkerAgent:
         self.session_id = f"{worker_type.value}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self.use_real_agent = use_real_agent
 
-    def execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> WorkerResult:
+    def execute(self, task: str, context: dict[str, Any] | None = None) -> WorkerResult:
         """
         执行任务
 
@@ -213,7 +213,7 @@ class WorkerAgent:
                 duration_seconds=duration,
             )
 
-    def _do_research(self, task: str, context: Optional[Dict[str, Any]]) -> tuple[str, List[str]]:
+    def _do_research(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Research worker: 搜索研究"""
         query = task
         response, used_fallback = search_adapter.search_with_fallback(query, num_results=5)
@@ -233,13 +233,13 @@ class WorkerAgent:
 
         return output, [str(findings_path)]
 
-    def _do_code(self, task: str, context: Optional[Dict[str, Any]]) -> tuple[str, List[str]]:
+    def _do_code(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Coder worker: 代码实现 (生成代码片段/建议)"""
         # 如果 use_real_agent，使用 SubAgentRunner 执行真实 AI
         if self.use_real_agent:
-            SubAgentRunner = _get_subagent_runner()
-            if SubAgentRunner:
-                runner = SubAgentRunner(workdir=str(self.workdir))
+            subagent_runner_class = _get_subagent_runner()
+            if subagent_runner_class:
+                runner = subagent_runner_class(workdir=str(self.workdir))
                 result = runner.run(
                     phase="EXECUTING",
                     task=task,
@@ -266,7 +266,7 @@ class WorkerAgent:
 
         return output, []
 
-    def _do_review(self, task: str, context: Optional[Dict[str, Any]]) -> tuple[str, List[str]]:
+    def _do_review(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Reviewer worker: 代码审查"""
         output = f"# Code Review\n\nTask: {task}\n\n"
         output += "## Review Focus\n"
@@ -282,7 +282,7 @@ class WorkerAgent:
 
         return output, []
 
-    def _do_debug(self, task: str, context: Optional[Dict[str, Any]]) -> tuple[str, List[str]]:
+    def _do_debug(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Debugger worker: 调试修复"""
         output = f"# Debug Analysis\n\nTask: {task}\n\n"
         output += "## Debugging Steps\n"
@@ -307,9 +307,9 @@ class TeamTask:
     """团队任务"""
     id: str
     description: str
-    assigned_worker: Optional[WorkerType] = None
+    assigned_worker: WorkerType | None = None
     status: str = "pending"  # pending, assigned, completed, failed
-    result: Optional[WorkerResult] = None
+    result: WorkerResult | None = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -331,9 +331,9 @@ class TeamAgent:
     def __init__(
         self,
         workdir: str = ".",
-        task: Optional[str] = None,
-        contract: Optional[Dict[str, Any]] = None,
-        frontier: Optional[Dict[str, Any]] = None,
+        task: str | None = None,
+        contract: dict[str, Any] | None = None,
+        frontier: dict[str, Any] | None = None,
         use_real_agent: bool = False,
     ):
         self.workdir = Path(workdir)
@@ -341,11 +341,11 @@ class TeamAgent:
         self.contract = contract or {}
         self.frontier = frontier or {}
         self.session_id = f"team-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        self.tasks: Dict[str, TeamTask] = {}
-        self.messages: List[TeamMessage] = []
+        self.tasks: dict[str, TeamTask] = {}
+        self.messages: list[TeamMessage] = []
         self.use_real_agent = use_real_agent
 
-    def add_task(self, description: str, worker_type: Optional[WorkerType] = None) -> str:
+    def add_task(self, description: str, worker_type: WorkerType | None = None) -> str:
         """添加任务"""
         task_id = str(uuid.uuid4())[:8]
         # If worker_type is provided, auto-assign
@@ -497,7 +497,7 @@ class TeamAgent:
             "error": result.error,
         })
 
-    def _infer_worker_type(self, task_data: Dict[str, Any]) -> WorkerType:
+    def _infer_worker_type(self, task_data: dict[str, Any]) -> WorkerType:
         """根据任务数据推断合适的 worker 类型"""
         title = task_data.get("title", "").lower()
         desc = task_data.get("description", "").lower()
@@ -516,7 +516,7 @@ class TeamAgent:
         # 默认分配给 coder
         return WorkerType.CODER
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """获取团队状态"""
         return {
             "session_id": self.session_id,

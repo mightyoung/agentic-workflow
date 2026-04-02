@@ -21,7 +21,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 from safe_io import safe_write_json_locked
 
@@ -42,7 +42,7 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def _run_git(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+def _run_git(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
     """运行 git 命令"""
     result = subprocess.run(
         ["git"] + args,
@@ -59,18 +59,18 @@ def _is_git_repo() -> bool:
     return os.path.isdir(".git") or os.path.exists(".git")
 
 
-def load_tracker() -> Dict:
+def load_tracker() -> dict:
     """加载 worktree 追踪数据"""
     if not _validate_path(TRACK_FILE) or not os.path.exists(TRACK_FILE):
         return {"worktrees": [], "version": "1.0"}
-    with open(TRACK_FILE, 'r', encoding='utf-8') as f:
+    with open(TRACK_FILE, encoding='utf-8') as f:
         data = json.load(f)
         if isinstance(data, dict):
             return data
         return {"worktrees": [], "version": "1.0"}
 
 
-def save_tracker(data: Dict) -> None:
+def save_tracker(data: dict) -> None:
     """保存 worktree 追踪数据"""
     if not _validate_path(TRACK_FILE):
         return
@@ -82,7 +82,7 @@ def create_worktree(
     branch_name: Optional[str] = None,
     base_branch: str = "main",
     worktree_root: str = DEFAULT_WORKTREE_ROOT
-) -> Dict:
+) -> dict:
     """创建独立的 worktree"""
     if not _is_git_repo():
         return {"success": False, "error": "Not a git repository"}
@@ -131,7 +131,7 @@ def create_worktree(
     }
 
 
-def list_worktrees() -> List[Dict]:
+def list_worktrees() -> list[dict]:
     """列出所有 worktree"""
     tracker = load_tracker()
     worktrees = tracker.get("worktrees", [])
@@ -140,10 +140,10 @@ def list_worktrees() -> List[Dict]:
     return []
 
 
-def get_worktree(task_id: str) -> Optional[Dict]:
+def get_worktree(task_id: str) -> Optional[dict]:
     """获取指定 task 的 worktree"""
     tracker = load_tracker()
-    worktrees: List[Dict] = tracker.get("worktrees", [])
+    worktrees: list[dict] = tracker.get("worktrees", [])
     if not isinstance(worktrees, list):
         return None
     for wt in worktrees:
@@ -152,7 +152,7 @@ def get_worktree(task_id: str) -> Optional[Dict]:
     return None
 
 
-def merge_worktree(task_id: str, delete: bool = True) -> Dict:
+def merge_worktree(task_id: str, delete: bool = True) -> dict:
     """合并 worktree 到主分支"""
     wt = get_worktree(task_id)
     if not wt:
@@ -194,7 +194,7 @@ def merge_worktree(task_id: str, delete: bool = True) -> Dict:
     }
 
 
-def cleanup_worktrees(force: bool = False) -> Dict:
+def cleanup_worktrees(force: bool = False) -> dict:
     """清理所有已完成的 worktree"""
     tracker = load_tracker()
     cleaned = []
@@ -215,7 +215,7 @@ def cleanup_worktrees(force: bool = False) -> Dict:
     }
 
 
-def prune_worktrees() -> Dict:
+def prune_worktrees() -> dict:
     """清理已失效的 worktree 引用"""
     result = _run_git(["worktree", "prune"], check=False)
     return {
@@ -225,7 +225,7 @@ def prune_worktrees() -> Dict:
     }
 
 
-def mark_completed(task_id: str) -> Dict:
+def mark_completed(task_id: str) -> dict:
     """标记 worktree 为已完成"""
     tracker = load_tracker()
     for wt in tracker.get("worktrees", []):

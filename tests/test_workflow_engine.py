@@ -13,8 +13,8 @@ from pathlib import Path
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import workflow_engine  # noqa: E402
 import unified_state  # noqa: E402
+import workflow_engine  # noqa: E402
 
 
 class TestWorkflowEngine(unittest.TestCase):

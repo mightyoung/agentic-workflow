@@ -22,10 +22,9 @@ import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TextIO
+from typing import Any, TextIO
 
 from safe_io import safe_write_json_locked
-
 
 TRAJECTORY_DIR = "trajectories"
 
@@ -47,14 +46,14 @@ class PhaseRecord:
     """Phase执行记录"""
     phase: str
     entered_at: str
-    exited_at: Optional[str] = None
-    actions: List[Dict[str, Any]] = field(default_factory=list)
-    decisions: List[Dict[str, str]] = field(default_factory=list)
-    file_changes: List[Dict[str, str]] = field(default_factory=list)
-    error: Optional[str] = None
-    notes: List[str] = field(default_factory=list)
+    exited_at: str | None = None
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    decisions: list[dict[str, str]] = field(default_factory=list)
+    file_changes: list[dict[str, str]] = field(default_factory=list)
+    error: str | None = None
+    notes: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -65,9 +64,9 @@ class DecisionRecord:
     decision: str
     reason: str = ""
     phase: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp,
             "decision": self.decision,
@@ -87,11 +86,11 @@ class FileChangeRecord:
     path: str
     action: str  # create, modify, delete
     phase: str = ""
-    size: Optional[int] = None
-    checksum: Optional[str] = None
-    error: Optional[str] = None
+    size: int | None = None
+    checksum: str | None = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp,
             "path": self.path,
@@ -111,11 +110,11 @@ class ErrorRecord:
     timestamp: str
     error: str
     phase: str = ""
-    stack_trace: Optional[str] = None
+    stack_trace: str | None = None
     recoverable: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp,
             "error": self.error,
@@ -138,12 +137,12 @@ class Trajectory:
     prompt: str = ""
     trigger_type: str = ""
     current_phase: str = "IDLE"
-    phases: List[PhaseRecord] = field(default_factory=list)
+    phases: list[PhaseRecord] = field(default_factory=list)
     final_state: str = "running"  # running, completed, failed, aborted
-    failure_reason: Optional[str] = None
-    completed_at: Optional[str] = None
+    failure_reason: str | None = None
+    completed_at: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "session_id": self.session_id,
@@ -176,23 +175,23 @@ class TrajectoryLogger:
         logger.complete("completed")
     """
 
-    def __init__(self, workdir: str = ".", session_id: Optional[str] = None):
+    def __init__(self, workdir: str = ".", session_id: str | None = None):
         self.workdir = workdir
         self.session_id = session_id or f"s{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self.base_dir = trajectory_date_dir(workdir, self.session_id)
-        self._current_phase: Optional[str] = None
-        self._phase_start: Optional[str] = None
-        self._current_actions: List[Dict[str, Any]] = []
-        self._current_decisions: List[Dict[str, str]] = []
-        self._current_file_changes: List[Dict[str, str]] = []
-        self._current_error: Optional[str] = None
+        self._current_phase: str | None = None
+        self._phase_start: str | None = None
+        self._current_actions: list[dict[str, Any]] = []
+        self._current_decisions: list[dict[str, str]] = []
+        self._current_file_changes: list[dict[str, str]] = []
+        self._current_error: str | None = None
 
         # 主轨迹文件
-        self._trajectory_file: Optional[Path] = None
+        self._trajectory_file: Path | None = None
         # JSONL文件句柄
-        self._decisions_file: Optional[TextIO] = None
-        self._file_changes_file: Optional[TextIO] = None
-        self._errors_file: Optional[TextIO] = None
+        self._decisions_file: TextIO | None = None
+        self._file_changes_file: TextIO | None = None
+        self._errors_file: TextIO | None = None
 
         # 元数据
         self._prompt: str = ""
@@ -240,7 +239,7 @@ class TrajectoryLogger:
 
         return self._run_id
 
-    def enter_phase(self, phase: str, actions: Optional[List[Dict[str, Any]]] = None):
+    def enter_phase(self, phase: str, actions: list[dict[str, Any]] | None = None):
         """进入新phase"""
         # 退出当前phase
         if self._current_phase:
@@ -259,10 +258,10 @@ class TrajectoryLogger:
                 data = json.loads(self._trajectory_file.read_text(encoding="utf-8"))
                 data["current_phase"] = phase
                 safe_write_json_locked(self._trajectory_file, data)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
 
-    def exit_phase(self, phase: str, error: Optional[str] = None):
+    def exit_phase(self, phase: str, error: str | None = None):
         """退出phase"""
         if self._current_phase != phase:
             # 忽略不匹配的退出
@@ -333,7 +332,7 @@ class TrajectoryLogger:
             "timestamp": datetime.now().isoformat(),
         })
 
-    def log_error(self, error: str, recoverable: bool = False, stack_trace: Optional[str] = None):
+    def log_error(self, error: str, recoverable: bool = False, stack_trace: str | None = None):
         """记录错误"""
         self._current_error = error
 
@@ -347,14 +346,14 @@ class TrajectoryLogger:
             )
             self._errors_file.write(err_rec.to_jsonl() + "\n")
 
-    def log_action(self, action: Dict[str, Any]):
+    def log_action(self, action: dict[str, Any]):
         """记录动作"""
         self._current_actions.append({
             **action,
             "timestamp": datetime.now().isoformat(),
         })
 
-    def complete(self, final_state: str = "completed", failure_reason: Optional[str] = None):
+    def complete(self, final_state: str = "completed", failure_reason: str | None = None):
         """完成轨迹"""
         # 如果还在某个phase中，先退出
         if self._current_phase:
@@ -381,7 +380,7 @@ class TrajectoryLogger:
         # 关闭文件句柄
         self._close_files()
 
-    def flush(self) -> Dict[str, Any]:
+    def flush(self) -> dict[str, Any]:
         """
         Flush current trajectory state to disk.
 
@@ -417,7 +416,7 @@ class TrajectoryLogger:
         if self._errors_file:
             self._errors_file.close()
 
-    def _load_phases(self) -> List[PhaseRecord]:
+    def _load_phases(self) -> list[PhaseRecord]:
         """从轨迹文件加载phases"""
         if not self._trajectory_file or not self._trajectory_file.exists():
             return []
@@ -454,7 +453,7 @@ class TrajectoryLogger:
             return
         safe_write_json_locked(self._trajectory_file, trajectory.to_dict())
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """获取轨迹摘要"""
         phases = self._load_phases()
 
@@ -483,7 +482,7 @@ class TrajectoryLogger:
 # ============================================================================
 
 
-def load_trajectory(workdir: str, session_id: str) -> Optional[Dict[str, Any]]:
+def load_trajectory(workdir: str, session_id: str) -> dict[str, Any] | None:
     """加载轨迹"""
     base_dir = trajectory_date_dir(workdir, session_id)
     trajectory_file = base_dir / "trajectory.json"
@@ -509,7 +508,7 @@ def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     return trajectory_file
 
 
-def list_trajectories(workdir: str, date: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_trajectories(workdir: str, date: str | None = None) -> list[dict[str, Any]]:
     """
     列出所有轨迹
 
@@ -556,7 +555,7 @@ def list_trajectories(workdir: str, date: Optional[str] = None) -> List[Dict[str
     return sorted(trajectories, key=lambda x: x.get("created_at", ""), reverse=True)
 
 
-def get_resume_point(workdir: str, session_id: str) -> Optional[Dict[str, Any]]:
+def get_resume_point(workdir: str, session_id: str) -> dict[str, Any] | None:
     """
     获取恢复点
 
@@ -589,7 +588,7 @@ def get_resume_point(workdir: str, session_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def resume_from_point(workdir: str, session_id: str, resume_phase: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = None) -> dict[str, Any] | None:
     """
     从恢复点继续工作流
 
@@ -711,7 +710,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: Optional[str]
     }
 
 
-def _get_next_phase_after(completed_phase: str, current_phase: str) -> Optional[str]:
+def _get_next_phase_after(completed_phase: str, current_phase: str) -> str | None:
     """
     根据已完成的phase和当前phase，计算下一个应该进入的phase
 
@@ -764,10 +763,10 @@ class TrajectoryResumer:
 
     def __init__(self, workdir: str = "."):
         self.workdir = workdir
-        self.resumed_session_id: Optional[str] = None
-        self.resumed_run_id: Optional[str] = None
+        self.resumed_session_id: str | None = None
+        self.resumed_run_id: str | None = None
 
-    def list_interrupted(self) -> List[Dict[str, Any]]:
+    def list_interrupted(self) -> list[dict[str, Any]]:
         """列出所有可以恢复的中断工作流"""
         trajectories = list_trajectories(self.workdir)
         interrupted = []
@@ -778,7 +777,7 @@ class TrajectoryResumer:
 
         return interrupted
 
-    def resume(self, session_id: str, resume_phase: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def resume(self, session_id: str, resume_phase: str | None = None) -> dict[str, Any] | None:
         """
         恢复指定session的工作流
 
@@ -795,7 +794,7 @@ class TrajectoryResumer:
             self.resumed_run_id = result["run_id"]
         return result
 
-    def get_resume_status(self) -> Dict[str, Any]:
+    def get_resume_status(self) -> dict[str, Any]:
         """获取当前恢复状态"""
         if not self.resumed_session_id:
             return {"resumed": False}

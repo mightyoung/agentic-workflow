@@ -19,16 +19,16 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
 from memory_ops import (
-    ensure_session_state_exists,
-    update_task_info,
     add_correction,
-    add_preference,
     add_decision,
+    add_preference,
+    add_task_result,
     add_value,
+    check_idle_status,
+    ensure_session_state_exists,
     get_info,
     show_session_state,
-    check_idle_status,
-    add_task_result
+    update_task_info,
 )
 
 
@@ -275,7 +275,7 @@ class TestIdleDetection(unittest.TestCase):
         # 修改开始时间为2小时前
         from datetime import datetime, timedelta
         old_time = (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.temp_session, 'r', encoding='utf-8') as f:
+        with open(self.temp_session, encoding='utf-8') as f:
             content = f.read()
         content = content.replace(
             f"**开始时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -363,7 +363,7 @@ class TestResultTracking(unittest.TestCase):
         history_file = os.path.join(self.temp_dir, '.task_history.jsonl')
         self.assertTrue(os.path.exists(history_file))
 
-        with open(history_file, 'r', encoding='utf-8') as f:
+        with open(history_file, encoding='utf-8') as f:
             content = f.read()
         self.assertIn('task-004', content)
         self.assertIn('success', content)

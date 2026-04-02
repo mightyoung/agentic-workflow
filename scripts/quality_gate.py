@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import Any, Optional
 
 
 @dataclass
@@ -31,7 +31,7 @@ class GateResult:
     duration_ms: int
     error: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "passed": self.passed,
@@ -44,7 +44,7 @@ class GateResult:
 @dataclass
 class QualityGateReport:
     """完整质量门禁报告"""
-    gate_results: List[GateResult] = field(default_factory=list)
+    gate_results: list[GateResult] = field(default_factory=list)
     total_duration_ms: int = 0
     project_dir: str = ""
     timestamp: str = ""
@@ -61,7 +61,7 @@ class QualityGateReport:
     def failed_count(self) -> int:
         return sum(1 for r in self.gate_results if not r.passed)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "all_passed": self.all_passed,
             "passed_count": self.passed_count,
@@ -73,7 +73,7 @@ class QualityGateReport:
         }
 
 
-def detect_project_type(project_dir: str) -> Dict[str, bool]:
+def detect_project_type(project_dir: str) -> dict[str, bool]:
     """检测项目类型"""
     has_package_json = os.path.exists(os.path.join(project_dir, "package.json"))
     has_pyproject_toml = os.path.exists(os.path.join(project_dir, "pyproject.toml"))
@@ -363,7 +363,7 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
     )
 
 
-def run_quality_gate(project_dir: str, gates: List[str], timeout: int = 60) -> QualityGateReport:
+def run_quality_gate(project_dir: str, gates: list[str], timeout: int = 60) -> QualityGateReport:
     """运行完整质量门禁"""
     from datetime import datetime
 

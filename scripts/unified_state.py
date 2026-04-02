@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
 
 from safe_io import safe_write_json_locked
 from state_schema import (
@@ -24,7 +24,6 @@ from state_schema import (
     WorkflowState,
     validate_state,
 )
-
 
 # 默认文件名
 WORKFLOW_STATE_FILE = ".workflow_state.json"
@@ -57,8 +56,8 @@ def register_artifact(
     file_path: str,
     phase: str,
     generated_by: str = "system",
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     注册一个工件
 
@@ -97,9 +96,9 @@ def register_artifact(
 
 def get_artifacts(
     workdir: str,
-    artifact_type: Optional[str] = None,
-    phase: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    artifact_type: str | None = None,
+    phase: str | None = None,
+) -> list[dict[str, Any]]:
     """
     获取工件列表
 
@@ -115,7 +114,7 @@ def get_artifacts(
     artifacts_raw = registry.get("artifacts", [])
     if not isinstance(artifacts_raw, list):
         return []
-    artifacts: List[Dict[str, Any]] = artifacts_raw
+    artifacts: list[dict[str, Any]] = artifacts_raw
 
     if artifact_type:
         artifacts = [a for a in artifacts if isinstance(a, dict) and a.get("type") == artifact_type]
@@ -125,7 +124,7 @@ def get_artifacts(
     return artifacts
 
 
-def get_artifact_by_id(workdir: str, artifact_id: str) -> Optional[Dict[str, Any]]:
+def get_artifact_by_id(workdir: str, artifact_id: str) -> dict[str, Any] | None:
     """根据ID获取工件"""
     registry = _load_artifact_registry(workdir)
     artifacts = registry.get("artifacts", [])
@@ -137,7 +136,7 @@ def get_artifact_by_id(workdir: str, artifact_id: str) -> Optional[Dict[str, Any
     return None
 
 
-def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
+def _load_artifact_registry(workdir: str) -> dict[str, Any]:
     """加载工件注册表"""
     path = Path(workdir) / ARTIFACT_REGISTRY_FILE
     if not path.exists():
@@ -149,11 +148,11 @@ def _load_artifact_registry(workdir: str) -> Dict[str, Any]:
             if isinstance(data, dict):
                 return data
             return {"artifacts": [], "created_at": datetime.now().isoformat()}
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return {"artifacts": [], "created_at": datetime.now().isoformat()}
 
 
-def _save_artifact_registry(workdir: str, registry: Dict[str, Any]) -> Path:
+def _save_artifact_registry(workdir: str, registry: dict[str, Any]) -> Path:
     """保存工件注册表"""
     path = Path(workdir) / ARTIFACT_REGISTRY_FILE
     safe_write_json_locked(path, registry)
@@ -170,7 +169,7 @@ def trajectory_dir_path(workdir: str = ".") -> Path:
     return Path(workdir) / TRAJECTORY_DIR
 
 
-def _init_phase_state(current_phase: str = "IDLE") -> Dict[str, Any]:
+def _init_phase_state(current_phase: str = "IDLE") -> dict[str, Any]:
     """初始化phase state，包含初始phase entry到history"""
     now = datetime.now().isoformat()
     return {
@@ -193,7 +192,7 @@ def _init_phase_state(current_phase: str = "IDLE") -> Dict[str, Any]:
 
 def create_initial_state(
     prompt: str,
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     trigger_type: str = "FULL_WORKFLOW",
     initial_phase: str = "PLANNING",
 ) -> WorkflowState:
@@ -240,7 +239,7 @@ def create_initial_state(
     return state
 
 
-def load_state(workdir: str = ".") -> Optional[WorkflowState]:
+def load_state(workdir: str = ".") -> WorkflowState | None:
     """
     加载状态文件
 
@@ -275,7 +274,7 @@ def save_state(workdir: str, state: WorkflowState) -> Path:
     return path
 
 
-def validate_workflow_state(workdir: str = ".") -> Tuple[bool, List[str]]:
+def validate_workflow_state(workdir: str = ".") -> tuple[bool, list[str]]:
     """
     验证状态文件
 
@@ -319,7 +318,7 @@ def can_transition(from_phase: str, to_phase: str) -> bool:
     return to_phase in TRANSITIONS.get(from_phase, set())
 
 
-def get_allowed_transitions(phase: str) -> List[str]:
+def get_allowed_transitions(phase: str) -> list[str]:
     """获取允许的下一个phase列表"""
     return sorted(TRANSITIONS.get(phase, set()))
 
@@ -328,8 +327,8 @@ def transition_phase(
     state: WorkflowState,
     new_phase: str,
     reason: str = "",
-    actions: Optional[List[Dict[str, Any]]] = None,
-    error: Optional[str] = None,
+    actions: list[dict[str, Any]] | None = None,
+    error: str | None = None,
 ) -> WorkflowState:
     """
     执行phase转换
@@ -396,7 +395,7 @@ def update_task_status(
     state: WorkflowState,
     task_id: str,
     status: str,
-    progress: Optional[int] = None,
+    progress: int | None = None,
 ) -> WorkflowState:
     """更新任务状态"""
     if state.task and state.task.task_id == task_id:
@@ -448,7 +447,7 @@ def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     return path
 
 
-def load_trajectory(workdir: str, run_id: str) -> Optional[Trajectory]:
+def load_trajectory(workdir: str, run_id: str) -> Trajectory | None:
     """加载轨迹"""
     path = _get_trajectory_path(workdir, run_id)
     if not path.exists():
@@ -460,7 +459,7 @@ def load_trajectory(workdir: str, run_id: str) -> Optional[Trajectory]:
     return Trajectory.from_dict(data)
 
 
-def list_trajectories(workdir: str, date: Optional[str] = None) -> List[str]:
+def list_trajectories(workdir: str, date: str | None = None) -> list[str]:
     """
     列出轨迹
 
@@ -508,9 +507,9 @@ def create_trajectory(
 def append_trajectory_phase(
     trajectory: Trajectory,
     phase: str,
-    actions: Optional[List[Dict[str, Any]]] = None,
-    decisions: Optional[List[Dict[str, str]]] = None,
-    file_changes: Optional[List[Dict[str, str]]] = None,
+    actions: list[dict[str, Any]] | None = None,
+    decisions: list[dict[str, str]] | None = None,
+    file_changes: list[dict[str, str]] | None = None,
 ) -> Trajectory:
     """追加phase到轨迹"""
     new_trajectory = Trajectory.from_dict(trajectory.to_dict())
@@ -527,7 +526,7 @@ def append_trajectory_phase(
 def complete_trajectory(
     trajectory: Trajectory,
     final_state: str = "completed",
-    failure_reason: Optional[str] = None,
+    failure_reason: str | None = None,
 ) -> Trajectory:
     """完成轨迹"""
     new_trajectory = Trajectory.from_dict(trajectory.to_dict())
@@ -542,7 +541,7 @@ def complete_trajectory(
 # ============================================================================
 
 
-def get_state_snapshot(workdir: str = ".") -> Dict[str, Any]:
+def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
     """
     获取状态快照
 
@@ -571,7 +570,7 @@ def get_state_snapshot(workdir: str = ".") -> Dict[str, Any]:
     }
 
 
-def get_last_resume_point(workdir: str = ".") -> Optional[Dict[str, Any]]:
+def get_last_resume_point(workdir: str = ".") -> dict[str, Any] | None:
     """
     从轨迹中获取最后可恢复点
 

@@ -19,7 +19,6 @@ import argparse
 import os
 import re
 from datetime import datetime
-from typing import List
 
 # 默认每日日志目录
 DEFAULT_MEMORY_DIR = "memory"
@@ -72,7 +71,7 @@ def add_task_record(date: str, task_id: str, description: str, result: str = "",
     if not os.path.exists(filepath):
         create_daily_log(date, memory_dir)
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         content = f.read()
 
     timestamp = datetime.now().strftime('%H:%M:%S')
@@ -95,7 +94,7 @@ def add_lesson(date: str, lesson: str, memory_dir: str = DEFAULT_MEMORY_DIR) -> 
     if not os.path.exists(filepath):
         create_daily_log(date, memory_dir)
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         content = f.read()
 
     # 检查是否有教训章节
@@ -122,11 +121,11 @@ def show_daily_log(date: str, memory_dir: str = DEFAULT_MEMORY_DIR) -> None:
         print(f"每日日志不存在: {filepath}")
         return
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         print(f.read())
 
 
-def list_daily_logs(memory_dir: str = DEFAULT_MEMORY_DIR) -> List[str]:
+def list_daily_logs(memory_dir: str = DEFAULT_MEMORY_DIR) -> list[str]:
     """列出所有每日日志"""
     ensure_memory_dir(memory_dir)
 
@@ -146,7 +145,7 @@ def distill_from_session(session_file: str = "SESSION-STATE.md",
         print(f"会话文件不存在: {session_file}")
         return False
 
-    with open(session_file, 'r', encoding='utf-8') as f:
+    with open(session_file, encoding='utf-8') as f:
         content = f.read()
 
     today = datetime.now().strftime('%Y-%m-%d')

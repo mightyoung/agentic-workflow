@@ -18,16 +18,16 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
 
 from quality_gate import (
-    detect_project_type,
-    run_command,
-    check_typescript,
-    check_python,
-    check_lint,
-    check_tests,
-    run_quality_gate,
-    format_report,
     GateResult,
-    QualityGateReport
+    QualityGateReport,
+    check_lint,
+    check_python,
+    check_tests,
+    check_typescript,
+    detect_project_type,
+    format_report,
+    run_command,
+    run_quality_gate,
 )
 
 

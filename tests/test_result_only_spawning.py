@@ -12,9 +12,9 @@ test_result_only_spawning.py - v5.5 Result-only Subagent Spawning 测试
     python tests/test_result_only_spawning.py
 """
 
+import os
 import re
 import sys
-import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
 

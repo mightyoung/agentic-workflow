@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -283,7 +283,7 @@ class AnalyzeGate:
                 result.add_warning(f"Directory {dir_path} has {len(files)} files claimed. Ensure conflicts are intentional.")
 
 
-def generate_spec_checklist(workdir: str = ".") -> Dict[str, Any]:
+def generate_spec_checklist(workdir: str = ".") -> dict[str, Any]:
     """
     Generate a checklist for spec/plan validation.
 
@@ -296,7 +296,7 @@ def generate_spec_checklist(workdir: str = ".") -> Dict[str, Any]:
     gate = AnalyzeGate(workdir)
     result = gate.validate()
 
-    checklist = {
+    checklist: dict[str, Any] = {
         "spec_checklist": [],
         "plan_checklist": [],
         "overall_score": 1.0 if result.passed else 0.0,
@@ -310,10 +310,11 @@ def generate_spec_checklist(workdir: str = ".") -> Dict[str, Any]:
 
         # Check 1: Has user stories
         has_stories = bool(re.search(r"### Story \d+:", spec_content))
+        story_count = len(re.findall(r"### Story \d+:", spec_content))
         checklist["spec_checklist"].append({
             "criterion": "Has user stories",
             "passed": has_stories,
-            "details": f"Found {len(re.findall(r'### Story \d+:', spec_content))} user stories" if has_stories else "No user stories found",
+            "details": f"Found {story_count} user stories" if has_stories else "No user stories found",
         })
 
         # Check 2: User stories have acceptance criteria
@@ -366,7 +367,7 @@ def generate_spec_checklist(workdir: str = ".") -> Dict[str, Any]:
     return checklist
 
 
-def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dict[str, Any]:
+def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> dict[str, Any]:
     """
     Check for drift between repo SKILL.md and installed SKILL.md.
 
@@ -386,13 +387,13 @@ def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dic
     def hash_file(path: str) -> str:
         """Compute SHA256 hash of a file."""
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
             return hashlib.sha256(content.encode()).hexdigest()[:12]
-        except (OSError, IOError):
+        except OSError:
             return "not-found"
 
-    result = {
+    result: dict[str, Any] = {
         "has_drift": False,
         "drift_details": [],
         "repo_hash": hash_file(repo_skill_path),
@@ -400,9 +401,9 @@ def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dic
     }
 
     try:
-        with open(repo_skill_path, "r", encoding="utf-8") as f:
+        with open(repo_skill_path, encoding="utf-8") as f:
             repo_content = f.read()
-        with open(installed_skill_path, "r", encoding="utf-8") as f:
+        with open(installed_skill_path, encoding="utf-8") as f:
             installed_content = f.read()
 
         if repo_content != installed_content:
@@ -446,7 +447,7 @@ def check_template_drift(repo_skill_path: str, installed_skill_path: str) -> Dic
                         "details": f"Repo version {repo_version.group(1)} vs installed {installed_version.group(1)}",
                     })
 
-    except (OSError, IOError) as e:
+    except OSError as e:
         result["drift_details"].append({
             "type": "read_error",
             "details": str(e),
@@ -488,7 +489,7 @@ CONSTITUTION_RULES = {
 }
 
 
-def validate_constitution(workdir: str = ".") -> Dict[str, Any]:
+def validate_constitution(workdir: str = ".") -> dict[str, Any]:
     """
     Validate plan.md against project constitution.
 
@@ -505,7 +506,7 @@ def validate_constitution(workdir: str = ".") -> Dict[str, Any]:
         - score: float (0.0 to 1.0)
         - suggestions: list of improvement suggestions
     """
-    result = {
+    result: dict[str, Any] = {
         "is_valid": True,
         "violations": [],
         "score": 1.0,

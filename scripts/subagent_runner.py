@@ -33,15 +33,14 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from skill_loader import load_skill, SkillPromptFormatter
+from skill_loader import SkillPromptFormatter, load_skill
 
 
 @dataclass
@@ -53,8 +52,8 @@ class SubAgentResult:
     phase: str = ""
     session_id: str = ""
     duration_seconds: float = 0.0
-    artifacts: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    artifacts: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class SubAgentRunner:
@@ -76,7 +75,7 @@ class SubAgentRunner:
         self.skills_dir = Path(skills_dir)
         self.claude_bin = claude_bin
         self.timeout = timeout
-        self._claude_available: Optional[bool] = None
+        self._claude_available: bool | None = None
 
     def check_claude_available(self) -> bool:
         """Check if Claude CLI is available"""
@@ -99,9 +98,9 @@ class SubAgentRunner:
         phase: str,
         task: str,
         session_id: str = "",
-        context: Optional[Dict[str, Any]] = None,
-        prompt_override: Optional[str] = None,
-        output_file: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        prompt_override: str | None = None,
+        output_file: str | None = None,
     ) -> SubAgentResult:
         """
         Run a subagent for the given phase and task.
@@ -152,7 +151,7 @@ class SubAgentRunner:
         prompt: str,
         phase: str,
         session_id: str,
-        output_file: Optional[str],
+        output_file: str | None,
         start_time: datetime,
     ) -> SubAgentResult:
         """Run using Claude CLI"""
@@ -227,7 +226,7 @@ class SubAgentRunner:
         prompt: str,
         phase: str,
         session_id: str,
-        output_file: Optional[str],
+        output_file: str | None,
         start_time: datetime,
     ) -> SubAgentResult:
         """
@@ -269,10 +268,10 @@ class SubAgentRunner:
 
     def run_parallel(
         self,
-        tasks: List[Dict[str, Any]],
+        tasks: list[dict[str, Any]],
         phase: str,
         session_id: str = "",
-    ) -> List[SubAgentResult]:
+    ) -> list[SubAgentResult]:
         """
         Run multiple subagents in parallel.
 

@@ -13,9 +13,9 @@ Trajectory Tests - 轨迹持久化专项测试
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -23,15 +23,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from trajectory_logger import (
+    PhaseRecord,
     TrajectoryLogger,
+    _get_next_phase_after,
+    get_resume_point,
+    list_trajectories,
+    load_trajectory,
+    resume_from_point,
     trajectory_base_path,
     trajectory_date_dir,
-    load_trajectory,
-    list_trajectories,
-    get_resume_point,
-    resume_from_point,
-    _get_next_phase_after,
-    PhaseRecord,
 )
 
 

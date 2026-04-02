@@ -16,8 +16,8 @@ import argparse
 import json
 import os
 import sys
-from typing import Any, Dict, List
 from collections import Counter
+from typing import Any
 
 from safe_io import safe_write_json
 
@@ -37,26 +37,26 @@ def _validate_path(path: str) -> bool:
         return False
 
 
-def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> Dict:
+def load_patterns(path: str = DEFAULT_PATTERNS_FILE) -> dict:
     """加载失败模式数据"""
     if not _validate_path(path):
         return {"patterns": [], "version": "1.0"}
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             if isinstance(data, dict):
                 return data
     return {"patterns": [], "version": "1.0"}
 
 
-def save_patterns(path: str, data: Dict) -> None:
+def save_patterns(path: str, data: dict) -> None:
     """保存失败模式数据"""
     if not _validate_path(path):
         return
     safe_write_json(path, data)
 
 
-def detect_error_pattern(errors: List[str]) -> Dict:
+def detect_error_pattern(errors: list[str]) -> dict:
     """检测错误模式
 
     分析错误列表，识别重复出现的错误模式
@@ -75,7 +75,7 @@ def detect_error_pattern(errors: List[str]) -> Dict:
     }
 
 
-def _generate_recommendation(repeated_errors: Dict[str, int]) -> str:
+def _generate_recommendation(repeated_errors: dict[str, int]) -> str:
     """根据重复错误生成建议"""
     if not repeated_errors:
         return "无明显重复错误模式"
@@ -100,14 +100,14 @@ def _generate_recommendation(repeated_errors: Dict[str, int]) -> str:
     return recommendations["default"]
 
 
-def analyze_run(run_data: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_run(run_data: dict[str, Any]) -> dict[str, Any]:
     """分析单个 run 的数据，生成建议"""
     errors = run_data.get("errors", [])
     steps = run_data.get("steps", [])
     tokens = run_data.get("total_tokens", 0)
     duration_ms = run_data.get("duration_ms", 0)
 
-    analysis: Dict[str, Any] = {
+    analysis: dict[str, Any] = {
         "run_id": run_data.get("run_id"),
         "error_pattern": detect_error_pattern(errors),
         "performance": _analyze_performance(steps, tokens, duration_ms),
@@ -140,7 +140,7 @@ def analyze_run(run_data: Dict[str, Any]) -> Dict[str, Any]:
     return analysis
 
 
-def _analyze_performance(steps: List[Dict[str, Any]], tokens: int, duration_ms: int) -> Dict[str, Any]:
+def _analyze_performance(steps: list[dict[str, Any]], tokens: int, duration_ms: int) -> dict[str, Any]:
     """分析性能"""
     if not steps:
         return {"slow_phases": [], "avg_step_duration_ms": 0}
@@ -159,11 +159,11 @@ def _analyze_performance(steps: List[Dict[str, Any]], tokens: int, duration_ms: 
     }
 
 
-def load_run_tracker(tracker_path: str = ".run_tracker.json") -> List[Dict]:
+def load_run_tracker(tracker_path: str = ".run_tracker.json") -> list[dict]:
     """加载运行追踪数据"""
     if not _validate_path(tracker_path) or not os.path.exists(tracker_path):
         return []
-    with open(tracker_path, 'r') as f:
+    with open(tracker_path) as f:
         data = json.load(f)
         if isinstance(data, dict):
             runs = data.get("runs", [])
@@ -172,11 +172,11 @@ def load_run_tracker(tracker_path: str = ".run_tracker.json") -> List[Dict]:
         return []
 
 
-def load_step_records(records_path: str = ".step_records.json") -> List[Dict]:
+def load_step_records(records_path: str = ".step_records.json") -> list[dict]:
     """加载步骤记录数据"""
     if not _validate_path(records_path) or not os.path.exists(records_path):
         return []
-    with open(records_path, 'r') as f:
+    with open(records_path) as f:
         data = json.load(f)
         if isinstance(data, dict):
             records = data.get("records", [])
@@ -185,7 +185,7 @@ def load_step_records(records_path: str = ".step_records.json") -> List[Dict]:
         return []
 
 
-def detect_failures() -> Dict:
+def detect_failures() -> dict:
     """检测所有失败模式"""
     runs = load_run_tracker()
     step_records = load_step_records()
