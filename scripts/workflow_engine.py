@@ -1504,32 +1504,66 @@ def advance_workflow(
         # Filter out common non-source directories
         excluded_dirs = {'node_modules', '.git', '__pycache__', 'venv', '.venv', 'dist', 'build'}
 
-        # Task-directed review: prioritize owned_files from task_plan, then file_changes, then fallback
+        # Task-directed review: prioritize spec-kit (tasks.md / .contract.json) over legacy task_plan.md
         target_files = []
         review_source = "none"
 
-        # 1. Try to get owned_files from task_plan
-        plan_path = Path(workdir) / "task_plan.md"
-        if plan_path.exists():
-            plan_content = plan_path.read_text(encoding="utf-8", errors="ignore")
-            # Parse owned_files from plan (format: "  - owned_files: file1.py, file2.py")
-            import re
-            owned_pattern = re.compile(r'owned_files:\s*(.+)', re.IGNORECASE)
-            for line in plan_content.split('\n'):
-                match = owned_pattern.search(line)
-                if match:
-                    files_str = match.group(1).strip()
-                    for f in files_str.split(','):
+        # 1. Try tasks.md (spec-kit): parse **Files:** per task
+        tasks_md_path = Path(workdir) / "tasks.md"
+        if tasks_md_path.exists():
+            tasks_content = tasks_md_path.read_text(encoding="utf-8", errors="ignore")
+            files_pattern = re.compile(r'\*\*Files:\*\*\s*`([^`]+)`', re.IGNORECASE)
+            for match in files_pattern.finditer(tasks_content):
+                files_str = match.group(1).strip()
+                for f in files_str.split(','):
+                    f = f.strip()
+                    if f:
+                        fp = Path(workdir) / f
+                        if fp.exists():
+                            target_files.append(fp)
+            if target_files:
+                review_source = "tasks_md"
+
+        # 2. Try .contract.json (spec-kit): owned_files field
+        if not target_files:
+            contract_json_path = Path(workdir) / ".contract.json"
+            if contract_json_path.exists():
+                try:
+                    import json as json_lib
+                    contract_data = json_lib.loads(contract_json_path.read_text(encoding="utf-8"))
+                    owned = contract_data.get("owned_files", [])
+                    for f in owned:
                         f = f.strip()
                         if f:
                             fp = Path(workdir) / f
                             if fp.exists():
                                 target_files.append(fp)
                     if target_files:
-                        review_source = "owned_files"
-                        break
+                        review_source = "contract_json"
+                except (json_lib.JSONDecodeError, OSError):
+                    pass
 
-        # 2. Try to get files from state.file_changes
+        # 3. Try task_plan.md (legacy fallback): parse owned_files: line
+        if not target_files:
+            plan_path = Path(workdir) / "task_plan.md"
+            if plan_path.exists():
+                plan_content = plan_path.read_text(encoding="utf-8", errors="ignore")
+                owned_pattern = re.compile(r'owned_files:\s*(.+)', re.IGNORECASE)
+                for line in plan_content.split('\n'):
+                    match = owned_pattern.search(line)
+                    if match:
+                        files_str = match.group(1).strip()
+                        for f in files_str.split(','):
+                            f = f.strip()
+                            if f:
+                                fp = Path(workdir) / f
+                                if fp.exists():
+                                    target_files.append(fp)
+                        if target_files:
+                            review_source = "task_plan_md"
+                            break
+
+        # 4. Try state.file_changes
         if not target_files and state.file_changes:
             for fc in state.file_changes[:10]:  # Limit to first 10 changes
                 fp = Path(workdir) / fc.path
@@ -1538,15 +1572,14 @@ def advance_workflow(
             if target_files:
                 review_source = "file_changes"
 
-        # 3. Strict fallback: ONLY do workdir_scan if explicitly allowed
-        # Check if user/task explicitly allows fallback review
+        # 5. Strict fallback: ONLY do workdir_scan if explicitly allowed
         review_fallback_allowed = False
         if state.task:
             task_text = (state.task.description or "").lower() + (state.task.title or "").lower()
             if "allow_review_fallback" in task_text or "review_fallback=true" in task_text:
                 review_fallback_allowed = True
 
-        # Also check task_plan.md for explicit allow_fallback flag
+        # Also check task_plan.md / tasks.md for explicit allow_fallback flag
         if not review_fallback_allowed and plan_path.exists():
             plan_content = plan_path.read_text(encoding="utf-8", errors="ignore").lower()
             if "allow_review_fallback" in plan_content or "review_fallback: true" in plan_content:
@@ -1640,7 +1673,7 @@ def advance_workflow(
             review_path = Path(workdir) / f"review_{session_id}.md"
             degraded_note = ""
             if review_source == "workdir_scan":
-                degraded_note = """> **⚠️ Degraded Mode**: Review used workdir_scan fallback (task_plan has no owned_files and no file_changes recorded). Results are less targeted than owned_files/file_changes directed review.
+                degraded_note = """> **⚠️ Degraded Mode**: Review used workdir_scan fallback (no owned_files in tasks.md, .contract.json, task_plan.md, and no file_changes recorded). Results are less targeted than owned_files/file_changes directed review.
 """
             review_content = f"""# Code Review: {task_title}
 

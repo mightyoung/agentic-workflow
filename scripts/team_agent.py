@@ -227,9 +227,12 @@ class WorkerAgent:
         if response.metadata.get("degraded_mode"):
             output += f"\n**Warning**: {response.metadata.get('degraded_reason', 'Degraded mode')}"
 
-        # Write findings artifact
+        # Write findings artifact via safe_write_text_locked
         findings_path = self.workdir / f"findings_{self.session_id}.md"
-        findings_path.write_text(output, encoding="utf-8")
+        safe_write_text_locked(findings_path, output)
+        # Register artifact with unified pipeline
+        register_artifact(str(self.workdir), ArtifactType.FINDINGS, str(findings_path), self.worker_type.value, "team-agent",
+                         metadata={"task": task, "session_id": self.session_id})
 
         return output, [str(findings_path)]
 
@@ -424,10 +427,14 @@ class TeamAgent:
         """
         运行团队任务
 
-        基于 contract 和 frontier 自动分配任务
-        使用 frontier 分组进行调度:
-        - parallel_candidates: 可并行的任务候选（顺序执行，当前为 parallel-ready 而非真正并行）
-        - conflict_groups: 冲突任务串行执行
+        基于 contract 和 frontier 自动分配任务。
+        使用 frontier 分组进行 parallel-safe scheduling:
+        - parallel_candidates: parallel-ready 任务候选（当前为顺序调度，不是真并发）
+        - conflict_groups: 有文件冲突的任务，必须串行执行
+
+        注意: 当前实现是 "parallel-ready scheduling hints"（调度语义），
+        不是 "stable parallel orchestration"（真并发执行）。
+        要支持真并发需接入 parallel_executor.py 等并发执行器。
 
         Args:
             phase: Current workflow phase for artifact registration

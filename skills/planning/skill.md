@@ -138,15 +138,18 @@ python3 -c "from contract_manager import create_phase_contract; create_phase_con
 最小验证命令：
 
 ```bash
+# 使用 spec-kit 验证工具
 bash scripts/check_template.sh .
-bash scripts/create_plan.sh "示例任务" .
+
+# 创建规范链（spec -> plan -> tasks -> contract）
+python3 -m task_decomposer --from-spec --feature-id myfeature
+python3 -c "from contract_manager import create_phase_contract; create_phase_contract('任务名', '描述', '.')"
 ```
 
 Windows:
 
 ```bat
 scripts\win\check_template.bat .
-scripts\win\create_plan.bat "示例任务" .
 ```
 
 ## Implemented Vs Planned
