@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
-Small Team Agent - 轻量级多Agent小团队编排
+Small Team Agent - Lightweight Multi-Agent Team Orchestration
 
-稳定版小团队拓扑:
-- 1 Lead Agent (lead): 负责任务分配和协调
+Stable team topology:
+- 1 Lead Agent: task allocation and coordination
 - Typed Workers: researcher, coder, reviewer, debugger
-- 简单文件通信 via artifacts (无重型 message bus)
+- Simple file-based communication via artifacts (no heavy message bus)
 
-基于 contract + frontier 模式工作:
-1. Lead 接收任务和 phase_contract
-2. Lead 计算 frontier，决定分配给哪个 worker
-3. Worker 执行任务，结果写回 artifact
-4. Lead 汇总结果，推进 workflow
+Works with contract + frontier mode:
+1. Lead receives task and phase contract
+2. Lead computes frontier, assigns tasks to workers
+3. Worker executes task, writes results to artifact
+4. Lead summarizes results, advances workflow
 
 Usage:
     from team_agent import TeamAgent, WorkerType
 
-    team = TeamAgent(workdir, task="实现REST API", contract=contract)
+    team = TeamAgent(workdir, task="Implement REST API", contract=contract)
     result = team.run()
 
-    # 或单独使用 worker
+    # Or use a single worker directly
     worker = WorkerAgent(WorkerType.CODER, workdir)
-    output = worker.execute(task="实现 /users endpoint")
+    output = worker.execute(task="Implement /users endpoint")
 """
 
 from __future__ import annotations
@@ -366,16 +366,16 @@ class TeamTask:
 
 class TeamAgent:
     """
-    Lead Agent - 小团队协调者
+    Lead Agent - Team Coordinator.
 
-    负责任务分配和协调:
-    1. 解析 contract 和 frontier
-    2. 分配任务给合适的 worker
-    3. 收集结果并汇总
-    4. 推进 workflow
+    Responsibilities:
+    1. Parse contract and frontier
+    2. Assign tasks to appropriate workers
+    3. Collect and summarize results
+    4. Advance workflow
 
     Usage:
-        team = TeamAgent(workdir, task="实现REST API")
+        team = TeamAgent(workdir, task="Implement REST API")
         result = team.run()
     """
 

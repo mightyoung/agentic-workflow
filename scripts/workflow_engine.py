@@ -901,6 +901,16 @@ def allowed_next_phases(phase: str) -> list[str]:
 
 
 def recommend_next_phases(current_phase: str, trigger_type: str | None = None) -> list[str]:
+    """
+    Recommend the next phases reachable from the current phase.
+
+    Args:
+        current_phase: The current workflow phase
+        trigger_type: Optional trigger type (FULL_WORKFLOW, STAGE, DIRECT_ANSWER)
+
+    Returns:
+        List of phase names that are valid next steps, ordered by recommendation priority
+    """
     if current_phase == "DIRECT_ANSWER":
         return ["COMPLETE"]
     if current_phase == "PLANNING":
@@ -925,6 +935,16 @@ def recommend_next_phases(current_phase: str, trigger_type: str | None = None) -
 
 
 def validate_transition(current_phase: str, next_phase: str) -> None:
+    """
+    Validate that a phase transition is allowed by the state machine.
+
+    Args:
+        current_phase: Current phase
+        next_phase: Desired next phase
+
+    Raises:
+        ValueError: If the transition is not allowed
+    """
     if not can_transition(current_phase, next_phase):
         raise ValueError(f"illegal phase transition: {current_phase} -> {next_phase}")
 
@@ -935,6 +955,22 @@ def initialize_workflow(
     task_id: str | None = None,
     auto_create_plan: bool = True,
 ) -> dict[str, Any]:
+    """
+    Initialize a new workflow session.
+
+    Creates .workflow_state.json, initializes task tracker, and sets up
+    trajectory logging. Determines initial phase via router and creates
+    spec artifacts if auto_create_plan is True.
+
+    Args:
+        prompt: User task description (e.g., "帮我开发一个REST API")
+        workdir: Working directory for workflow files
+        task_id: Optional task ID (auto-generated from timestamp if None)
+        auto_create_plan: Whether to create spec/plan/task artifacts
+
+    Returns:
+        Initial state snapshot dict with session_id, task, phase, trigger_type
+    """
     workdir_path = Path(workdir)
     workdir_path.mkdir(parents=True, exist_ok=True)
 
@@ -1068,6 +1104,27 @@ def advance_workflow(
     task_status: str | None = None,
     note: str = "",
 ) -> dict[str, Any]:
+    """
+    Advance the workflow to a new phase.
+
+    Updates .workflow_state.json with the new phase, saves progress to progress.md,
+    runs quality gate on phase exit (for EXECUTING), generates phase-specific
+    artifacts (findings for RESEARCH, review for REVIEWING), and saves checkpoint
+    if conditions are met.
+
+    Args:
+        phase: Target phase to advance to
+        workdir: Working directory
+        progress: Progress percentage (0-100)
+        task_status: Optional task status override
+        note: Optional note for this transition
+
+    Returns:
+        Updated state snapshot dict
+
+    Raises:
+        ValueError: If workflow not initialized or phase transition is illegal
+    """
     state = load_state(workdir)
     if state is None:
         raise ValueError("workflow state not found, please run init first")
@@ -1699,18 +1756,22 @@ def complete_workflow(
     failure_reason: str | None = None,
 ) -> dict[str, Any]:
     """
-    完成工作流并结束 trajectory 记录
+    Complete the workflow and finalize trajectory logging.
+
+    Validates contract fulfillment gate before allowing completion (contract must
+    be active/fulfilled, goals must not be placeholders). Generates final
+    summary artifact and flushes trajectory logger.
 
     Args:
-        workdir: 工作目录
-        final_state: 最终状态 (completed/failed/aborted)
-        failure_reason: 失败原因（如果失败）
+        workdir: Working directory
+        final_state: Final state string (completed/failed/aborted)
+        failure_reason: Reason for failure (if final_state is not completed)
 
     Returns:
-        完成结果
+        Completion result dict with session_id and final state
 
     Raises:
-        ValueError: 如果是代码任务且质量门禁失败
+        ValueError: If contract gate validation fails or workflow not initialized
     """
     state = load_state(workdir)
     if state is None:
@@ -1906,14 +1967,18 @@ def resume_workflow(
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    从中断点恢复工作流
+    Resume workflow from a checkpoint.
+
+    Loads checkpoint state from .checkpoints/ directory (or from trajectory if
+    session_id not provided), restores .workflow_state.json, and updates
+    task tracker to reflect resumed state.
 
     Args:
-        workdir: 工作目录
-        session_id: 可选的 session ID，默认从 trajectory 获取最新中断的
+        workdir: Working directory
+        session_id: Optional session ID (auto-detected from trajectories if None)
 
     Returns:
-        恢复结果
+        Restored state snapshot dict with resume metadata
     """
     from trajectory_logger import list_trajectories, resume_from_point
 
@@ -2254,7 +2319,31 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Workflow runtime engine")
+    """
+    CLI entry point for the workflow runtime engine.
+
+    Supported operations (--op):
+        init          Initialize a new workflow session
+        advance       Advance to a new phase
+        snapshot      Get a snapshot of current workflow state
+        recommend     Recommend next phases from current state
+        validate      Validate workflow state integrity
+        plan          Generate a task plan
+        frontier      Compute the execution frontier (ready/blocked/conflict tasks)
+        checkpoint    Conditionally save a checkpoint
+        complete      Mark workflow as complete (with contract gate validation)
+        log-decision  Record a workflow decision
+        log-file      Record a file change
+        validate-plan Validate task plan structure
+        update-task   Update task status in plan
+        resume        Resume from a checkpoint
+        handle-failure Handle workflow failure with error classification
+        team-run      Run multi-agent team orchestration
+
+    Returns:
+        Exit code (0 = success, non-zero = error)
+    """
+    parser = argparse.ArgumentParser(description="Agentic workflow runtime engine")
     parser.add_argument("--workdir", default=".", help="workspace directory")
     parser.add_argument("--op", choices=["init", "advance", "snapshot", "recommend", "validate", "plan", "frontier", "checkpoint", "complete", "log-decision", "log-file", "validate-plan", "update-task", "resume", "handle-failure", "team-run"], required=True)
     parser.add_argument("--prompt", help="user prompt for workflow initialization")
