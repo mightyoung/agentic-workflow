@@ -560,7 +560,7 @@ class TestTeamArtifactPersistence(unittest.TestCase):
         team = TeamAgent(self.temp_dir, task="Test task")
         team.add_task("Research Python", WorkerType.RESEARCHER)
         task_id = list(team.tasks.keys())[0]
-        result = team.execute_task(task_id)
+        team.execute_task(task_id)  # execute to produce output/artifact
 
         # Save snapshot
         team.save_snapshot(self.temp_dir)

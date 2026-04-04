@@ -606,7 +606,7 @@ class TeamAgent:
         safe_write_text_locked(registry_path, json_lib.dumps(registry, indent=2, ensure_ascii=False))
 
     @classmethod
-    def load_snapshot(cls, workdir: str, session_id: str) -> "TeamAgent | None":
+    def load_snapshot(cls, workdir: str, session_id: str) -> TeamAgent | None:
         """
         从 .team_registry.json 恢复一个团队会话。
 
