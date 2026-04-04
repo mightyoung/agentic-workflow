@@ -545,7 +545,7 @@ class TeamAgent:
         return WorkerType.CODER
 
     def get_state(self) -> dict[str, Any]:
-        """获取团队状态"""
+        """获取团队状态（含 output summaries 和 artifact paths，用于可审计性）"""
         return {
             "session_id": self.session_id,
             "task": self.task,
@@ -556,6 +556,10 @@ class TeamAgent:
                     "assigned_worker": t.assigned_worker.value if t.assigned_worker else None,
                     "status": t.status,
                     "success": t.result.success if t.result else None,
+                    "output_summary": t.result.output[:200] if t.result and t.result.output else None,
+                    "error": t.result.error if t.result else None,
+                    "artifacts": t.result.artifacts if t.result else [],
+                    "duration_seconds": t.result.duration_seconds if t.result else None,
                 }
                 for tid, t in self.tasks.items()
             },
@@ -600,6 +604,74 @@ class TeamAgent:
         # Write registry
         import json as json_lib
         safe_write_text_locked(registry_path, json_lib.dumps(registry, indent=2, ensure_ascii=False))
+
+    @classmethod
+    def load_snapshot(cls, workdir: str, session_id: str) -> "TeamAgent | None":
+        """
+        从 .team_registry.json 恢复一个团队会话。
+
+        恢复后团队状态完整（task、contract、tasks 及其 results），
+        可用于审计断点或继续执行。
+
+        Args:
+            workdir: 工作目录
+            session_id: 要恢复的会话 ID
+
+        Returns:
+            TeamAgent 实例或 None（找不到对应会话）
+        """
+        registry_path = Path(workdir) / ".team_registry.json"
+        if not registry_path.exists():
+            return None
+
+        try:
+            import json as json_lib
+            registry = json_lib.loads(registry_path.read_text(encoding="utf-8"))
+        except (json_lib.JSONDecodeError, OSError):
+            return None
+
+        # Find the session
+        snapshot = None
+        for sess in registry.get("team_sessions", []):
+            if sess.get("session_id") == session_id:
+                snapshot = sess
+                break
+
+        if not snapshot:
+            return None
+
+        # Reconstruct TeamAgent
+        state = snapshot.get("state", {})
+        team = cls(workdir=workdir, task=snapshot.get("task", "Recovered task"))
+
+        # Restore session_id
+        team.session_id = session_id
+
+        # Restore tasks with their results
+        for tid, tdata in state.get("tasks", {}).items():
+            task = TeamTask(
+                id=tid,
+                description=tdata.get("description", ""),
+                assigned_worker=WorkerType(tdata["assigned_worker"]) if tdata.get("assigned_worker") else None,
+                status=tdata.get("status", "pending"),
+            )
+
+            # Reconstruct WorkerResult if task was completed
+            if tdata.get("status") in ("completed", "failed") and tdata.get("assigned_worker"):
+                result = WorkerResult(
+                    worker_type=WorkerType(tdata["assigned_worker"]),
+                    task=tdata.get("description", ""),
+                    output=tdata.get("output_summary", "") or "",
+                    success=tdata.get("success", False),
+                    artifacts=tdata.get("artifacts", []),
+                    error=tdata.get("error"),
+                    duration_seconds=tdata.get("duration_seconds", 0.0),
+                )
+                task.result = result
+
+            team.tasks[tid] = task
+
+        return team
 
 
 # ============================================================================

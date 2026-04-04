@@ -555,6 +555,53 @@ class TestTeamArtifactPersistence(unittest.TestCase):
         self.assertEqual(latest["task"], "Test task")
         self.assertEqual(latest["total_tasks"], 2)
 
+    def test_team_snapshot_contains_output_summaries(self):
+        """Snapshot includes output_summary and artifacts from completed tasks"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        team.add_task("Research Python", WorkerType.RESEARCHER)
+        task_id = list(team.tasks.keys())[0]
+        result = team.execute_task(task_id)
+
+        # Save snapshot
+        team.save_snapshot(self.temp_dir)
+
+        # Load registry and check output_summary + artifacts are present
+        registry_path = Path(self.temp_dir) / ".team_registry.json"
+        import json
+        registry = json.loads(registry_path.read_text())
+        latest = registry["team_sessions"][-1]
+        task_state = latest["state"]["tasks"][task_id]
+
+        self.assertIn("output_summary", task_state)
+        self.assertIn("artifacts", task_state)
+        self.assertIsNotNone(task_state["output_summary"])
+        self.assertGreater(len(task_state["artifacts"]), 0)
+
+    def test_load_snapshot_recovers_team_state(self):
+        """load_snapshot restores a team with task results and artifacts"""
+        team = TeamAgent(self.temp_dir, task="Test task")
+        team.add_task("Research Python", WorkerType.RESEARCHER)
+        task_id = list(team.tasks.keys())[0]
+        team.execute_task(task_id)
+        original_session_id = team.session_id
+
+        # Save snapshot
+        team.save_snapshot(self.temp_dir)
+
+        # Recover team from snapshot
+        recovered = TeamAgent.load_snapshot(self.temp_dir, original_session_id)
+
+        self.assertIsNotNone(recovered)
+        self.assertEqual(recovered.session_id, original_session_id)
+        self.assertEqual(recovered.task, "Test task")
+        self.assertEqual(len(recovered.tasks), 1)
+
+        recovered_task = list(recovered.tasks.values())[0]
+        self.assertEqual(recovered_task.status, "completed")
+        self.assertIsNotNone(recovered_task.result)
+        self.assertTrue(recovered_task.result.success)
+        self.assertGreater(len(recovered_task.result.artifacts), 0)
+
     def test_team_run_registers_artifacts(self):
         """TeamAgent.run() registers worker artifacts"""
         team = TeamAgent(self.temp_dir, task="Test task")
