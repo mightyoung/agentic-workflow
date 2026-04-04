@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """
 LRU Cache 实现 - 基于 OrderedDict 的 O(1) 实现
 
@@ -9,8 +8,10 @@ LRU Cache 实现 - 基于 OrderedDict 的 O(1) 实现
 - 容量超限时自动淘汰最久未使用的条目
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 
 class LRUCache:
@@ -135,8 +136,8 @@ class _Node:
     def __init__(self, key: int = 0, value: Any = None) -> None:
         self.key = key
         self.value = value
-        self.prev: Optional[_Node] = None
-        self.next: Optional[_Node] = None
+        self.prev: _Node | None = None
+        self.next: _Node | None = None
 
 
 class LRUCacheManual:

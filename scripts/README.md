@@ -17,7 +17,7 @@
 - `task_tracker.py`: 任务状态追踪
 - `team_agent.py`: 小团队多Agent编排 (lead + typed workers)
 
-这组脚本加上 `.workflow_state.json`、`SESSION-STATE.md`、`progress.md`、`task_plan.md` 这些状态文件，就是当前的 workflow runtime layer。
+这组脚本加上 `.workflow_state.json`、`SESSION-STATE.md`、`progress.md`、`.specs/`、`.contract.json` 这些状态/规划文件，就是当前的 workflow runtime layer。`task_plan.md` 仅作为 legacy 兼容投影保留。
 
 ### 🔬 实验版 (未纳入主线)
 
@@ -61,7 +61,7 @@
 | `quick_tdd.sh` | 快速 TDD | 执行 TDD 循环 (红-绿-重构) |
 | `check_env.sh` | 环境检查 | 检查必需工具和环境变量 |
 | `auto_commit.sh` | 自动提交 | 快捷 git 提交 |
-| `create_plan.sh` | 创建计划 | 生成项目内 `task_plan.md` |
+| `create_plan.sh` | 创建计划 | 生成项目内 `task_plan.md` (legacy) |
 | `quick_review.sh` | 快速审查 | 代码审查 (TODO/密码/空文件) |
 | `watch_progress.sh` | 监控进度 | 监控 progress.md 变化 |
 
@@ -74,7 +74,7 @@
 | `init_session.bat` | 初始化会话 | 创建 SESSION-STATE.md |
 | `check_template.bat` | 检查模板 | 验证 `references\templates\` 下模板是否存在 |
 | `check_env.bat` | 环境检查 | 检查必需工具和环境变量 |
-| `create_plan.bat` | 创建计划 | 生成项目内 `task_plan.md` |
+| `create_plan.bat` | 创建计划 | 生成项目内 `task_plan.md` (legacy) |
 | `quick_review.bat` | 快速审查 | 代码审查 (TODO/密码/空文件) |
 
 ### 跨平台脚本调用
@@ -151,7 +151,7 @@ bash scripts/init_session.sh                    # 初始化会话
 bash scripts/check_template.sh                 # 检查模板
 bash scripts/check_env.sh                      # 检查环境
 bash scripts/quick_tdd.sh "npm test" "npm run build"  # TDD循环
-bash scripts/create_plan.sh "新功能开发"        # 创建 task_plan.md
+bash scripts/create_plan.sh "新功能开发"        # 创建 task_plan.md (legacy)
 bash scripts/quick_review.sh src/              # 快速审查
 bash scripts/auto_commit.sh . "完成功能X"     # 提交代码
 bash scripts/watch_progress.sh progress.md 5   # 监控进度

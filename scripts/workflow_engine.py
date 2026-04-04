@@ -80,7 +80,7 @@ def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: st
         gate_result_path = Path(workdir) / f".quality_gate_{task_id}.json"
         safe_write_json(gate_result_path, report.to_dict())
 
-        return report.all_passed
+        return bool(report.all_passed)
     except Exception:
         # If quality gate fails for any reason, block completion for code tasks
         # This is fail-closed: code tasks must pass quality gate to complete
@@ -804,7 +804,8 @@ def should_checkpoint(
     """
     # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
     from checkpoint_manager import should_checkpoint as _impl
-    return _impl(workdir, config)
+    result: tuple[bool, str] = _impl(workdir, config)
+    return bool(result[0]), str(result[1])
 
 
 def conditional_checkpoint(
@@ -834,7 +835,8 @@ def conditional_checkpoint(
     """
     # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
     from checkpoint_manager import conditional_checkpoint as _impl
-    return _impl(workdir, config)
+    result: dict[str, Any] = _impl(workdir, config)
+    return result
 
 
 def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
@@ -1483,9 +1485,9 @@ def advance_workflow(
                 plan_content = plan_path.read_text(encoding="utf-8", errors="ignore")
                 owned_pattern = re.compile(r'owned_files:\s*(.+)', re.IGNORECASE)
                 for line in plan_content.split('\n'):
-                    match = owned_pattern.search(line)
-                    if match:
-                        files_str = match.group(1).strip()
+                    owned_match: re.Match[str] | None = owned_pattern.search(line)
+                    if owned_match:
+                        files_str = owned_match.group(1).strip()
                         for f in files_str.split(','):
                             f = f.strip()
                             if f:
@@ -1860,6 +1862,10 @@ def complete_workflow(
 
     current_phase = state.phase.get("current", "IDLE")
     session_id = state.session_id or "unknown"
+    if final_state == "completed":
+        contract_valid, contract_error = validate_contract_gate(workdir, state)
+        if not contract_valid:
+            raise ValueError(f"Cannot complete workflow: {contract_error}")
 
     # Gate blocking for code tasks - same logic as advance_workflow COMPLETE
     phase_history = state.phase.get("history", [])
@@ -1903,13 +1909,6 @@ def complete_workflow(
             raise ValueError(
                 f"Cannot complete workflow: task {task_id} (P0/P1) has no verification method. "
                 f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
-            )
-
-        # Contract fulfillment gate: validate contract is properly fulfilled
-        contract_valid, contract_error = validate_contract_gate(workdir, state)
-        if not contract_valid:
-            raise ValueError(
-                f"Cannot complete workflow: {contract_error}"
             )
 
     # Complete trajectory logging
