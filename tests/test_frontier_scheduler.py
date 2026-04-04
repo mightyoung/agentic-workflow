@@ -487,8 +487,8 @@ class TestTeamArtifactPersistence(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_coder_produces_artifact(self):
-        """Coder worker produces artifact file"""
-        team = TeamAgent(self.temp_dir, task="Test task")
+        """Coder worker produces artifact file (skip real agent, test pipeline)"""
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
         task_id = team.add_task("Implement feature", WorkerType.CODER)
         result = team.execute_task(task_id)
 
@@ -500,7 +500,7 @@ class TestTeamArtifactPersistence(unittest.TestCase):
 
     def test_reviewer_produces_artifact(self):
         """Reviewer worker produces artifact file"""
-        team = TeamAgent(self.temp_dir, task="Test task")
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
         task_id = team.add_task("Review code", WorkerType.REVIEWER)
         result = team.execute_task(task_id)
 
@@ -511,7 +511,7 @@ class TestTeamArtifactPersistence(unittest.TestCase):
 
     def test_debugger_produces_artifact(self):
         """Debugger worker produces artifact file"""
-        team = TeamAgent(self.temp_dir, task="Test task")
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
         task_id = team.add_task("Debug issue", WorkerType.DEBUGGER)
         result = team.execute_task(task_id)
 

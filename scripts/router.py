@@ -157,8 +157,13 @@ def check_force_trigger(text: str) -> Optional[str]:
     return None
 
 
-def detect_stage(text: str) -> str:
-    """检测应该触发的阶段"""
+def detect_stage(text: str) -> tuple[str, float]:
+    """
+    Detect which phase to trigger.
+
+    Returns:
+        (stage, confidence) where confidence is 0.0-1.0
+    """
     text_lower = text.lower()
     stage_priority = {
         "DEBUGGING": 7,
@@ -173,42 +178,48 @@ def detect_stage(text: str) -> str:
         "EXECUTING": 1,
         "SUBAGENT": 0,
     }
-    matches = []
+    matches: list[tuple[float, int, str]] = []
 
     for stage, keywords in ROUTE_KEYWORDS.items():
         for keyword in keywords:
             if keyword in text_lower:
-                matches.append((len(keyword), stage_priority.get(stage, 0), stage))
+                # Confidence = keyword relevance (length ratio) * priority factor
+                relevance = min(len(keyword) / max(len(text_lower), 1), 0.9)
+                priority_factor = stage_priority.get(stage, 0) / 10.0
+                confidence = relevance + (priority_factor * 0.1)
+                matches.append((confidence, stage_priority.get(stage, 0), stage))
 
     if matches:
         matches.sort(reverse=True)
-        return matches[0][2]
+        return matches[0][2], min(matches[0][0], 0.95)
 
-    return "EXECUTING"  # 默认
+    return "EXECUTING", 0.1  # Default: low confidence
 
 
-def route(text: str, use_semantic: bool = False) -> tuple[str, str]:
+def route(text: str, use_semantic: bool = False) -> tuple[str, str, float]:
     """
-    执行路由决策
+    Execute routing decision.
 
     Args:
-        text: 用户消息
-        use_semantic: 是否优先使用语义路由
+        text: User message
+        use_semantic: Whether to prefer semantic routing
 
     Returns:
-        (触发类型, 阶段)
-        触发类型: FULL_WORKFLOW / STAGE / DIRECT_ANSWER / NONE
+        (trigger_type, phase, confidence)
+        trigger_type: FULL_WORKFLOW / STAGE / DIRECT_ANSWER / NONE
+        phase: Phase name
+        confidence: 0.0-1.0 confidence score
     """
-    # Step 1: 检查负面触发
+    # Step 1: Check negative trigger
     if check_negative_trigger(text):
-        return ("DIRECT_ANSWER", "闲聊")
+        return ("DIRECT_ANSWER", "闲聊", 1.0)
 
-    # Step 2: 检查强制触发
+    # Step 2: Check force trigger
     force = check_force_trigger(text)
     if force:
-        return ("FULL_WORKFLOW", "完整流程")
+        return ("FULL_WORKFLOW", "完整流程", 1.0)
 
-    # Step 3: 尝试语义路由 (如果启用)
+    # Step 3: Try semantic routing if enabled
     if use_semantic:
         try:
             import os
@@ -218,20 +229,20 @@ def route(text: str, use_semantic: bool = False) -> tuple[str, str]:
             from semantic_router import route_semantic as semantic_route
             trigger_type, phase = semantic_route(text)
             if trigger_type == "STAGE":
-                return (trigger_type, phase)
+                return (trigger_type, phase, 0.8)  # Semantic gives high confidence
         except ImportError:
-            pass  # 降级到关键词
+            pass  # Fallback to keyword
         except Exception:
-            pass  # 降级到关键词
+            pass  # Fallback to keyword
 
-    # Step 4: 检测阶段
-    stage = detect_stage(text)
-    return ("STAGE", stage)
+    # Step 4: Detect stage (keyword-based)
+    stage, confidence = detect_stage(text)
+    return ("STAGE", stage, confidence)
 
 
-def format_output(result: tuple[str, str], text: str, format: str = 'simple') -> str:
-    """格式化输出"""
-    trigger_type, stage = result
+def format_output(result: tuple[str, str, float], text: str, format: str = 'simple') -> str:
+    """Format routing output"""
+    trigger_type, stage, confidence = result
 
     if format == 'json':
         import json
@@ -239,16 +250,17 @@ def format_output(result: tuple[str, str], text: str, format: str = 'simple') ->
             "input": text,
             "trigger_type": trigger_type,
             "stage": stage,
+            "confidence": round(confidence, 3),
             "should_trigger_workflow": trigger_type in ("FULL_WORKFLOW", "STAGE")
         }, ensure_ascii=False, indent=2)
 
     elif format == 'simple':
         if trigger_type == "DIRECT_ANSWER":
-            return "DIRECT_ANSWER | 闲聊 | NO_WORKFLOW"
+            return f"DIRECT_ANSWER | 闲聊 | NO_WORKFLOW | conf={confidence:.2f}"
         elif trigger_type == "FULL_WORKFLOW":
-            return "FULL_WORKFLOW | 完整流程 | WORKFLOW"
+            return f"FULL_WORKFLOW | 完整流程 | WORKFLOW | conf={confidence:.2f}"
         else:
-            return f"STAGE | {stage} | WORKFLOW"
+            return f"STAGE | {stage} | WORKFLOW | conf={confidence:.2f}"
 
     else:  # verbose
         lines = [
@@ -257,6 +269,7 @@ def format_output(result: tuple[str, str], text: str, format: str = 'simple') ->
             "-" * 50,
             f"触发类型: {trigger_type}",
             f"阶段: {stage}",
+            f"置信度: {confidence:.3f}",
             f"是否触发工作流: {'是' if trigger_type in ('FULL_WORKFLOW', 'STAGE') else '否'}",
             "=" * 50
         ]

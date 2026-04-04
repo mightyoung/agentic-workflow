@@ -35,6 +35,10 @@ from typing import Any
 
 # Template variable pattern: {{variable_name}}
 TEMPLATE_PATTERN = re.compile(r"\{\{(\w+)\}\}")
+# Include directive pattern: {{include: relative/path/to/file.md}}
+INCLUDE_PATTERN = re.compile(r"\{\{include:\s*([^\}]+)\}\}")
+# Maximum include depth to prevent infinite recursion
+MAX_INCLUDE_DEPTH = 5
 
 
 @dataclass
@@ -65,6 +69,7 @@ class Skill:
     Attributes:
         metadata: Parsed frontmatter
         phase_name: Name of the phase (e.g., "THINKING", "DEBUGGING")
+        path: Absolute path to the skill file (for include resolution)
         overview: The ## Overview section content
         entry_criteria: Human-readable entry criteria
         exit_criteria: Structured exit criteria
@@ -75,13 +80,14 @@ class Skill:
     """
     metadata: SkillMetadata
     phase_name: str
-    overview: str
-    entry_criteria: str
-    exit_criteria: ExitCriteria
-    core_process: str
-    phase_prompt_template: str
-    completion_template: str
-    raw_content: str
+    path: Path = Path(".")
+    overview: str = ""
+    entry_criteria: str = ""
+    exit_criteria: ExitCriteria = field(default_factory=ExitCriteria)
+    core_process: str = ""
+    phase_prompt_template: str = ""
+    completion_template: str = ""
+    raw_content: str = ""
 
 
 class SkillLoader:
@@ -115,7 +121,10 @@ class SkillLoader:
             return None
 
         content = skill_path.read_text(encoding="utf-8")
-        return self.parse_skill_md(phase_name.upper(), content)
+        skill = self.parse_skill_md(phase_name.upper(), content)
+        if skill:
+            skill.path = skill_path.resolve()
+        return skill
 
     def load_all_skills(self) -> dict[str, Skill]:
         """Load all available skills."""
@@ -288,6 +297,11 @@ class SkillLoader:
             "",
         ]
 
+        # Add Preamble (may contain {{include:}} directives)
+        preamble = sections.get("Preamble", "")
+        if preamble:
+            parts.extend(["## Preamble", preamble, ""])
+
         # Add entry criteria
         entry = sections.get("Entry Criteria", "")
         if entry:
@@ -403,15 +417,74 @@ class SkillPromptFormatter:
         }
         substitutions.update(extra_vars)
 
-        # Substitute template variables
-        prompt = self.skill.phase_prompt_template
-
-        for match in TEMPLATE_PATTERN.finditer(prompt):
-            var_name = match.group(1)
-            if var_name in substitutions:
-                prompt = prompt.replace(match.group(0), str(substitutions[var_name]))
+        # Substitute template variables and expand includes
+        prompt = self._expand_template(
+            self.skill.phase_prompt_template,
+            substitutions,
+            depth=0,
+        )
 
         return prompt
+
+    def _expand_template(
+        self,
+        content: str,
+        substitutions: dict[str, Any],
+        depth: int,
+    ) -> str:
+        """
+        Recursively expand {{include:}} directives and substitute variables.
+
+        Args:
+            content: Template content
+            substitutions: Variable substitutions dict
+            depth: Current recursion depth for include directives
+
+        Returns:
+            Fully expanded content
+        """
+        if depth > MAX_INCLUDE_DEPTH:
+            return f"[ERROR: max include depth ({MAX_INCLUDE_DEPTH}) exceeded]"
+
+        result = content
+
+        # First: expand include directives
+        for match in INCLUDE_PATTERN.finditer(result):
+            include_path = match.group(1).strip()
+            # Resolve relative to the skill file's directory
+            base_dir = self.skill.path.parent
+
+            # The skill's raw_content doesn't have full path; resolve from skills_dir
+            # We use a heuristic: the include path ../_shared/ means from skills/{phase}/ go up to skills/
+            # So include_path like "../_shared/preamble.md" resolves from skills/{phase}/ to skills/_shared/
+            # Include path is relative to the skill file's directory
+            included_path = (base_dir / include_path).resolve()
+
+            if included_path.exists():
+                try:
+                    included_content = included_path.read_text(encoding="utf-8")
+                    # Strip frontmatter from included file for cleaner expansion
+                    if included_content.startswith("---"):
+                        parts = included_content.split("---", 2)
+                        if len(parts) >= 3:
+                            included_content = parts[2].strip()
+                    # Recursively expand includes in the included content
+                    included_content = self._expand_template(
+                        included_content, substitutions, depth + 1
+                    )
+                    result = result.replace(match.group(0), included_content)
+                except (OSError, UnicodeDecodeError):
+                    result = result.replace(match.group(0), f"[ERROR: could not read {include_path}]")
+            else:
+                result = result.replace(match.group(0), f"[ERROR: file not found: {include_path}]")
+
+        # Second: substitute {{variable}} patterns
+        for match in TEMPLATE_PATTERN.finditer(result):
+            var_name = match.group(1)
+            if var_name in substitutions:
+                result = result.replace(match.group(0), str(substitutions[var_name]))
+
+        return result
 
     def _format_context(self, context: dict[str, Any]) -> str:
         """Format context dict as readable string."""

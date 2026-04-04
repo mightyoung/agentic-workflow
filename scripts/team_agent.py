@@ -160,7 +160,7 @@ class WorkerAgent:
     - Debugger: 调试修复
     """
 
-    def __init__(self, worker_type: WorkerType, workdir: str = ".", use_real_agent: bool = False):
+    def __init__(self, worker_type: WorkerType, workdir: str = ".", use_real_agent: bool = True):
         self.worker_type = worker_type
         self.workdir = Path(workdir)
         self.session_id = f"{worker_type.value}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -238,46 +238,65 @@ class WorkerAgent:
 
     def _do_code(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Coder worker: 代码实现 (生成代码片段/建议)"""
-        # 如果 use_real_agent，使用 SubAgentRunner 执行真实 AI
-        if self.use_real_agent:
-            subagent_runner_class = _get_subagent_runner()
-            if subagent_runner_class:
-                runner = subagent_runner_class(workdir=str(self.workdir))
-                result = runner.run(
-                    phase="EXECUTING",
-                    task=task,
-                    session_id=self.session_id,
-                    context=context,
-                )
-                if result.success:
-                    return result.output, result.artifacts
-                # Fall through to template if real agent failed
+        # 如果 use_real_agent=False，明确跳过，不输出假结果
+        if not self.use_real_agent:
+            skipped_msg = (
+                f"# Code Implementation Plan\n\nTask: {task}\n\n"
+                f"## Status: SKIPPED\n\n"
+                f"Real agent execution is disabled (`use_real_agent=False`).\n"
+                f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
+            )
+            code_path = self.workdir / f"code_{self.session_id}.md"
+            safe_write_text_locked(code_path, skipped_msg)
+            register_artifact(str(self.workdir), ArtifactType.CODE, str(code_path), self.worker_type.value, "team-agent",
+                            metadata={"task": task, "session_id": self.session_id, "skipped": True})
+            return skipped_msg, [str(code_path)]
 
-        # 默认: 生成实现建议模板
+        subagent_runner_class = _get_subagent_runner()
+        if subagent_runner_class:
+            runner = subagent_runner_class(workdir=str(self.workdir))
+            result = runner.run(
+                phase="EXECUTING",
+                task=task,
+                session_id=self.session_id,
+                context=context,
+            )
+            if result.success:
+                return result.output, result.artifacts
+
+        # Fallback when SubAgentRunner unavailable: explicit template (not fake output)
         output = f"# Code Implementation Plan\n\nTask: {task}\n\n"
-
         if context and context.get("owned_files"):
             output += "## Target Files\n"
             for f in context["owned_files"]:
                 output += f"- {f}\n"
-
         if context and context.get("verification"):
             output += f"\n## Verification\n{context['verification']}\n"
-
         output += "\n## Implementation Notes\n"
         output += "TDD approach recommended:\n1. Write failing test\n2. Implement minimal code\n3. Refactor\n"
 
-        # Write code artifact
         code_path = self.workdir / f"code_{self.session_id}.md"
         safe_write_text_locked(code_path, output)
-        # Register artifact
         register_artifact(str(self.workdir), ArtifactType.CODE, str(code_path), self.worker_type.value, "team-agent",
-                          metadata={"task": task, "session_id": self.session_id})
-
+                        metadata={"task": task, "session_id": self.session_id})
         return output, [str(code_path)]
 
     def _do_review(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Reviewer worker: 代码审查"""
+        # 如果 use_real_agent=False，明确跳过
+        if not self.use_real_agent:
+            skipped_msg = (
+                f"# Code Review\n\nTask: {task}\n\n"
+                f"## Status: SKIPPED\n\n"
+                f"Real agent execution is disabled (`use_real_agent=False`).\n"
+                f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
+            )
+            review_path = self.workdir / f"review_{self.session_id}.md"
+            safe_write_text_locked(review_path, skipped_msg)
+            register_artifact(str(self.workdir), ArtifactType.REVIEW, str(review_path), self.worker_type.value, "team-agent",
+                            metadata={"task": task, "session_id": self.session_id, "skipped": True})
+            return skipped_msg, [str(review_path)]
+
         output = f"# Code Review\n\nTask: {task}\n\n"
         output += "## Review Focus\n"
         output += "- Correctness\n"
@@ -290,17 +309,28 @@ class WorkerAgent:
             for f in context["owned_files"]:
                 output += f"- {f}\n"
 
-        # Write review artifact
         review_path = self.workdir / f"review_{self.session_id}.md"
         safe_write_text_locked(review_path, output)
-        # Register artifact
         register_artifact(str(self.workdir), ArtifactType.REVIEW, str(review_path), self.worker_type.value, "team-agent",
-                          metadata={"task": task, "session_id": self.session_id})
-
+                        metadata={"task": task, "session_id": self.session_id})
         return output, [str(review_path)]
 
     def _do_debug(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Debugger worker: 调试修复"""
+        # 如果 use_real_agent=False，明确跳过
+        if not self.use_real_agent:
+            skipped_msg = (
+                f"# Debug Analysis\n\nTask: {task}\n\n"
+                f"## Status: SKIPPED\n\n"
+                f"Real agent execution is disabled (`use_real_agent=False`).\n"
+                f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
+            )
+            debug_path = self.workdir / f"debug_{self.session_id}.md"
+            safe_write_text_locked(debug_path, skipped_msg)
+            register_artifact(str(self.workdir), ArtifactType.DEBUG, str(debug_path), self.worker_type.value, "team-agent",
+                            metadata={"task": task, "session_id": self.session_id, "skipped": True})
+            return skipped_msg, [str(debug_path)]
+
         output = f"# Debug Analysis\n\nTask: {task}\n\n"
         output += "## Debugging Steps\n"
         output += "1. Reproduce the issue\n"
@@ -312,13 +342,10 @@ class WorkerAgent:
         if context and context.get("error"):
             output += f"\n## Error Context\n{context['error']}\n"
 
-        # Write debug artifact
         debug_path = self.workdir / f"debug_{self.session_id}.md"
         safe_write_text_locked(debug_path, output)
-        # Register artifact
         register_artifact(str(self.workdir), ArtifactType.DEBUG, str(debug_path), self.worker_type.value, "team-agent",
-                          metadata={"task": task, "session_id": self.session_id})
-
+                        metadata={"task": task, "session_id": self.session_id})
         return output, [str(debug_path)]
 
 
@@ -358,7 +385,7 @@ class TeamAgent:
         task: str | None = None,
         contract: dict[str, Any] | None = None,
         frontier: dict[str, Any] | None = None,
-        use_real_agent: bool = False,
+        use_real_agent: bool = True,
     ):
         self.workdir = Path(workdir)
         self.task = task or "Untitled task"

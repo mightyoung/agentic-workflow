@@ -1131,7 +1131,7 @@ def initialize_workflow(
     memory_ops.ensure_session_state_exists(str(session_path))
     task_tracker.save_tracker(str(tracker_path), task_tracker.load_tracker(str(tracker_path)))
 
-    trigger_type, routed_phase = router.route(prompt)
+    trigger_type, routed_phase, _confidence = router.route(prompt)
     current_phase = _phase_display_name(trigger_type, routed_phase)
 
     # Create unified state
@@ -2601,7 +2601,7 @@ def main() -> int:
             task=task_title,
             contract=contract,
             frontier=frontier,
-            use_real_agent=getattr(args, 'use_real_agent', False),
+            use_real_agent=getattr(args, 'use_real_agent', True),
         )
         team_result = team.run(phase=phase_name, register_artifacts=True)
 
@@ -2610,7 +2610,7 @@ def main() -> int:
             "tasks_completed": team_result["tasks_completed"],
             "tasks_failed": team_result["tasks_failed"],
             "outputs": team_result["outputs"],
-            "used_real_agent": getattr(args, 'use_real_agent', False),
+            "used_real_agent": getattr(args, 'use_real_agent', True),
         }, ensure_ascii=False, indent=2))
         return 0
 
