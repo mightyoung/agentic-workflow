@@ -10,6 +10,8 @@ description: |
 ### 状态文件
 
 - `.workflow_state.json` — 唯一真实状态源（session_id, task, phase, trigger_type）
+- `.specs/` — 规划阶段正式工件目录（spec.md / plan.md / tasks.md / .contract.json）
+- `task_plan.md` — 兼容投影层，仅供旧 runtime/frontier 读取
 
 ### 阶段执行流程
 
@@ -21,7 +23,7 @@ description: |
 
 | 阶段 | 产出文件 |
 |------|---------|
-| RESEARCH | `findings.md` |
-| PLANNING | `task_plan.md` |
+| RESEARCH | `findings_{session}.md` |
+| PLANNING | `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
 | EXECUTING | 实际代码变更 |
 | REVIEWING | review 意见（含 file:line 定位） |

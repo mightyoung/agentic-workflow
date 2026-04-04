@@ -8,6 +8,17 @@
 logs/
 tmp/
 temp/
+.artifacts.json
+.artifacts.json.lock
+.quality_gate_*.json
+.team_registry.json
+.checkpoints/
+handoff_*.md
+findings_*.md.lock
+review_*.md.lock
+code_*.md.lock
+debug_*.md.lock
+completion_summary_*.md.lock
 
 # Session and state files
 SESSION-STATE.md

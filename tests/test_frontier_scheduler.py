@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts"))  # noqa: E402
 
 import workflow_engine  # noqa: E402
 from team_agent import TeamAgent, WorkerType  # noqa: E402
+from unified_state import load_state, save_state  # noqa: E402
 from workflow_engine import (  # noqa: E402
     CheckpointConfig,
     compute_frontier,
@@ -416,7 +417,6 @@ class TestTeamRunIntegration(unittest.TestCase):
     def test_contract_gate_blocks_draft_complete(self):
         """Contract with status=draft blocks workflow completion for FULL_WORKFLOW code tasks"""
         import json
-        from unified_state import load_state, save_state
 
         # Initialize workflow — routes to STAGE/EXECUTING (which is a code task)
         workflow_engine.initialize_workflow("Test task", workdir=self.temp_dir)

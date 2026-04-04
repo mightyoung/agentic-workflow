@@ -21,9 +21,9 @@ This section describes what actually works **today** via the scripts layer.
 | EXPLORING | ✅ | — | Socratic deep exploration |
 | RESEARCH | ✅ | findings_{session}.md | Web search → findings report (falls back to keyword-based if search unavailable) |
 | THINKING | ✅ | — | Expert reasoning |
-| PLANNING | ✅ | .specs/<feat>/spec+plan+tasks.md | Task breakdown with spec-kit chain (.specs/*/spec.md → plan.md → tasks.md) |
+| PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | Task breakdown with spec-kit chain |
 | EXECUTING | ✅ | — | TDD-driven implementation |
-| REVIEWING | ✅ | review_{session}.md | Real code analysis when files present (falls back to template-based risk assessment) |
+| REVIEWING | ✅ | review_{session}.md | Real code analysis when files present (falls back to contract-scoped fallback) |
 | DEBUGGING | ✅ | — | 5-step systematic debugging |
 | REFINING | ✅ | — | Feedback loop iteration |
 | COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
@@ -62,7 +62,7 @@ The actual executable surface:
 | `.artifacts.json` | ✅ Active | Artifact registry (progress, plan, session, tracker) |
 | `SESSION-STATE.md` | ✅ Active | Session state (markdown) |
 | `progress.md` | ✅ Active | Phase progress (markdown) |
-| `task_plan.md` | ✅ Active | Task breakdown (markdown) |
+| `task_plan.md` | 🔄 Legacy | Compatibility projection for old runtime/frontier |
 
 ## Quickstart
 
@@ -111,9 +111,9 @@ python3 scripts/unified_state.py --op=list-trajectories --workdir .
 python3 scripts/task_decomposer.py --prompt "实现用户认证模块：注册、登录、登出"
 ```
 
-### Plan-Driven Execution (NEW)
+### Plan-Driven Execution (spec-kit chain)
 
-任务计划现在支持可执行格式：
+规划现在以 spec/plan/tasks/contract 为主：
 
 ```bash
 # 验证任务计划（检查循环依赖等）
@@ -219,7 +219,7 @@ new_state = migrate_state(old_state)
 
 **已注册工件类型**:
 - `progress.md` -> type: progress
-- `task_plan.md` -> type: plan
+- `task_plan.md` -> type: plan (legacy)
 - `SESSION-STATE.md` -> type: session
 - `.task_tracker.json` -> type: tracker
 

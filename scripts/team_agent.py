@@ -729,7 +729,8 @@ def main():
     else:
         # 团队模式
         team = TeamAgent(args.workdir, task=args.task)
-        team.add_task(args.task, WorkerType.CODER)
+        if not team.contract.get("goals") and not team.frontier.get("executable_frontier") and not team.frontier.get("parallel_candidates") and not team.frontier.get("conflict_groups"):
+            team.add_task(args.task, WorkerType.CODER)
         result = team.run()
         print(f"Team Session: {result['session_id']}")
         print(f"Tasks: {result['tasks_completed']} completed, {result['tasks_failed']} failed")
