@@ -264,6 +264,16 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
     if trigger_type in ("RESULT_ONLY", "DIRECT_ANSWER"):
         return True, ""  # Lenient: Q&A tasks don't need formal contracts
 
+    # Gate is skipped for STAGE trigger (simple tasks)
+    if trigger_type == "STAGE":
+        return True, ""  # Simple stage-triggered tasks don't need contracts
+
+    # Gate is relaxed for low-complexity tasks (XS/S)
+    metadata = getattr(state, 'metadata', None) or {}
+    complexity = metadata.get("complexity", "")
+    if complexity in ("XS", "S"):
+        return True, ""  # Simple tasks skip formal contract gate
+
     if not json_contract_path.exists():
         return True, ""  # No contract = no gate
 
