@@ -154,6 +154,7 @@ class WorkflowState:
     artifacts: dict[str, str] = field(default_factory=dict)
     decisions: list[Decision] = field(default_factory=list)
     file_changes: list[FileChange] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.created_at:
@@ -178,6 +179,8 @@ class WorkflowState:
             result["task"] = self.task.to_dict()
         if self.phase:
             result["phase"] = self.phase
+        if self.metadata:
+            result["metadata"] = self.metadata
         return result
 
     @classmethod
@@ -200,6 +203,7 @@ class WorkflowState:
             artifacts=data.get("artifacts", {}),
             decisions=decisions,
             file_changes=file_changes,
+            metadata=data.get("metadata", {}),
         )
 
 

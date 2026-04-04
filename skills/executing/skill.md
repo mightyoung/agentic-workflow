@@ -86,11 +86,9 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 默认使用项目内文件：
 
+- `.workflow_state.json`
 - `task_plan.md`
-- `SESSION-STATE.md`
 - `progress.md`
-
-不要假定 `~/.gstack` 会话目录存在。
 
 ### 4. Use Real Tracking Scripts
 

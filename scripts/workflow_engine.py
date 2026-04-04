@@ -381,6 +381,55 @@ def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, 
     return spec_path, plan_path
 
 
+def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> dict[str, Any]:
+    """
+    Build context for the next phase based on artifacts from the current phase.
+
+    Returns dict with:
+        files_to_read: list of file paths the AI should read
+        summary: brief description of what was produced
+    """
+    workdir_path = Path(workdir)
+    files_to_read: list[str] = []
+    summary = ""
+
+    if current_phase == "RESEARCH":
+        # RESEARCH produces findings — THINKING should read them
+        findings = workdir_path / f"findings_{session_id}.md"
+        if findings.exists():
+            files_to_read.append(str(findings))
+            summary = "Research findings available. Read findings before analysis."
+        else:
+            findings_glob = list(workdir_path.glob("findings*.md"))
+            if findings_glob:
+                files_to_read.append(str(findings_glob[0]))
+                summary = "Research findings available."
+
+    elif current_phase == "PLANNING":
+        # PLANNING produces task_plan — EXECUTING should follow it
+        plan = workdir_path / "task_plan.md"
+        if plan.exists():
+            files_to_read.append(str(plan))
+            summary = "Task plan available. Execute tasks in priority order."
+
+    elif current_phase == "EXECUTING":
+        # EXECUTING produces code changes — REVIEWING should diff them
+        summary = "Code changes made. Run `git diff` to review actual changes."
+
+    elif current_phase == "REVIEWING":
+        # REVIEWING produces review feedback — REFINING should fix issues
+        summary = "Review complete. Fix any issues identified in review."
+
+    elif current_phase == "THINKING":
+        # THINKING produces analysis — PLANNING should use conclusions
+        summary = "Analysis complete. Use conclusions to inform task planning."
+
+    return {
+        "files_to_read": files_to_read,
+        "summary": summary,
+    }
+
+
 def _phase_display_name(trigger_type: str, phase: str) -> str:
     if trigger_type == "DIRECT_ANSWER":
         return "DIRECT_ANSWER"
@@ -983,6 +1032,10 @@ def initialize_workflow(
     trigger_type, routed_phase, _confidence = router.route(prompt)
     current_phase = _phase_display_name(trigger_type, routed_phase)
 
+    # Estimate complexity and get phase sequence
+    complexity, complexity_conf = router.estimate_complexity(prompt)
+    phase_sequence = router.get_phase_sequence(complexity)
+
     # Create unified state
     state = create_initial_state(
         prompt=prompt,
@@ -990,6 +1043,13 @@ def initialize_workflow(
         trigger_type=trigger_type,
         initial_phase=current_phase,
     )
+
+    # Store complexity and phase sequence in state metadata
+    if state.metadata is None:
+        state.metadata = {}
+    state.metadata["complexity"] = complexity
+    state.metadata["complexity_confidence"] = complexity_conf
+    state.metadata["phase_sequence"] = phase_sequence
 
     # NOTE: create_initial_state already sets the phase to initial_phase
     # Don't call transition_phase here as it would try to transition to the same phase
@@ -1094,6 +1154,9 @@ def initialize_workflow(
         "recommended_next_phases": recommend_next_phases(current_phase, trigger_type),
         "state_file": str(workflow_state_path(workdir)),
         "trajectory_session_id": state.session_id,
+        "complexity": complexity,
+        "phase_sequence": phase_sequence,
+        "total_phases": len(phase_sequence),
     }
 
 
@@ -1737,6 +1800,20 @@ def advance_workflow(
         # Skill loading is best-effort - don't fail the phase transition
         pass
 
+    # Calculate progress visualization data
+    phase_sequence = state.metadata.get("phase_sequence") if state.metadata else None
+    phase_index = None
+    total_phases = None
+    if phase_sequence and isinstance(phase_sequence, list):
+        try:
+            phase_index = phase_sequence.index(phase) + 1
+            total_phases = len(phase_sequence)
+        except ValueError:
+            pass
+
+    # Build context for next phase — what the AI should read before proceeding
+    context_for_next_phase = _build_phase_context(phase, workdir, state.session_id or "unknown")
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -1747,6 +1824,10 @@ def advance_workflow(
         "state_file": str(workflow_state_path(workdir)),
         "skill_prompt_path": str(skill_prompt_path) if skill_prompt_path else None,
         "skill_name": skill_name,
+        "phase_index": phase_index,
+        "total_phases": total_phases,
+        "complexity": state.metadata.get("complexity") if state.metadata else None,
+        "context_for_next_phase": context_for_next_phase,
     }
 
 

@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 单入口设计，所有任务从 router 开始
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施
   DO NOT TRIGGER when: 简单闲聊
-version: 5.14.0
+version: 6.0.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -30,13 +30,31 @@ requires:
 | 简单任务 | 其他 | EXECUTING |
 | 继续 | 继续/resume/恢复 | 读取 .workflow_state.json 恢复上下文 |
 
-## 状态机
+## 进度输出格式
+
+每进入新阶段时 **必须** 输出进度行：
 
 ```
-IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
-                ↓
-        OFFICE-HOURS → EXPLORING → RESEARCH/THINKING/PLANNING/EXECUTING/REVIEWING/DEBUGGING/REFINING → COMPLETE
+[N/M PHASE] 一句话描述当前要做什么
 ```
+
+阶段完成时输出：
+
+```
+[N/M PHASE done] 一句话总结产出
+```
+
+## 阶段切换与上下文传递
+
+每个阶段结束时，**必须** 将关键产出传递给下一阶段：
+
+| 当前阶段 | 产出 | 下一阶段必须读取 |
+|---------|------|-----------------|
+| RESEARCH | `findings.md` | THINKING 开始前读取 findings.md |
+| THINKING | 分析结论（输出到对话） | PLANNING 基于 THINKING 结论拆分任务 |
+| PLANNING | `task_plan.md` / TodoWrite | EXECUTING 逐项执行 |
+| EXECUTING | 代码变更 | REVIEWING 运行 `git diff` 查看变更 |
+| REVIEWING | review 意见 | REFINING 针对性修复（如有问题） |
 
 ## 原则与铁律
 
@@ -50,6 +68,13 @@ IDLE → [ROUTER] → RESULT-ONLY → SUBAGENT → COMPLETE
 ## 阶段切换
 
 1. 读取 `.workflow_state.json` 确认当前 phase
-2. 读取 `skill_prompt_{phase}_{session}.md` 获取阶段指令
-3. 执行阶段任务 → `python3 scripts/workflow_engine.py --op advance --phase NEXT`
-4. 写 `progress.md` 记录进度
+2. 读取 `skill_prompt_{phase}_{session}.md` 获取阶段指令（如存在）
+3. 执行阶段任务
+4. 推进：`python3 scripts/workflow_engine.py --op advance --phase NEXT --workdir .`
+
+## 搜索工具降级策略
+
+RESEARCH 阶段搜索工具优先级（按可用性自动降级）：
+1. **WebSearch** — Claude Code 原生，最优先
+2. **WebFetch** — 当已知具体 URL 时
+3. **AI 知识库** — 如果所有搜索工具都不可用，**必须明确告知用户**，不要静默用自身知识回答

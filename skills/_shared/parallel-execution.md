@@ -285,7 +285,7 @@ if len(active_subagents) >= max_concurrent_subagents:
 在并行执行前，必须验证:
 
 - [ ] 数据依赖: 读取的数据源已完成写入
-- [ ] 状态依赖: 前置 phase 的 SESSION-STATE 已更新
+- [ ] 状态依赖: 前置 phase 的 .workflow_state.json 已更新
 - [ ] 文件依赖: 所需文件已存在且版本正确
 - [ ] 资源依赖: 共享资源无冲突
 

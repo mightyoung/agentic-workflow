@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 LRU Cache 实现 - 基于 OrderedDict 的 O(1) 实现
 

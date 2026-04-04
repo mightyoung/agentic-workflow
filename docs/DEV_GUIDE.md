@@ -63,11 +63,14 @@ python3 scripts/trajectory_logger.py --op list --workdir .
 ## 测试命令
 
 ```bash
-# 完整测试套件 (396 tests)
-python3 -m pytest tests/ -q
+# 核心测试 (312 tests,不含 benchmark)
+python3 -m pytest tests/ --ignore=tests/bench/ -q
 
-# 核心测试 (frontier_scheduler, failure_handling, quality_gate, workflow_engine)
-python3 -m pytest tests/test_workflow_engine.py tests/test_frontier_scheduler.py tests/test_failure_handling.py tests/test_quality_gate.py -q
+# Benchmark 测试 (84 tests, TDD 学习/性能基准)
+python3 -m pytest tests/bench/ -q
+
+# 完整测试套件 (396 tests = 312 core + 84 benchmark)
+python3 -m pytest tests/ -q
 
 # 任务分解测试
 python3 -m pytest tests/test_task_decomposer.py -v

@@ -49,8 +49,24 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 
 **目的**：初步感知问题性质，建立调试方向
 
+**强制自动诊断** — 进入 DEBUGGING 时必须先执行以下命令收集信息：
+
+```bash
+# 1. 查看最近变更（可能引入 bug 的代码）
+git diff HEAD~3 --stat
+git log --oneline -5
+
+# 2. 运行测试获取完整错误输出（根据项目类型选择）
+python3 -m pytest --tb=long -q 2>&1 | tail -50   # Python
+# npm test 2>&1 | tail -50                        # Node.js
+# cargo test 2>&1 | tail -50                      # Rust
+
+# 3. 检查 lint/type 错误
+python3 -m ruff check . 2>&1 | head -20 || true
+```
+
 **操作**：
-1. 收集错误信息（错误消息、堆栈跟踪、返回码）
+1. 收集错误信息（错误消息、堆栈跟踪、返回码）— **必须从上述命令输出中提取**
 2. 复现问题（确认问题可重现）
 3. 确定问题域（前端/后端/数据库/网络/配置）
 4. 评估紧急程度和影响范围

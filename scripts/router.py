@@ -122,6 +122,74 @@ NEGATIVE_REGEX_TRIGGERS = [
 NEGATIVE_CONTEXTS = ["开发", "代码", "帮我", "问题", "需要"]
 
 
+# Complexity estimation keywords
+COMPLEXITY_KEYWORDS = {
+    "XL": [
+        "系统设计", "设计系统", "新系统", "架构设计", "从零开始",
+        "全新项目", "微服务", "分布式", "system design", "new system",
+        "from scratch", "architecture", "设计一个", "搭建一个"
+    ],
+    "L": [
+        "重构", "重写", "模块", "迁移", "升级", "整个",
+        "全面", "大改", "refactor", "rewrite", "module",
+        "migration", "全部改", "重新设计", "多个文件"
+    ],
+    "M": [
+        "新增", "功能", "feature", "endpoint", "api",
+        "接口", "页面", "组件", "add", "implement",
+        "开发一个", "写一个", "实现一个"
+    ],
+    "S": [
+        "修复", "修改", "改一下", "fix", "bug", "错误",
+        "调整", "更新", "update", "change", "小改"
+    ],
+    "XS": [
+        "typo", "拼写", "格式", "注释", "import", "rename",
+        "重命名", "删除", "移除", "简单", "一行"
+    ],
+}
+
+# Phase sequences per complexity level
+PHASE_SEQUENCES = {
+    "XS": ["EXECUTING", "COMPLETE"],
+    "S": ["EXECUTING", "REVIEWING", "COMPLETE"],
+    "M": ["PLANNING", "EXECUTING", "REVIEWING", "COMPLETE"],
+    "L": ["RESEARCH", "THINKING", "PLANNING", "EXECUTING", "REVIEWING", "COMPLETE"],
+    "XL": ["RESEARCH", "THINKING", "PLANNING", "EXECUTING", "REVIEWING", "REFINING", "COMPLETE"],
+}
+
+
+def estimate_complexity(text: str) -> tuple[str, float]:
+    """
+    Estimate task complexity from user input.
+
+    Returns:
+        (complexity, confidence) where complexity is XS/S/M/L/XL
+        and confidence is 0.0-1.0
+    """
+    text_lower = text.lower()
+    scores: dict[str, float] = {}
+
+    for level, keywords in COMPLEXITY_KEYWORDS.items():
+        score = 0.0
+        for kw in keywords:
+            if kw in text_lower:
+                score += len(kw) / max(len(text_lower), 1)
+        scores[level] = score
+
+    if not any(scores.values()):
+        return ("M", 0.3)  # Default: medium complexity, low confidence
+
+    best = max(scores, key=lambda k: scores[k])
+    confidence = min(scores[best] * 5, 0.95)  # Scale up, cap at 0.95
+    return (best, confidence)
+
+
+def get_phase_sequence(complexity: str) -> list[str]:
+    """Get the required phase sequence for a given complexity level."""
+    return PHASE_SEQUENCES.get(complexity, PHASE_SEQUENCES["M"])
+
+
 def check_negative_trigger(text: str) -> bool:
     """检查是否应该直接回答（不触发工作流）"""
     text_lower = text.lower()
@@ -238,6 +306,28 @@ def route(text: str, use_semantic: bool = False) -> tuple[str, str, float]:
     # Step 4: Detect stage (keyword-based)
     stage, confidence = detect_stage(text)
     return ("STAGE", stage, confidence)
+
+
+def route_with_complexity(text: str, use_semantic: bool = False) -> dict:
+    """
+    Extended routing that includes complexity estimation and phase sequence.
+
+    Returns dict with:
+        trigger_type, phase, confidence, complexity, complexity_confidence, phase_sequence
+    """
+    trigger_type, phase, confidence = route(text, use_semantic)
+    complexity, complexity_conf = estimate_complexity(text)
+    phase_sequence = get_phase_sequence(complexity)
+
+    return {
+        "trigger_type": trigger_type,
+        "phase": phase,
+        "confidence": confidence,
+        "complexity": complexity,
+        "complexity_confidence": complexity_conf,
+        "phase_sequence": phase_sequence,
+        "total_phases": len(phase_sequence),
+    }
 
 
 def format_output(result: tuple[str, str, float], text: str, format: str = 'simple') -> str:
