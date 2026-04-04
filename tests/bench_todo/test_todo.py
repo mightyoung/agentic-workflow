@@ -1,8 +1,9 @@
 """Tests for TodoList"""
 
-import pytest
 import os
 import tempfile
+
+import pytest
 from todo_v1_direct import TodoList
 
 

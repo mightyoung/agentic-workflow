@@ -7,7 +7,8 @@ ECC集成测试运行器
 import json
 import time
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import Any
+
 
 @dataclass
 class TestResult:
@@ -15,13 +16,13 @@ class TestResult:
     category: str
     passed: bool
     execution_time: float
-    details: Dict[str, Any]
+    details: dict[str, Any]
 
 class ECCTestRunner:
     def __init__(self, eval_file: str):
-        with open(eval_file, 'r', encoding='utf-8') as f:
+        with open(eval_file, encoding='utf-8') as f:
             self.config = json.load(f)
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
     def run_trigger_detection_tests(self):
         """测试Skill触发检测"""

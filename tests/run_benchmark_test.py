@@ -9,14 +9,14 @@ SWE-Bench风格工程任务对比测试
 - 测试验证通过
 """
 
-import os
-import json
-import time
 import asyncio
+import json
+import os
+import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass
@@ -26,7 +26,7 @@ class SWEBenchStyleTask:
     issue_title: str
     issue_description: str
     repo: str
-    files_to_modify: List[str]
+    files_to_modify: list[str]
     test_command: str
     expected_behavior: str
     difficulty: str  # easy, medium, hard
@@ -915,7 +915,7 @@ class BenchmarkResult:
     correctness_improvement: float
 
 
-async def call_claude(prompt: str, system_prompt: str = "", max_tokens: int = 32000) -> Dict:
+async def call_claude(prompt: str, system_prompt: str = "", max_tokens: int = 32000) -> dict:
     """调用 Claude API - 默认32000 token上限用于监测模式"""
     try:
         from anthropic import Anthropic
@@ -973,7 +973,7 @@ def load_skill_context(module: str = None) -> str:
     - 只加载对应模块的指南
     """
     skill_path = Path(__file__).parent.parent / "SKILL.md"
-    with open(skill_path, "r", encoding="utf-8") as f:
+    with open(skill_path, encoding="utf-8") as f:
         full_content = f.read()
 
     # 如果没指定模块，返回完整内容（用于benchmark对比测试）
@@ -1082,7 +1082,7 @@ bug、错误、调试、修复、报错、崩溃、异常、失败、卡住
     return core_principles + module_guide
 
 
-async def run_with_skill(task: SWEBenchStyleTask) -> Dict:
+async def run_with_skill(task: SWEBenchStyleTask) -> dict:
     """使用skill执行任务 - 渐进式加载"""
     # v5.0: 只加载与模块相关的skill内容，减少token
     skill_content = load_skill_context(task.module)
@@ -1116,7 +1116,7 @@ async def run_with_skill(task: SWEBenchStyleTask) -> Dict:
     return await call_claude(prompt, system_prompt)
 
 
-async def run_without_skill(task: SWEBenchStyleTask) -> Dict:
+async def run_without_skill(task: SWEBenchStyleTask) -> dict:
     """不使用skill执行任务"""
     prompt = f"""## GitHub Issue
 {task.issue_title}
@@ -1183,7 +1183,7 @@ def get_token_cap(task: SWEBenchStyleTask) -> int:
     return base_cap
 
 
-async def run_with_skill_monitored(task: SWEBenchStyleTask) -> Dict:
+async def run_with_skill_monitored(task: SWEBenchStyleTask) -> dict:
     """
     v5.0: 使用skill执行任务 - 监测模式
 
@@ -1199,7 +1199,7 @@ async def run_with_skill_monitored(task: SWEBenchStyleTask) -> Dict:
     return result
 
 
-def should_fallback(result_with_skill: Dict, result_without_skill: Dict, task: SWEBenchStyleTask) -> bool:
+def should_fallback(result_with_skill: dict, result_without_skill: dict, task: SWEBenchStyleTask) -> bool:
     """
     P2: 判断是否应该使用fallback(切换到无skill)
 
@@ -1268,7 +1268,7 @@ def get_evaluation_thresholds(difficulty: str) -> dict:
     return base_thresholds.get(difficulty, base_thresholds["medium"])
 
 
-def evaluate_correctness(task: SWEBenchStyleTask, response: Dict) -> bool:
+def evaluate_correctness(task: SWEBenchStyleTask, response: dict) -> bool:
     """
     多维度评估响应质量 v5.4
 
@@ -1365,7 +1365,7 @@ def evaluate_correctness(task: SWEBenchStyleTask, response: Dict) -> bool:
     return is_correct
 
 
-def get_detailed_evaluation(task: SWEBenchStyleTask, response: Dict) -> Dict:
+def get_detailed_evaluation(task: SWEBenchStyleTask, response: dict) -> dict:
     """
     获取详细评估结果（用于调试和分析）
 
@@ -1413,7 +1413,7 @@ def get_detailed_evaluation(task: SWEBenchStyleTask, response: Dict) -> Dict:
     }
 
 
-async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] = None) -> List[BenchmarkResult]:
+async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[list[str]] = None) -> list[BenchmarkResult]:
     """运行基准测试 (v4.16 P0/P1/P2)"""
     # 选择任务
     if task_subset:
@@ -1531,7 +1531,7 @@ async def run_benchmark_test(n_tasks: int = 5, task_subset: Optional[List[str]] 
     return results
 
 
-def generate_report(results: List[BenchmarkResult], output_path: str = "tests/benchmark_results.json") -> str:
+def generate_report(results: list[BenchmarkResult], output_path: str = "tests/benchmark_results.json") -> str:
     """生成测试报告"""
     report = {
         "test_date": datetime.now().isoformat(),
@@ -1573,7 +1573,7 @@ def generate_report(results: List[BenchmarkResult], output_path: str = "tests/be
     }
 
     # 按模块统计
-    for module in set(r.module for r in results):
+    for module in {r.module for r in results}:
         module_results = [r for r in results if r.module == module]
         report["by_module"][module] = {
             "count": len(module_results),
@@ -1582,7 +1582,7 @@ def generate_report(results: List[BenchmarkResult], output_path: str = "tests/be
         }
 
     # 按难度统计
-    for difficulty in set(r.difficulty for r in results):
+    for difficulty in {r.difficulty for r in results}:
         diff_results = [r for r in results if r.difficulty == difficulty]
         report["by_difficulty"][difficulty] = {
             "count": len(diff_results),

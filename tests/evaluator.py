@@ -9,8 +9,8 @@ Agentic Workflow Skill Evaluation Framework
 
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass
@@ -19,7 +19,7 @@ class TestCase:
     id: str
     prompt: str
     expected: Optional[str] = None
-    checks: List[str] = field(default_factory=list)
+    checks: list[str] = field(default_factory=list)
     category: str = "trigger"
 
 
@@ -29,7 +29,7 @@ class TestResult:
     test_id: str
     passed: bool
     actual: Optional[str] = None
-    metrics: Dict = field(default_factory=dict)
+    metrics: dict = field(default_factory=dict)
     error: Optional[str] = None
     duration_ms: int = 0
 
@@ -39,7 +39,7 @@ class SkillEvaluator:
 
     def __init__(self, skill_path: str):
         self.skill_path = skill_path
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
     def check_skill_activation(self, prompt: str) -> Optional[str]:
         """
@@ -50,7 +50,7 @@ class SkillEvaluator:
         # 这里应该调用实际的skill触发检测
         pass
 
-    def run_and_check(self, prompt: str, checks: List[str]) -> TestResult:
+    def run_and_check(self, prompt: str, checks: list[str]) -> TestResult:
         """运行测试并检查特性"""
         start = time.time()
         # 实际执行逻辑
@@ -191,7 +191,7 @@ QUALITY_TESTS = [
 # 测试执行
 # =============================================================================
 
-def run_trigger_tests(evaluator: SkillEvaluator) -> List[TestResult]:
+def run_trigger_tests(evaluator: SkillEvaluator) -> list[TestResult]:
     """运行触发测试"""
     results = []
     for test in TRIGGER_TESTS:
@@ -206,7 +206,7 @@ def run_trigger_tests(evaluator: SkillEvaluator) -> List[TestResult]:
     return results
 
 
-def run_phase_tests(evaluator: SkillEvaluator) -> List[TestResult]:
+def run_phase_tests(evaluator: SkillEvaluator) -> list[TestResult]:
     """运行阶段测试"""
     results = []
     for test in PHASE_TESTS:
@@ -216,7 +216,7 @@ def run_phase_tests(evaluator: SkillEvaluator) -> List[TestResult]:
     return results
 
 
-def run_quality_tests(evaluator: SkillEvaluator) -> Dict:
+def run_quality_tests(evaluator: SkillEvaluator) -> dict:
     """运行质量对比测试"""
     results = {}
     for test in QUALITY_TESTS:
@@ -242,7 +242,7 @@ def run_quality_tests(evaluator: SkillEvaluator) -> Dict:
 # 报告生成
 # =============================================================================
 
-def generate_report(results: List[TestResult], quality_results: Dict) -> str:
+def generate_report(results: list[TestResult], quality_results: dict) -> str:
     """生成测试报告"""
     total = len(results)
     passed = sum(1 for r in results if r.passed)

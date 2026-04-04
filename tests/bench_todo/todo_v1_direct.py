@@ -3,9 +3,9 @@
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass
@@ -25,7 +25,7 @@ class TodoList:
 
     def load(self) -> None:
         if os.path.exists(self.filepath):
-            with open(self.filepath, "r") as f:
+            with open(self.filepath) as f:
                 content = f.read()
                 if content.strip():
                     data = json.loads(content)

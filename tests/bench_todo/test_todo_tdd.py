@@ -1,9 +1,9 @@
 """Todo List - TDD Tests (RED phase)"""
 
-import pytest
 import os
 import tempfile
 
+import pytest
 
 # ===== TDD RED: Write failing tests first =====
 

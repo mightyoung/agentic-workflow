@@ -8,7 +8,7 @@ import json
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import Any
 
 
 @dataclass
@@ -23,7 +23,7 @@ class RealTestResult:
     tokens_input: int = 0
     tokens_output: int = 0
     error: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 def call_claude(prompt: str, timeout: int = 120) -> tuple:
@@ -70,7 +70,7 @@ def call_claude(prompt: str, timeout: int = 120) -> tuple:
 
 class RealSubagentTester:
     def __init__(self):
-        self.results: List[RealTestResult] = []
+        self.results: list[RealTestResult] = []
 
     def run_stage_trigger_tests(self):
         """运行阶段触发测试 - 选择代表性场景"""
@@ -168,7 +168,7 @@ class RealSubagentTester:
             if result.error:
                 print(f"      Error: {result.error}")
 
-    def _execute_stage_test(self, test: Dict) -> RealTestResult:
+    def _execute_stage_test(self, test: dict) -> RealTestResult:
         """执行单个阶段触发测试"""
         print(f"    执行中: {test['prompt'][:50]}...")
         response, exec_time, error = call_claude(test['prompt'], timeout=60)
@@ -190,7 +190,7 @@ class RealSubagentTester:
             details={"response": str(response)[:200]}
         )
 
-    def _execute_subagent_test(self, test: Dict) -> RealTestResult:
+    def _execute_subagent_test(self, test: dict) -> RealTestResult:
         """执行单个Subagent测试"""
         print(f"    执行中: {test['prompt'][:50]}...")
         response, exec_time, error = call_claude(test['prompt'], timeout=60)
@@ -211,7 +211,7 @@ class RealSubagentTester:
             details={"response": str(response)[:200]}
         )
 
-    def _execute_quality_test(self, test: Dict) -> RealTestResult:
+    def _execute_quality_test(self, test: dict) -> RealTestResult:
         """执行单个运行质量测试"""
         print(f"    执行中: {test['prompt'][:50]}...")
         response, exec_time, error = call_claude(test['prompt'], timeout=120)

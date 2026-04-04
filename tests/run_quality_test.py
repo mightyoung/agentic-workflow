@@ -10,7 +10,7 @@
 import json
 
 # 加载测试数据
-with open("tests/evals/evals_100.json", "r", encoding="utf-8") as f:
+with open("tests/evals/evals_100.json", encoding="utf-8") as f:
     test_data = json.load(f)
 
 QUALITY_TESTS = test_data["quality_tests"]

@@ -7,8 +7,9 @@ Module专项测试运行器
 import json
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Optional
+
 
 @dataclass
 class ModuleTestResult:
@@ -18,15 +19,15 @@ class ModuleTestResult:
     passed: bool
     execution_time: float
     triggered_module: Optional[str] = None
-    checks_passed: List[str] = field(default_factory=list)
-    checks_failed: List[str] = field(default_factory=list)
-    details: Dict[str, Any] = field(default_factory=dict)
+    checks_passed: list[str] = field(default_factory=list)
+    checks_failed: list[str] = field(default_factory=list)
+    details: dict[str, Any] = field(default_factory=dict)
 
 class ModuleTestRunner:
     def __init__(self, eval_file: str):
-        with open(eval_file, 'r', encoding='utf-8') as f:
+        with open(eval_file, encoding='utf-8') as f:
             self.config = json.load(f)
-        self.results: List[ModuleTestResult] = []
+        self.results: list[ModuleTestResult] = []
         self.stats = {
             "total": 0,
             "passed": 0,
@@ -35,7 +36,7 @@ class ModuleTestRunner:
             "by_category": {}
         }
 
-    def run_tests(self, test_list: List[Dict], module_name: str):
+    def run_tests(self, test_list: list[dict], module_name: str):
         """运行特定module的测试"""
         print(f"\n{'='*50}")
         print(f"  {module_name} Module Tests")
@@ -53,7 +54,7 @@ class ModuleTestRunner:
             if result.checks_failed:
                 print(f"      Failed checks: {', '.join(result.checks_failed)}")
 
-    def _execute_test(self, test: Dict, module_name: str) -> ModuleTestResult:
+    def _execute_test(self, test: dict, module_name: str) -> ModuleTestResult:
         """执行单个测试"""
         # 模拟测试 - 实际应该调用Claude Code API进行验证
         time.sleep(0.01)  # 模拟执行时间
@@ -106,7 +107,7 @@ class ModuleTestRunner:
         if result.passed:
             self.stats["by_category"][result.category]["passed"] += 1
 
-    def generate_report(self) -> Dict:
+    def generate_report(self) -> dict:
         """生成测试报告"""
         report = {
             "timestamp": datetime.now().isoformat(),

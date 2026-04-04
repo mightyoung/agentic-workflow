@@ -7,7 +7,7 @@ Subagent集成与运行质量测试运行器
 import json
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import Any
 
 
 @dataclass
@@ -18,12 +18,12 @@ class SubagentTestResult:
     passed: bool
     execution_time: float
     tokens_used: int = 0
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 class SubagentTestRunner:
     def __init__(self):
-        self.results: List[SubagentTestResult] = []
+        self.results: list[SubagentTestResult] = []
         self.stats = {
             "total": 0,
             "passed": 0,
@@ -196,7 +196,7 @@ class SubagentTestRunner:
             target = test.get('target', test.get('quality_metric', ''))
             print(f"  [{result.test_id}] {status} - {test['scenario'][:20]} (目标: {target})")
 
-    def _execute_stage_test(self, test: Dict) -> SubagentTestResult:
+    def _execute_stage_test(self, test: dict) -> SubagentTestResult:
         """执行单个阶段触发测试"""
         start_time = time.time()
 
@@ -220,7 +220,7 @@ class SubagentTestRunner:
             }
         )
 
-    def _execute_subagent_test(self, test: Dict) -> SubagentTestResult:
+    def _execute_subagent_test(self, test: dict) -> SubagentTestResult:
         """执行单个Subagent测试"""
         start_time = time.time()
 
@@ -244,7 +244,7 @@ class SubagentTestRunner:
             }
         )
 
-    def _execute_quality_test(self, test: Dict) -> SubagentTestResult:
+    def _execute_quality_test(self, test: dict) -> SubagentTestResult:
         """执行单个运行质量测试"""
         start_time = time.time()
 

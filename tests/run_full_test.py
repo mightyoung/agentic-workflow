@@ -6,12 +6,13 @@
 
 import json
 from pathlib import Path
+
 from router_helpers import load_router_module
 
 router_module = load_router_module()
 
 # 加载测试数据
-with open(Path(__file__).resolve().parent / "evals" / "evals_100.json", "r", encoding="utf-8") as f:
+with open(Path(__file__).resolve().parent / "evals" / "evals_100.json", encoding="utf-8") as f:
     test_data = json.load(f)
 
 TESTS = test_data["trigger_tests"]

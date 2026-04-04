@@ -28,7 +28,7 @@ class TodoList:
     def load(self) -> None:
         """从 JSON 文件加载数据"""
         if os.path.exists(self.filepath):
-            with open(self.filepath, "r") as f:
+            with open(self.filepath) as f:
                 content = f.read()
                 if content.strip():
                     data = json.loads(content)

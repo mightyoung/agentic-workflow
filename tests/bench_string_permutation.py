@@ -3,9 +3,9 @@ Benchmark 测试: 字符串全排列 - WITH Skill 流程 (v5.4)
 TDD 驱动实现 + 代码审查
 """
 
-import pytest
 import sys
-from typing import List
+
+import pytest
 
 
 class TestStringPermutation:
@@ -71,7 +71,7 @@ class TestStringPermutation:
 # 实现代码 (将在 RED 阶段后填充)
 # ============================================================================
 
-def string_permutation(s: str) -> List[str]:
+def string_permutation(s: str) -> list[str]:
     """
     计算字符串的全排列。
 
@@ -93,7 +93,7 @@ def string_permutation(s: str) -> List[str]:
     result = []
     used = [False] * n
 
-    def backtrack(path: List[str]):
+    def backtrack(path: list[str]):
         if len(path) == n:
             result.append("".join(path))
             return

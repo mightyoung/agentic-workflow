@@ -8,11 +8,10 @@
 2. 运行脚本: python run_quality_comparison.py
 """
 
-import os
-import json
-import time
 import asyncio
-from typing import Dict
+import json
+import os
+import time
 
 # 测试任务集 - 代表性任务
 TEST_TASKS = [
@@ -54,7 +53,7 @@ TEST_TASKS = [
     }
 ]
 
-async def call_claude(prompt: str, system_prompt: str = "") -> Dict:
+async def call_claude(prompt: str, system_prompt: str = "") -> dict:
     """调用 Claude API"""
     try:
         from anthropic import Anthropic
@@ -92,10 +91,10 @@ async def call_claude(prompt: str, system_prompt: str = "") -> Dict:
             "error": str(e)
         }
 
-async def run_with_skill(task: Dict) -> Dict:
+async def run_with_skill(task: dict) -> dict:
     """使用 skill 执行任务"""
     # 加载 skill 上下文
-    with open("SKILL.md", "r", encoding="utf-8") as f:
+    with open("SKILL.md", encoding="utf-8") as f:
         skill_content = f.read()
 
     system_prompt = f"""你是一个专业的AI开发助手。遵循以下技能规范：
@@ -106,7 +105,7 @@ async def run_with_skill(task: Dict) -> Dict:
 
     return await call_claude(task["prompt"], system_prompt)
 
-async def run_without_skill(task: Dict) -> Dict:
+async def run_without_skill(task: dict) -> dict:
     """不使用 skill 执行任务"""
     return await call_claude(task["prompt"])
 

@@ -9,8 +9,8 @@
 - phase 的详细行为验证应由独立集成测试覆盖
 """
 
-import json
 import importlib.util
+import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -28,7 +28,7 @@ def load_router_module():
 router_module = load_router_module()
 
 # 加载测试数据
-with open(REPO_ROOT / "tests" / "evals" / "evals_100.json", "r", encoding="utf-8") as f:
+with open(REPO_ROOT / "tests" / "evals" / "evals_100.json", encoding="utf-8") as f:
     test_data = json.load(f)
 
 PHASE_TESTS = test_data["phase_tests"]

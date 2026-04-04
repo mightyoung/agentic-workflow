@@ -10,14 +10,13 @@
 4. 解决方案完整性 (30%)
 """
 
+import asyncio
 import json
 import time
-import asyncio
 from dataclasses import dataclass
-from typing import Dict, List
 from datetime import datetime
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 
 class Difficulty(Enum):
@@ -45,7 +44,7 @@ class TestTask:
     module: Module
     description: str
     expected_solution: str
-    evaluation_criteria: Dict[str, str]
+    evaluation_criteria: dict[str, str]
 
 
 @dataclass
@@ -82,10 +81,10 @@ class TestResult:
     skill_used: bool = False
 
 
-def load_tasks_from_markdown(file_path: str) -> List[TestTask]:
+def load_tasks_from_markdown(file_path: str) -> list[TestTask]:
     """从markdown文件加载测试任务"""
     tasks = []
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         content = f.read()
 
     # 解析markdown中的任务
@@ -285,7 +284,7 @@ async def run_reviewing_test(task: TestTask) -> TestResult:
     return result
 
 
-async def run_parallel_tests(tasks: List[TestTask]) -> List[TestResult]:
+async def run_parallel_tests(tasks: list[TestTask]) -> list[TestResult]:
     """并行执行所有测试"""
     results = []
 
@@ -307,7 +306,7 @@ async def run_parallel_tests(tasks: List[TestTask]) -> List[TestResult]:
     return results
 
 
-def generate_report(results: List[TestResult], output_path: str):
+def generate_report(results: list[TestResult], output_path: str):
     """生成测试报告"""
     report = {
         "test_date": datetime.now().isoformat(),
