@@ -716,16 +716,20 @@ def compute_frontier(workdir: str = ".") -> dict[str, Any]:
 
 @dataclass
 class CheckpointConfig:
-    """Conditional checkpoint configuration"""
-    # Trigger checkpoint after N phase transitions (default 1 for immediate save)
+    """
+    Conditional checkpoint configuration.
+
+    Attributes:
+        phase_change_threshold: Trigger after N phase transitions (default 1)
+        resume_threshold: Trigger after N resume attempts
+        failure_threshold: Trigger after N failures
+        step_threshold: Trigger after N workflow steps
+        enabled: Whether auto-checkpoint is enabled
+    """
     phase_change_threshold: int = 1
-    # Trigger checkpoint after N resume attempts
     resume_threshold: int = 2
-    # Trigger checkpoint after N failures
     failure_threshold: int = 1
-    # Trigger checkpoint after N workflow steps
     step_threshold: int = 5
-    # Enable auto-checkpoint
     enabled: bool = True
 
 
@@ -736,49 +740,22 @@ def should_checkpoint(
     """
     Determine if a checkpoint should be triggered based on conditions.
 
-    Conditions:
+    Conditions evaluated:
     - Phase changes since last checkpoint
     - Resume attempts
     - Failure count
     - Total workflow steps
 
+    Args:
+        workdir: Working directory
+        config: Checkpoint configuration (uses defaults if None)
+
     Returns:
-        (should_checkpoint, reason)
+        (should_checkpoint, reason) tuple
     """
-    if config is None:
-        config = CheckpointConfig()
-
-    if not config.enabled:
-        return False, "checkpoint disabled"
-
-    state = load_state(workdir)
-    if state is None:
-        return False, "no state"
-
-    # Count phase transitions from workflow state (phase is a dict)
-    phase_history = state.phase.get("history", []) if hasattr(state, 'phase') else []
-    phase_changes = len(phase_history)
-
-    # Get counters from state attributes
-    resume_count = getattr(state, 'resume_count', 0)
-    failure_count = getattr(state, 'failure_count', 0)
-    step_count = getattr(state, 'step_count', 0)
-
-    # Check each condition
-    reasons = []
-    if phase_changes >= config.phase_change_threshold:
-        reasons.append(f"phase_changes={phase_changes}>={config.phase_change_threshold}")
-    if resume_count >= config.resume_threshold:
-        reasons.append(f"resume_count={resume_count}>={config.resume_threshold}")
-    if failure_count >= config.failure_threshold:
-        reasons.append(f"failure_count={failure_count}>={config.failure_threshold}")
-    if step_count >= config.step_threshold:
-        reasons.append(f"step_count={step_count}>={config.step_threshold}")
-
-    if reasons:
-        return True, "; ".join(reasons)
-
-    return False, ""
+    # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
+    from checkpoint_manager import should_checkpoint as _impl
+    return _impl(workdir, config)
 
 
 def conditional_checkpoint(
@@ -792,187 +769,23 @@ def conditional_checkpoint(
     - .checkpoints/<checkpoint_id>.json: Full state snapshot
     - handoff_<checkpoint_id>.md: Human-readable handoff document
 
+    Args:
+        workdir: Working directory
+        config: Checkpoint configuration (uses defaults if None)
+
     Returns:
-        {
-            "checkpoint_saved": bool,
-            "reason": str,
-            "checkpoint_id": str,
-            "session_id": str,
-            "files": [str, ...],
-            "error": str | None  # present when checkpoint_saved is False
-        }
-
-    Raises:
-        No exceptions - all failures are reported via return dict with error field.
-        This ensures callers can distinguish between "save succeeded" and "save failed"
-        without relying on exception handling.
+        dict with keys:
+            checkpoint_saved: bool
+            reason: str
+            checkpoint_id: str
+            session_id: str
+            files: list of created file paths
+            error: str or None
+            partial: bool (True if only JSON was saved, not handoff)
     """
-    should_save, reason = should_checkpoint(workdir, config)
-
-    if not should_save:
-        return {"checkpoint_saved": False, "reason": reason, "error": None}
-
-    state = load_state(workdir)
-    if state is None:
-        return {"checkpoint_saved": False, "reason": "no state", "error": "workflow state not found"}
-
-    session_id = state.session_id
-    workdir_path = Path(workdir)
-
-    # Flush trajectory logger if active
-    if session_id in _active_loggers:
-        logger = _active_loggers[session_id]
-        logger.flush()
-
-    # Generate checkpoint ID
-    import uuid
-    checkpoint_id = f"cp-{datetime.now().strftime('%Y%m%d%H%M%S')}-{str(uuid.uuid4())[:8]}"
-
-    # Create checkpoints directory
-    checkpoints_dir = workdir_path / ".checkpoints"
-    checkpoints_dir.mkdir(exist_ok=True)
-
-    # Snapshot current state
-    current_phase = state.phase.get("current", "UNKNOWN") if hasattr(state.phase, 'get') else "UNKNOWN"
-
-    # Load task plan if exists
-    try:
-        plan_tasks = parse_task_plan(workdir)
-        next_tasks = next_plan_tasks(workdir)
-    except Exception:
-        plan_tasks = []
-        next_tasks = []
-
-    # Create checkpoint JSON
-    checkpoint_data = {
-        "checkpoint_id": checkpoint_id,
-        "session_id": session_id,
-        "created_at": datetime.now().isoformat(),
-        "reason": reason,
-        "phase": current_phase,
-        "task": state.task.to_dict() if state.task else None,
-        "plan_tasks": plan_tasks,
-        "next_tasks": next_tasks,
-        "artifacts": state.artifacts if hasattr(state, 'artifacts') else [],
-        "decisions": [d.to_dict() if hasattr(d, 'to_dict') else d for d in state.decisions] if hasattr(state, 'decisions') else [],
-        "file_changes": state.file_changes if hasattr(state, 'file_changes') else [],
-    }
-
-    # Write checkpoint JSON - track success/failure explicitly
-    checkpoint_file = checkpoints_dir / f"{checkpoint_id}.json"
-    handoff_file = workdir_path / f"handoff_{checkpoint_id}.md"
-
-    try:
-        safe_write_json(checkpoint_file, checkpoint_data)
-    except Exception as e:
-        # Checkpoint JSON write failed - return failure without claiming success
-        return {
-            "checkpoint_saved": False,
-            "reason": reason,
-            "checkpoint_id": checkpoint_id,
-            "session_id": session_id,
-            "files": [],
-            "error": f"checkpoint JSON write failed: {e}",
-        }
-
-    # Parse contract and frontier state (optional - don't fail if these fail)
-    try:
-        contract_state = parse_phase_contract(workdir)
-        frontier_state = compute_frontier(workdir)
-    except Exception:
-        contract_state = {}
-        frontier_state = {"executable_frontier": [], "blocked_tasks": [], "conflict_groups": []}
-
-    # Parse recent decisions (last 3)
-    recent_decisions = []
-    if hasattr(state, 'decisions') and state.decisions:
-        for d in state.decisions[-3:]:
-            if hasattr(d, 'to_dict'):
-                recent_decisions.append(d.to_dict().get('decision', str(d)))
-            elif isinstance(d, dict):
-                recent_decisions.append(d.get('decision', str(d)))
-
-    # Build handoff content
-    handoff_content = f"""# Checkpoint Handoff: {checkpoint_id}
-
-**Created**: {datetime.now().isoformat()}
-**Reason**: {reason}
-**Session**: {session_id}
-**Phase**: {current_phase}
-
-## Task
-{state.task.title if state.task else "Unknown task"}
-
-## Contract Status
-"""
-    if contract_state.get("goals"):
-        handoff_content += f"- Goals: {len(contract_state['goals'])} defined\n"
-        handoff_content += f"- Verification methods: {len(contract_state.get('verification_methods', []))} defined\n"
-        handoff_content += f"- Owned files: {len(contract_state.get('owned_files', []))} tracked\n"
-    else:
-        handoff_content += "- No contract or contract not yet negotiated\n"
-
-    handoff_content += f"""
-## Current State
-- Phase: {current_phase}
-- Plan Tasks: {len(plan_tasks)} total, {len(next_tasks)} next
-- Frontier: {len(frontier_state.get('executable_frontier', []))} ready, {len(frontier_state.get('blocked_tasks', []))} blocked, {len(frontier_state.get('conflict_groups', []))} conflict groups
-
-## Next Tasks
-"""
-    for t in next_tasks[:5]:
-        handoff_content += f"- [{t.get('id', '?')}] {t.get('title', 'Untitled')}\n"
-
-    if recent_decisions:
-        handoff_content += "\n## Recent Decisions\n"
-        for d in recent_decisions:
-            handoff_content += f"- {d}\n"
-
-    # List key artifacts
-    artifacts = list(state.artifacts) if hasattr(state, 'artifacts') and state.artifacts else []
-    if artifacts:
-        handoff_content += "\n## Key Artifacts\n"
-        for art in artifacts[:5]:
-            if isinstance(art, dict):
-                handoff_content += f"- {art.get('name', str(art))}\n"
-            else:
-                handoff_content += f"- {art}\n"
-
-    handoff_content += f"""
-## How to Resume
-```bash
-python3 scripts/workflow_engine.py --op resume --session-id {session_id} --workdir {workdir}
-```
-
----
-*This is an auto-generated handoff document. See .checkpoints/{checkpoint_id}.json for full state.*
-"""
-
-    # Write handoff file - if this fails, checkpoint JSON was already saved
-    # Return partial success so caller knows the state
-    try:
-        safe_write_text_locked(handoff_file, handoff_content)
-    except Exception as e:
-        # Handoff write failed but checkpoint JSON was saved
-        # Return success with warning - checkpoint can still be recovered from JSON
-        return {
-            "checkpoint_saved": True,
-            "reason": reason,
-            "checkpoint_id": checkpoint_id,
-            "session_id": session_id,
-            "files": [str(checkpoint_file)],
-            "error": f"handoff write failed (checkpoint JSON saved): {e}",
-            "partial": True,
-        }
-
-    return {
-        "checkpoint_saved": True,
-        "reason": reason,
-        "checkpoint_id": checkpoint_id,
-        "session_id": session_id,
-        "files": [str(checkpoint_file), str(handoff_file)],
-        "error": None,
-    }
+    # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
+    from checkpoint_manager import conditional_checkpoint as _impl
+    return _impl(workdir, config)
 
 
 def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
