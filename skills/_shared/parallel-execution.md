@@ -1,20 +1,26 @@
 ---
 name: parallel-execution
-version: 1.1.0
+version: 1.2.0
 description: |
   并行执行规则 - 定义 phase 并行化策略和依赖关系
-  支持独立 phase 并行执行以提升性能
-  默认启用并行优先模式
-tags: [core, optimization, parallel, default-enabled]
+  ⚠️ 本文档为设计方案，尚未实现
+tags: [core, optimization, parallel, planned]
 ---
 
 # Parallel Execution
+
+## ⚠️ Design Document - Not Yet Implemented
+
+本文档描述的是**设计目标**，当前 runtime **不支持** phase 并行执行。
+所有 phase 转换目前为完全串行。`experimental/parallel_executor.py` 未接入主线。
+
+**不要**基于本文档描述的行为假设任何并行能力已生效。
 
 ## Overview
 
 并行执行通过同时运行独立 phase 来提升整体吞吐量，同时保持逻辑正确性。
 
-**默认行为**: 并行执行已启用，无需额外配置
+**当前状态**: 尚未实现 — 所有 phase 串行执行
 
 ## 核心原则
 

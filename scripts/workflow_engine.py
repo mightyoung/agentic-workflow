@@ -2167,16 +2167,23 @@ def handle_workflow_failure(
 
         # Adjust max_retries based on error classification
         adjusted_max_retries = max_retries
-        retry_hint = ""
+
+        # Generate dynamic reflexion hint based on actual error content
+        from reflexion import reflect_on_errors
+        reflex = reflect_on_errors(error, error_type, {
+            "phase": current_phase,
+            "retry_count": retry_count,
+        })
+        retry_hint = reflex.hint
 
         if error_type == "test_failure" and retry_count >= 1:
             # After one test failure retry, suggest debugging
             adjusted_max_retries = max(retry_count + 1, 2)
-        elif error_type == "lint_error":
-            # Lint errors often fixed by auto-fix
+        elif error_type == "lint_error" and not retry_hint:
+            # Lint errors often fixed by auto-fix (only if reflexion didn't find specifics)
             retry_hint = "try running ruff/lint auto-fix"
-        elif error_type == "type_error":
-            # Type errors need careful review
+        elif error_type == "type_error" and not retry_hint:
+            # Type errors need careful review (only if reflexion didn't find specifics)
             retry_hint = "check type annotations"
 
         if retry_count >= adjusted_max_retries:
@@ -2193,6 +2200,8 @@ def handle_workflow_failure(
                     "error_type": error_type,
                     "error_confidence": confidence,
                     "error_history": error_history,
+                    "reflection": reflex.reflection,
+                    "reflection_hint": retry_hint,
                 },
             ))
             save_state(workdir, state)

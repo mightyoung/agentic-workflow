@@ -244,23 +244,25 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
     """
     Validate contract fulfillment for completion gate.
 
-    Checks:
-    1. status != 'draft' (contract is active/fulfilled)
-    2. If goals exist, they are not placeholder text
-    3. If goals have goal_status, at least one is fulfilled
-    4. If owned_files exist, they match actual file_changes
-    5. If verification_methods exist, they are not placeholder text
-    6. If verification_results exist, at least one verification passed
-    7. If review_evidence is set, review was completed
+    Gate policy:
+    - STAGE trigger: skip gate (lenient - simple tasks don't need contracts)
+    - FULL_WORKFLOW non-code: lightweight gate (draft OK, goals not required)
+    - FULL_WORKFLOW code task: full gate (status != draft, real goals, verification)
 
     Args:
         workdir: Working directory
-        state: WorkflowState object
+        state: WorkflowState object (must have trigger_type attribute)
 
     Returns:
         (is_valid, error_message)
     """
     json_contract_path = Path(workdir) / ".contract.json"
+
+    # Gate is skipped for RESULT_ONLY and DIRECT_ANSWER triggers
+    # (these are not real workflows - just Q&A or single responses)
+    trigger_type = getattr(state, 'trigger_type', None) if state else None
+    if trigger_type in ("RESULT_ONLY", "DIRECT_ANSWER"):
+        return True, ""  # Lenient: Q&A tasks don't need formal contracts
 
     if not json_contract_path.exists():
         return True, ""  # No contract = no gate
