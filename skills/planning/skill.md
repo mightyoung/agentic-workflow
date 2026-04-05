@@ -41,6 +41,18 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 
 ## Exit Criteria (按复杂度分级)
 
+<HARD-GATE name="planning-exit-gate">
+根据复杂度，以下条件必须全部满足才能退出 PLANNING 进入 EXECUTING：
+
+**XS/S**: TodoWrite 已列出所有任务项（每项有验收标准）
+**M**: `.specs/<feature>/tasks.md` 已创建 + `.contract.json` 已生成
+**L/XL**: 完整 spec-kit 已创建 + `.contract.json` 非 draft + 每个 P0 任务有 owned_files
+
+禁止在没有任何计划产出的情况下进入 EXECUTING。
+</HARD-GATE>
+
+**Iron Law**: `NO EXECUTING WITHOUT A PLAN FIRST`
+
 ### XS/S 复杂度（简单任务）
 - 使用 TodoWrite 列出任务项即可，**跳过 .specs/ 流程**
 - 不需要 .contract.json
@@ -126,6 +138,32 @@ mkdir -p .specs/<feature>/
 ```bash
 python3 -c "from contract_manager import create_phase_contract; create_phase_contract('任务名', '描述', '.')"
 ```
+
+### 5. Output Contract Visualization（PLANNING 结束时必须输出）
+
+PLANNING 阶段结束时，**必须**向用户输出可读的履约摘要：
+
+```markdown
+## 📋 任务契约
+
+**目标**: {一句话目标}
+**复杂度**: {XS/S/M/L/XL}
+**预计阶段**: {阶段序列}
+
+### P0 任务（必须完成）
+- [ ] {任务1} — 验收: {验收条件}
+- [ ] {任务2} — 验收: {验收条件}
+
+### P1 任务（重要）
+- [ ] {任务3}
+
+### 明确不做
+- {不在范围内的事项}
+
+**进入 EXECUTING 后，AI 将按上述顺序逐项执行。**
+```
+
+此摘要让用户在 EXECUTING 开始前确认范围，避免执行偏差。
 
 ## Minimal Plan Schema
 

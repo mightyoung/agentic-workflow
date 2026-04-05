@@ -44,10 +44,21 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 ## Exit Criteria
 
+<HARD-GATE name="executing-exit-gate">
+以下条件必须全部满足才能退出 EXECUTING：
+1. 目标代码已实现（Read 真实文件确认，不是"我以为写了"）
+2. 相关测试已运行并通过（有命令输出为证）
+3. 如有计划文件（tasks.md / TodoWrite），关键 P0 任务状态已同步
+
+禁止仅凭"代码应该可以工作"退出。必须运行测试并看到通过结果。
+</HARD-GATE>
+
+**Iron Law**: `NO COMPLETE WITHOUT TESTS PASSING FIRST`
+
 退出 EXECUTING 的条件：
 
 - 目标代码已实现
-- 相关验证已执行
+- 相关验证已执行（测试命令输出为证）
 - 如有 `.specs/<feature>/tasks.md` 或 legacy `task_plan.md`，关键任务状态已同步
 - 需要时已进入 REVIEWING 或 COMPLETE
 

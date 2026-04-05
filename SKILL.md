@@ -4,7 +4,7 @@ description: |
   统一智能体工作流 - 单入口设计，所有任务从 router 开始
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施
   DO NOT TRIGGER when: 简单闲聊
-version: 6.0.0
+version: 6.1.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
@@ -78,3 +78,42 @@ RESEARCH 阶段搜索工具优先级（按可用性自动降级）：
 1. **WebSearch** — Claude Code 原生，最优先
 2. **WebFetch** — 当已知具体 URL 时
 3. **AI 知识库** — 如果所有搜索工具都不可用，**必须明确告知用户**，不要静默用自身知识回答
+
+## Forbidden Responses（禁止输出的内容）
+
+以下响应是明确禁止的，遇到时必须停止并重新分析：
+
+| 禁止语句 | 原因 | 正确做法 |
+|---------|------|---------|
+| "这个问题无法解决" | 违反铁律一（穷尽一切） | 列出3个方案再判断 |
+| "我认为完成了" | 无证据声明 | 运行测试/diff，给出证据 |
+| "代码看起来不错" | REVIEWING 无实质内容 | 给出 file:line 具体意见 |
+| "根据我的知识..." (RESEARCH中) | 跳过真实搜索 | 先执行 WebSearch，工具不可用时明确告知 |
+| "直接跳到实现吧" | 跳过 THINKING/PLANNING | 遵循强制阶段序列 |
+| "先做个小版本，后面再改" | 无计划执行 | 先 PLANNING，再 EXECUTING |
+
+## 深度控制（用户可覆盖）
+
+用户可以显式控制流程深度，覆盖自动评估：
+
+| 关键词 | 效果 | 等价复杂度 |
+|--------|------|-----------|
+| `快速` / `quick` / `--quick` | 强制走最短路径 | XS/S |
+| `深入` / `thorough` / `--thorough` | 强制走完整路径 | L/XL |
+| `标准` / 无修饰词 | 自动评估 | 按任务内容决定 |
+
+**示例**:
+- `/agentic-workflow 快速修复这个 bug` → DEBUGGING → EXECUTING → COMPLETE
+- `/agentic-workflow 深入分析这个架构问题` → RESEARCH → THINKING → PLANNING → ...
+
+## 复杂度路由
+
+任务自动评估复杂度，路由到对应必经阶段序列：
+
+| 复杂度 | 示例 | 必经阶段 |
+|--------|------|---------|
+| **XS** | 改 typo、加 import | EXECUTING → COMPLETE |
+| **S** | 修已知 bug | DEBUGGING → EXECUTING → COMPLETE |
+| **M** | 新增 API endpoint | PLANNING → EXECUTING → REVIEWING → COMPLETE |
+| **L** | 重构模块 | RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE |
+| **XL** | 设计新系统 | RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → REFINING → COMPLETE |
