@@ -72,6 +72,24 @@ python3 scripts/quality_gate.py --workdir .
 pytest -v
 ```
 
+### Stage 0.5: Entity History Search (MAGMA Entity Graph)
+
+> 审查变更文件前，先查询该文件的**历史问题记录**。
+> 复发的 bug 最容易被漏掉——这一步保证不重蹈覆辙。
+
+```bash
+# 对 git diff 中每个主要变更文件，查询实体图历史
+# 示例: 审查 src/auth.py 时
+python3 scripts/memory_longterm.py \
+  --op search-entity \
+  --query "${变更文件名，如: auth.py / memory_longterm.py}" \
+  --limit 3 2>/dev/null || true
+```
+
+**处理规则**：
+- 有命中 → 在 Stage 2 Code Quality 审查中额外关注历史问题点
+- 无命中 → 正常审查，审查完成后考虑是否写入新的 entity-related experience
+
 ### Stage 1: Spec Compliance Review (First)
 
 > **顺序铁律**: Spec Compliance 必须在 Code Quality 之前。
