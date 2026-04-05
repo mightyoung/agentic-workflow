@@ -4,7 +4,7 @@ version: 1.1.0
 status: implemented
 description: |
   执行阶段 - TDD 开发循环和代码实现
-  当前版本对齐 task_plan.md、run_tracker.py 和 step_recorder.py
+  当前版本对齐 .specs/<feature>/tasks.md、.contract.json、run_tracker.py 和 step_recorder.py
   注意: Trajectory持久化在 trajectory_logger.py 中实现
 tags: [phase, executing, tdd]
 requires:
@@ -23,7 +23,7 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 当前真实能力聚焦在：
 
-- 基于 `task_plan.md` 执行任务
+- 基于 `.specs/<feature>/tasks.md` 和 `.contract.json` 执行任务
 - TDD 或最小可验证实现
 - 使用项目内状态文件
 - 使用 `run_tracker.py` / `step_recorder.py` 做轻量执行追踪
@@ -32,7 +32,7 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 进入 EXECUTING 的常见条件：
 
-- 已存在 `task_plan.md`
+- 已存在 `.specs/<feature>/tasks.md` 或 `.contract.json`；`task_plan.md` 仅作 legacy fallback
 - 用户明确要求实现、修复、编写
 - 已经能识别出要修改的文件或目标结果
 
@@ -48,14 +48,14 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 - 目标代码已实现
 - 相关验证已执行
-- 如有 `task_plan.md`，关键任务状态已同步
+- 如有 `.specs/<feature>/tasks.md` 或 legacy `task_plan.md`，关键任务状态已同步
 - 需要时已进入 REVIEWING 或 COMPLETE
 
 ## Core Process
 
 ### 1. Read The Current Plan
 
-如果项目内存在 `task_plan.md`，先读取并确认：
+如果项目内存在 `.specs/<feature>/tasks.md` 或 `.contract.json`，先读取并确认：
 
 - 当前要做哪一项
 - 影响哪些文件
@@ -87,7 +87,9 @@ EXECUTING 阶段负责把计划转成实际变更。
 默认使用项目内文件：
 
 - `.workflow_state.json`
-- `task_plan.md`
+- `.specs/<feature>/tasks.md`
+- `.contract.json`
+- `task_plan.md`（legacy）
 - `progress.md`
 
 ### 4. Use Real Tracking Scripts
@@ -112,7 +114,7 @@ python3 scripts/run_tracker.py --op=finish --run-id=R001 --status=success
 
 - `./trajectories/<task_id>_<timestamp>.json`
 - trajectory 自动断点恢复
-- trajectory 自动回写 `task_plan.md`
+- trajectory 自动回写 `task_plan.md`（legacy）
 - 自动并行执行编排
 - phase telemetry API
 
@@ -141,6 +143,6 @@ python3 scripts/run_tracker.py --op=finish --run-id=R001 --status=success
 最小验证：
 
 ```bash
-test -f task_plan.md || true
+test -f .contract.json || test -f task_plan.md
 python3 scripts/run_tracker.py --op=stats
 ```

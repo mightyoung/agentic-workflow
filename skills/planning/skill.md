@@ -39,16 +39,44 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 - 任务明显涉及多个文件或步骤
 - 执行前需要先定义范围、验收和顺序
 
-## Exit Criteria
+## Exit Criteria (按复杂度分级)
 
-满足以下条件时退出 PLANNING：
+<HARD-GATE name="planning-exit-gate">
+根据复杂度，以下条件必须全部满足才能退出 PLANNING 进入 EXECUTING：
 
+**XS/S**: TodoWrite 已列出所有任务项（每项有验收标准）
+**M**: `.specs/<feature>/tasks.md` 已创建 + `.contract.json` 已生成
+**L/XL**: 完整 spec-kit 已创建 + `.contract.json` 非 draft + 每个 P0 任务有 owned_files
+
+禁止在没有任何计划产出的情况下进入 EXECUTING。
+</HARD-GATE>
+
+**Iron Law**: `NO EXECUTING WITHOUT A PLAN FIRST`
+
+### XS/S 复杂度（简单任务）
+- 使用 TodoWrite 列出任务项即可，**跳过 .specs/ 流程**
+- 不需要 .contract.json
+
+### M 复杂度（中等任务）
+- `.specs/<feature>/spec.md` 已创建（用户故事 + 验收标准）
+- `.specs/<feature>/plan.md` 已创建（技术方案 + 约束）
+- `.specs/<feature>/tasks.md` 已创建（可执行任务清单）
+- `.contract.json` 已创建或准备生成（用于履约门禁）
+- `task_plan.md` 仅作为 legacy 投影，可选生成
+
+### L/XL 复杂度（复杂任务）
 - `.specs/<feature>/spec.md` 已创建（用户故事 + 验收标准）
 - `.specs/<feature>/plan.md` 已创建（技术方案 + 约束）
 - `.specs/<feature>/tasks.md` 已创建（可执行任务清单）
 - `.contract.json` 已创建（非 draft 状态）
-- 任务至少按优先级拆分为可执行项
 - 每个关键任务都有验收方式和 owned_files
+
+## Auto-Verify
+
+```bash
+# 优先验证正式 spec 链；legacy task_plan 仅在兼容模式下接受
+test -d .specs && find .specs -mindepth 1 -type f | grep -q . || test -f task_plan.md
+```
 
 ## Current File Conventions
 
@@ -62,7 +90,7 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 | 履约 | `.contract.json` | 履约契约 |
 
 **兼容投影层** (legacy, 只读):
-- `task_plan.md` - 旧 runtime 仍可读取
+- `task_plan.md` - 旧 runtime/frontier 仍可读取
 
 ## Core Process
 

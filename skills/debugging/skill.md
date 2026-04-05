@@ -34,14 +34,23 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 - 遇到执行失败、错误异常或不符合预期的情况
 - 从其他阶段转来的需要调试的问题
 
-**禁止**：在未充分分析前直接修改代码
+<HARD-GATE name="no-fix-before-root-cause">
+禁止在未完成 Phase 1（根因调查）前提出任何修复方案。
+"我觉得可能是..." 不是根因。"代码第 42 行的条件判断在 X 场景下失效" 才是根因。
+</HARD-GATE>
+
+**Iron Law**: `NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST`
 
 ## Exit Criteria
 
 退出 DEBUGGING 阶段的条件：
-- 问题已定位且修复完成
-- 所有相关测试通过
-- 复盘总结已记录
+
+<HARD-GATE name="debug-exit-gate">
+以下三项必须全部满足，缺一不可：
+1. 根本原因已用具体 file:line 证据确认（不是猜测）
+2. 修复后相关测试全部通过（必须运行并看到输出）
+3. 复盘总结已记录（至少包含：根因 + 修复方案 + 预防措施）
+</HARD-GATE>
 
 ## Core Process
 

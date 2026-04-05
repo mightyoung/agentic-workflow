@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts"))  # noqa: E402
 
 import workflow_engine  # noqa: E402
 from team_agent import TeamAgent, WorkerType  # noqa: E402
+from unified_state import load_state, save_state  # noqa: E402
 from workflow_engine import (  # noqa: E402
     CheckpointConfig,
     compute_frontier,
@@ -414,9 +415,19 @@ class TestTeamRunIntegration(unittest.TestCase):
         self.assertTrue(result.success)
 
     def test_contract_gate_blocks_draft_complete(self):
-        """Contract with status=draft blocks workflow completion"""
-        # Create a draft contract
+        """Contract with status=draft blocks workflow completion for FULL_WORKFLOW code tasks"""
         import json
+
+        # Initialize workflow — routes to STAGE/EXECUTING (which is a code task)
+        workflow_engine.initialize_workflow("Test task", workdir=self.temp_dir)
+
+        # Patch state to FULL_WORKFLOW trigger and M complexity (contract gate applies to these)
+        state = load_state(self.temp_dir)
+        state.trigger_type = "FULL_WORKFLOW"
+        state.metadata = {"complexity": "M"}
+        save_state(self.temp_dir, state)
+
+        # Create a draft contract AFTER init (so init doesn't interfere)
         contract_path = Path(self.temp_dir) / ".contract.json"
         contract_path.write_text(json.dumps({
             "version": "1.0",
@@ -426,9 +437,6 @@ class TestTeamRunIntegration(unittest.TestCase):
             "verification_methods": [],
             "owned_files": [],
         }))
-
-        # Initialize workflow
-        workflow_engine.initialize_workflow("Test task", workdir=self.temp_dir)
 
         # Set quality_gates_passed=True to skip quality gate check
         tracker_path = Path(self.temp_dir) / ".task_tracker.json"

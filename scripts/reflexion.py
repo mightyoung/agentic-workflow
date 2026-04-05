@@ -15,10 +15,9 @@ Usage:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-
 
 # Error pattern extractors - map regex patterns to hint generators
 ERROR_PATTERNS: list[tuple[re.Pattern, str]] = [
@@ -97,7 +96,6 @@ class ReflexionEngine:
             ReflexionResult with hint, pattern, reflection, and is_repeated
         """
         context = context or {}
-        error_lower = error.lower()
         retry_count = context.get("retry_count", 0)
 
         # Check for repeated errors
