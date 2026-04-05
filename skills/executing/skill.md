@@ -77,6 +77,35 @@ EXECUTING 阶段负责把计划转成实际变更。
 - 小任务可直接执行
 - 中等及以上任务应先回到 PLANNING 创建计划
 
+### 1.5. Parallel Agent Dispatch (M/L/XL 复杂度)
+
+当任务包含 **≥2 个相互独立的 P0 子任务** 时，使用并行 agent 而非串行执行。
+
+**决策树**:
+
+```
+任务中有 ≥2 个独立子任务?
+  ├─ 否 → 串行执行（常规流程）
+  └─ 是 → 进一步判断
+       子任务是否共享文件（会冲突）?
+         ├─ 是 → 串行执行（避免冲突）
+         └─ 否 → 并行派发（见模板）
+```
+
+**并行派发 Prompt 模板**（在 AI agent 层面使用 Agent tool）：
+
+```
+# 同时派发多个子任务时：
+- Agent 1: 实现 <模块A>，只修改 <文件列表A>，完成后输出 DONE/DONE_WITH_CONCERNS
+- Agent 2: 实现 <模块B>，只修改 <文件列表B>，完成后输出 DONE/DONE_WITH_CONCERNS
+# 规则:
+# - 每个 agent 只操作自己的文件，禁止跨越
+# - 每个 agent 收到的上下文是最小必要上下文，不传递完整历史
+# - 等所有 agent 返回 DONE 后，主流程继续
+```
+
+**注意**: 并行 agent 使用 Claude Code 的 Agent tool（`run_in_background: true`），**不是** Python subprocess。
+
 ### 2. Prefer TDD When Practical
 
 推荐顺序：
@@ -93,6 +122,37 @@ EXECUTING 阶段负责把计划转成实际变更。
 - 构建命令
 - 手动验证步骤
 
+### 2.5. TASK_NOTES Rolling Update (P0-C)
+
+每完成一个 P0 任务后，**必须**更新 `SHARED_TASK_NOTES.md`（跨迭代上下文桥接）：
+
+```markdown
+# SHARED_TASK_NOTES.md 格式
+
+## [任务 ID] [任务名] — [完成时间]
+- **完成情况**: DONE / DONE_WITH_CONCERNS
+- **关键决策**: [本任务做出的重要架构/逻辑决策]
+- **遗留问题**: [未解决或需下一步跟进的点]
+- **影响文件**: [修改的文件列表]
+```
+
+**更新规则**:
+- 每个 P0 任务结束时追加一条，不修改历史记录
+- 超过 20 条时，将最旧的 10 条合并为摘要 `## [Archived N entries]`
+- 并行 agent 收到任务时，**必须先读** SHARED_TASK_NOTES.md
+
+```bash
+# 追加任务笔记（示例）
+cat >> SHARED_TASK_NOTES.md << 'EOF'
+
+## T001 实现用户认证 — 2026-04-05
+- **完成情况**: DONE
+- **关键决策**: 使用 JWT refresh token，有效期 7 天
+- **遗留问题**: 未实现 token 吊销列表
+- **影响文件**: src/auth.py, tests/test_auth.py
+EOF
+```
+
 ### 3. Keep State Local
 
 默认使用项目内文件：
@@ -102,6 +162,7 @@ EXECUTING 阶段负责把计划转成实际变更。
 - `.contract.json`
 - `task_plan.md`（legacy）
 - `progress.md`
+- `SHARED_TASK_NOTES.md`（跨迭代上下文，本阶段新增）
 
 ### 4. Use Real Tracking Scripts
 
