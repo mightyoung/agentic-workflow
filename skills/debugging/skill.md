@@ -60,9 +60,11 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 
 ```bash
 # 搜索相关历史反思（关键词取自错误信息/问题描述）
+# --intent debug: 优先返回含 Trigger:/Signal: 的调试反思（MAGMA Intent-Aware Router）
 python3 scripts/memory_longterm.py \
   --op search \
   --query "${问题关键词，如: import error / type annotation / contract gate}" \
+  --intent debug \
   --limit 3 2>/dev/null || true
 ```
 
@@ -257,7 +259,9 @@ python3 -m ruff check . 2>&1 | head -20 || true
 ```bash
 python3 scripts/memory_longterm.py \
   --op add-experience \
-  --exp "Task:[问题类型] Trigger:[触发场景] Mistake:[错误行为] Fix:[正确做法] Signal:[识别特征]"
+  --exp "Task:[问题类型] Trigger:[触发场景] Mistake:[错误行为] Fix:[正确做法] Signal:[识别特征]" \
+  --confidence 0.7 \
+  --scope project
 ```
 
 **示例**：

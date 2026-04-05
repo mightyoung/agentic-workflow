@@ -24,11 +24,37 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
 import uuid
 from datetime import datetime, timedelta
+
+
+# MAGMA-inspired temporal decay (λ=0.95 per day → 30d: ×0.21, 90d: ×0.01)
+TEMPORAL_DECAY_LAMBDA: float = 0.95
+
+
+def _effective_confidence(base: float, timestamp_str: str, decay: float = TEMPORAL_DECAY_LAMBDA) -> float:
+    """计算时间衰减后的有效置信度。
+
+    公式（MAGMA Temporal backbone 代理实现）：
+        effective = base × λ^(days_since_added)
+
+    λ=0.95 时衰减曲线：
+        7  天后: 0.8 → 0.57   (×0.698)
+        30 天后: 0.8 → 0.17   (×0.215)
+        90 天后: 0.8 → 0.004  (×0.009)
+
+    对于 global scope 条目使用更慢的衰减（λ^0.5），因为全局知识更持久。
+    """
+    try:
+        added = datetime.strptime(timestamp_str, "%Y-%m-%d")
+        days_old = max(0, (datetime.now() - added).days)
+        return base * (decay ** days_old)
+    except (ValueError, TypeError):
+        return base
 
 # 默认长期记忆文件
 DEFAULT_MEMORY_FILE = "MEMORY.md"
@@ -101,8 +127,15 @@ def search_index(
     project_id: str | None = None,
     limit: int = 10,
     index_file: str = MEMORY_INDEX_FILE,
+    intent: str = "auto",
 ) -> list[dict]:
     """从 .memory_index.jsonl 搜索结构化记忆。
+
+    排序策略（MAGMA Temporal backbone 代理实现）：
+        score = effective_confidence × intent_boost
+        effective_confidence = base_confidence × λ^(days_old)
+        intent_boost: debug 模式提升 Trigger/Signal 字段命中；plan 提升 pattern 类型；
+                      review 提升含文件路径的条目
 
     Args:
         query: 关键词（大小写不敏感）
@@ -110,9 +143,10 @@ def search_index(
         project_id: git remote hash；None 时自动检测（project scope 下自动过滤）
         limit: 最多返回条数
         index_file: JSONL 索引文件路径
+        intent: "debug" | "plan" | "review" | "auto"
 
     Returns:
-        匹配条目列表（按 confidence 降序）
+        匹配条目列表（按 score 降序，条目附加 _score 字段）
     """
     if not os.path.exists(index_file):
         return []
@@ -138,14 +172,51 @@ def search_index(
                 if scope == "global" and entry.get("scope") != "global":
                     continue
 
+                text = entry.get("text", "")
                 # Text match
-                if query_lower in entry.get("text", "").lower():
-                    matches.append(entry)
+                if query_lower not in text.lower():
+                    continue
+
+                # ── Temporal decay ────────────────────────────────────────
+                base_conf = entry.get("confidence", 0.5)
+                ts = entry.get("timestamp", "")
+                # global entries decay slower (λ^0.3 exponent scale)
+                decay_lambda = TEMPORAL_DECAY_LAMBDA if entry.get("scope") != "global" else (TEMPORAL_DECAY_LAMBDA ** 0.3)
+                eff_conf = _effective_confidence(base_conf, ts, decay=decay_lambda)
+
+                # ── Intent boost ──────────────────────────────────────────
+                boost = 1.0
+                resolved_intent = intent
+                if resolved_intent == "auto":
+                    # Heuristic: detect intent from query shape
+                    if any(k in query_lower for k in ("trigger:", "signal:", "fix:", "mistake:", "error", "bug", "fail")):
+                        resolved_intent = "debug"
+                    elif any(k in query_lower for k in ("pattern", "best practice", "架构", "设计", "模式")):
+                        resolved_intent = "plan"
+                    elif query_lower.endswith(".py") or "/" in query_lower or query_lower.endswith(".ts"):
+                        resolved_intent = "review"
+
+                if resolved_intent == "debug":
+                    # Boost entries that contain Trigger: or Signal: field
+                    if "trigger:" in text.lower() or "signal:" in text.lower():
+                        boost = 1.4
+                elif resolved_intent == "plan":
+                    # Boost pattern-type entries
+                    if entry.get("type") == "pattern":
+                        boost = 1.3
+                elif resolved_intent == "review":
+                    # Boost entries mentioning file paths (.py, .ts, /)
+                    if re.search(r'\b\w+\.(py|ts|js|go|rs|java)\b|src/', text):
+                        boost = 1.3
+
+                entry["_score"] = eff_conf * boost
+                entry["_eff_conf"] = round(eff_conf, 3)
+                matches.append(entry)
+
     except OSError:
         return []
 
-    # Sort by confidence descending
-    matches.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
+    matches.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
     return matches[:limit]
 
 
@@ -273,37 +344,61 @@ def search_memory(
     filepath: str = DEFAULT_MEMORY_FILE,
     scope: str | None = None,
     limit: int = 10,
+    intent: str = "auto",
 ) -> list[str]:
-    """搜索记忆内容（先搜结构化索引，再 fallback 到 MEMORY.md 全文搜索）。
+    """搜索记忆内容（MAGMA Intent-Aware Router 代理实现）。
+
+    检索策略（三层）：
+    1. 结构化索引（.memory_index.jsonl）— 时间衰减置信度 × 意图增益排序
+    2. 意图感知过滤 — debug/plan/review 三模式，不同字段权重
+    3. Fallback 全文搜索 MEMORY.md（去重追加）
 
     Args:
         query: 搜索关键词
         filepath: MEMORY.md 路径
         scope: "project" | "global" | None（不过滤）
         limit: 最多返回条数
+        intent: "debug" | "plan" | "review" | "auto"
+            - debug:  优先返回含 Trigger:/Signal: 的调试反思（DEBUGGING 阶段用）
+            - plan:   优先返回 type=pattern 的模式记录（PLANNING 阶段用）
+            - review: 优先返回含文件路径的代码相关经验（REVIEWING 阶段用）
+            - auto:   从 query 内容自动推断（默认）
     """
     results: list[str] = []
 
-    # 1. 优先搜索结构化索引（置信度排序）
-    indexed = search_index(query, scope=scope, limit=limit)
+    # 1. 结构化索引（时间衰减 + 意图增益）
+    indexed = search_index(query, scope=scope, limit=limit, intent=intent)
     for entry in indexed:
-        conf = entry.get("confidence", 0.5)
+        eff_conf = entry.get("_eff_conf", entry.get("confidence", 0.5))
         ts = entry.get("timestamp", "")
-        results.append(f"[{ts} conf={conf:.1f}] {entry.get('text', '')}")
+        text = entry.get("text", "")
+        results.append(f"[{ts} eff_conf={eff_conf:.2f}] {text}")
 
-    # 2. Fallback：全文搜索 MEMORY.md（去重）
+    # 2. Fallback：全文搜索 MEMORY.md（intent 过滤后追加，避免重复）
     if os.path.exists(filepath):
         with open(filepath, encoding='utf-8') as f:
             content = f.read()
         lines = content.split('\n')
+        query_lower = query.lower()
         for i, line in enumerate(lines):
-            if query.lower() in line.lower():
-                start = max(0, i - 1)
-                end = min(len(lines), i + 2)
-                context = '\n'.join(lines[start:end])
-                # Avoid duplicating indexed results
-                if context not in results:
-                    results.append(context)
+            if query_lower not in line.lower():
+                continue
+
+            # Intent filter for MEMORY.md fallback lines
+            line_lower = line.lower()
+            if intent == "debug" and not any(k in line_lower for k in ("trigger:", "signal:", "fix:", "mistake:")):
+                # Still include if no indexed results yet
+                if len(results) >= 3:
+                    continue
+            if intent == "plan" and "pattern" not in line_lower and "模式" not in line_lower:
+                if len(results) >= 3:
+                    continue
+
+            start = max(0, i - 1)
+            end = min(len(lines), i + 2)
+            context = '\n'.join(lines[start:end])
+            if context not in results:
+                results.append(context)
 
     return results[:limit]
 
@@ -535,6 +630,9 @@ def main() -> int:
                         help='记忆范围: project（仅当前项目）| global（跨项目）')
     parser.add_argument('--project-id', default=None,
                         help='项目 ID（默认自动从 git remote 检测）')
+    parser.add_argument('--intent', default='auto', choices=['auto', 'debug', 'plan', 'review'],
+                        help='检索意图（MAGMA Intent-Aware Router）: '
+                             'debug=调试反思优先 | plan=模式记录优先 | review=文件相关优先 | auto=自动推断')
 
     args = parser.parse_args()
 
@@ -560,9 +658,9 @@ def main() -> int:
         if not args.query:
             print("错误: --query 必须指定")
             return 1
-        results = search_memory(args.query, args.file, scope=args.scope, limit=args.limit)
+        results = search_memory(args.query, args.file, scope=args.scope, limit=args.limit, intent=args.intent)
         if results:
-            print(f"找到 {len(results)} 条匹配 (scope={args.scope or 'all'}):")
+            print(f"找到 {len(results)} 条匹配 (scope={args.scope or 'all'}, intent={args.intent}):")
             for i, result in enumerate(results, 1):
                 print(f"\n--- 结果 {i} ---")
                 print(result)
