@@ -10,6 +10,8 @@ tmp/
 temp/
 .artifacts.json
 .artifacts.json.lock
+.memory_index.jsonl
+MEMORY.md
 .quality_gate_*.json
 .team_registry.json
 .checkpoints/

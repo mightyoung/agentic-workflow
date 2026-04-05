@@ -20,7 +20,7 @@ Usage:
 
     # Check if exit criteria are met
     can_exit = skill.check_exit_criteria(
-        artifacts=["findings.md"],
+        artifacts=["findings_{session}.md"],
         decisions=["选择方案A"]
     )
 """
@@ -371,7 +371,7 @@ class SkillPromptFormatter:
             task="实现 REST API",
             session_id="abc123",
             context={"errors": [], "files": ["src/api.py"]},
-            artifacts=["findings.md"],
+            artifacts=["findings_{session}.md"],
             decisions=["选择方案A"],
         )
     """

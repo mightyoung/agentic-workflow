@@ -81,8 +81,8 @@ RESEARCH (5min) ──────────────────▶ THINKI
 ```
 
 **实现条件**:
-- RESEARCH 有明确的输出 (findings.md)
-- THINKING 可以在收到 findings.md 后立即开始
+- RESEARCH 有明确的输出 (findings_{session}.md)
+- THINKING 可以在收到 findings_{session}.md 后立即开始
 - 使用事件驱动: RESEARCH 完成 → 触发 THINKING
 
 ### 规则 2: REVIEWING 内并行子检查
@@ -205,9 +205,9 @@ Task A ─┤          ├─→ Task D
 
 | Agent | Owned Files | 说明 |
 |-------|-------------|------|
-| researcher | findings.md | 研究结果唯一来源 |
+| researcher | findings_{session}.md | 研究结果唯一来源 |
 | thinker | analysis.md | 分析结论唯一来源 |
-| planner | task_plan.md | 任务规划唯一来源 |
+| planner | `.specs/<feature>/tasks.md` | 任务规划唯一来源 |
 | coder | src/** | 所有源代码 |
 | reviewer | (read-only) | 只读访问所有文件 |
 | debugger | (read-only) | 调试时只读 |

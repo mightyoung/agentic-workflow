@@ -48,10 +48,10 @@ YOU CANNOT SKIP THIS CHECK. Even "simple" tasks escalate.
 | 当前阶段 | 必须传给下一阶段 |
 |---------|----------------|
 | RESEARCH | `findings_{session}.md` — THINKING 开始前读取 |
-| THINKING | 分析结论 → PLANNING 基于结论拆任务 |
-| PLANNING | `task_plan.md` / TodoWrite → EXECUTING 逐项执行 |
+| THINKING | 分析结论 → PLANNING 基于结论创建 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
+| PLANNING | `.specs/<feature>/tasks.md` / `.contract.json` → EXECUTING 逐项执行；`task_plan.md` 仅 legacy fallback |
 | EXECUTING | 代码变更 → REVIEWING 运行 `git diff` |
-| REVIEWING | review 意见 → REFINING 针对性修复 |
+| REVIEWING | `review_{session}.md` → REFINING 针对性修复 |
 
 ## Iron Law
 

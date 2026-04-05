@@ -212,7 +212,7 @@ scripts\win\check_template.bat .
 
 - 复杂状态机自动推进
 - Dev Agent Record 自动持久化
-- trajectory 自动写回 `task_plan.md`
+- trajectory 自动写回 `.specs/<feature>/tasks.md` 的 legacy 投影（`task_plan.md`）
 - HARD-GATE 自动评分系统
 
 这些能力如果需要，应在脚本层实现后再回填文档。
