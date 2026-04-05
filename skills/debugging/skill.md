@@ -59,8 +59,13 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 > 对标 Reflexion (arXiv 2303.11366)：在开始调试前，先检索本项目过去的同类错误反思，避免重复踩坑。
 
 ```bash
-# 搜索相关历史反思（关键词取自错误信息/问题描述）
-# --intent debug: 优先返回含 Trigger:/Signal: 的调试反思（MAGMA Intent-Aware Router）
+# 层 1: 因果图检索 — 错误信号 → 已知修复方案（MAGMA Causal Graph 代理）
+python3 scripts/memory_longterm.py \
+  --op search-causal \
+  --query "${错误信号，如: ModuleNotFoundError / TypeError unsupported |}" \
+  --limit 3 2>/dev/null || true
+
+# 层 2: 全量意图检索（包含因果图 + 结构化索引 + MEMORY.md fallback）
 python3 scripts/memory_longterm.py \
   --op search \
   --query "${问题关键词，如: import error / type annotation / contract gate}" \
@@ -69,8 +74,9 @@ python3 scripts/memory_longterm.py \
 ```
 
 **处理规则**：
-- 找到相关反思 → 在 Step 1 分析中优先考虑历史教训，不重复失败路径
-- 无相关反思 → 正常进入 Step 1，调试结束后在 Step 5.5 写入新反思
+- `search-causal` 有命中 → **Fix 字段即为已验证解决方案**，直接参考，跳过相同失败路径
+- `search` 有命中 → 在 Step 1 分析中优先考虑历史教训
+- 两者均无结果 → 正常进入 Step 1，调试结束后在 Step 5.5 写入新反思（自动触发图索引重建）
 
 ---
 

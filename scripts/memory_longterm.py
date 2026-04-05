@@ -28,9 +28,23 @@ import math
 import os
 import re
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timedelta
 
+# Allow `python3 scripts/memory_longterm.py` from project root
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from memory_graph_index import (  # noqa: E402
+        MEMORY_CAUSAL_FILE,
+        MEMORY_ENTITY_FILE,
+        rebuild_all_indexes,
+        search_causal,
+        search_entity,
+    )
+    _GRAPH_INDEX_AVAILABLE = True
+except ImportError:
+    _GRAPH_INDEX_AVAILABLE = False
 
 # MAGMA-inspired temporal decay (λ=0.95 per day → 30d: ×0.21, 90d: ×0.01)
 TEMPORAL_DECAY_LAMBDA: float = 0.95
@@ -118,6 +132,17 @@ def add_to_index(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError:
         pass
+
+    # Auto-rebuild graph indexes when a Reflexion-format experience is added.
+    # Reflexion entries contain at least two of: Trigger:/Signal:/Fix:/Mistake:
+    reflexion_fields = sum(1 for k in ("trigger:", "signal:", "fix:", "mistake:")
+                           if k in text.lower())
+    if _GRAPH_INDEX_AVAILABLE and reflexion_fields >= 2:
+        try:
+            rebuild_all_indexes(index_file)
+        except Exception:
+            pass
+
     return entry_id
 
 
@@ -346,12 +371,13 @@ def search_memory(
     limit: int = 10,
     intent: str = "auto",
 ) -> list[str]:
-    """搜索记忆内容（MAGMA Intent-Aware Router 代理实现）。
+    """搜索记忆内容（MAGMA 四层检索代理实现）。
 
-    检索策略（三层）：
-    1. 结构化索引（.memory_index.jsonl）— 时间衰减置信度 × 意图增益排序
-    2. 意图感知过滤 — debug/plan/review 三模式，不同字段权重
-    3. Fallback 全文搜索 MEMORY.md（去重追加）
+    检索策略（四层，按优先级）：
+    1. 因果图检索（仅 intent=debug）— Signal/Trigger 精确召回 Fix 方案
+    2. 实体图检索（仅 intent=review）— 文件/模块名 → 历史经验
+    3. 结构化索引（.memory_index.jsonl）— 时间衰减置信度 × 意图增益排序
+    4. Fallback 全文搜索 MEMORY.md
 
     Args:
         query: 搜索关键词
@@ -359,22 +385,56 @@ def search_memory(
         scope: "project" | "global" | None（不过滤）
         limit: 最多返回条数
         intent: "debug" | "plan" | "review" | "auto"
-            - debug:  优先返回含 Trigger:/Signal: 的调试反思（DEBUGGING 阶段用）
-            - plan:   优先返回 type=pattern 的模式记录（PLANNING 阶段用）
-            - review: 优先返回含文件路径的代码相关经验（REVIEWING 阶段用）
+            - debug:  Causal graph (Signal→Fix) + 调试反思优先
+            - plan:   type=pattern 模式记录优先
+            - review: Entity graph (file→history) + 文件相关经验优先
             - auto:   从 query 内容自动推断（默认）
     """
     results: list[str] = []
+    seen: set[str] = set()
 
-    # 1. 结构化索引（时间衰减 + 意图增益）
-    indexed = search_index(query, scope=scope, limit=limit, intent=intent)
+    def _add(text: str) -> None:
+        if text not in seen:
+            seen.add(text)
+            results.append(text)
+
+    # Resolve auto intent from query shape
+    resolved_intent = intent
+    if intent == "auto":
+        q = query.lower()
+        if any(k in q for k in ("trigger:", "signal:", "error", "bug", "fail", "exception")):
+            resolved_intent = "debug"
+        elif any(k in q for k in (".py", ".ts", ".js", "src/", "scripts/")):
+            resolved_intent = "review"
+        elif any(k in q for k in ("pattern", "best practice", "模式", "架构")):
+            resolved_intent = "plan"
+
+    # ── Layer 1: Causal Graph (debug only) ────────────────────────────────
+    if resolved_intent == "debug" and _GRAPH_INDEX_AVAILABLE:
+        causal_hits = search_causal(query, limit=min(3, limit))
+        for hit in causal_hits:
+            match_field = hit.get("_match_field", "?")
+            matched_key = hit.get("_matched_key", "")
+            fix = hit.get("fix", "")
+            _add(f"[causal:{match_field}={matched_key!r}] Fix: {fix}")
+
+    # ── Layer 2: Entity Graph (review only) ──────────────────────────────
+    if resolved_intent == "review" and _GRAPH_INDEX_AVAILABLE:
+        entity_hits = search_entity(query, limit=min(3, limit))
+        for hit in entity_hits:
+            matched_ent = hit.get("_matched_entity", "")
+            snippet = hit.get("snippet", "")
+            _add(f"[entity:{matched_ent}] {snippet}")
+
+    # ── Layer 3: Structured index (time-decay + intent boost) ─────────────
+    indexed = search_index(query, scope=scope, limit=limit, intent=resolved_intent)
     for entry in indexed:
         eff_conf = entry.get("_eff_conf", entry.get("confidence", 0.5))
         ts = entry.get("timestamp", "")
         text = entry.get("text", "")
-        results.append(f"[{ts} eff_conf={eff_conf:.2f}] {text}")
+        _add(f"[{ts} eff_conf={eff_conf:.2f}] {text}")
 
-    # 2. Fallback：全文搜索 MEMORY.md（intent 过滤后追加，避免重复）
+    # ── Layer 4: Fallback full-text MEMORY.md ─────────────────────────────
     if os.path.exists(filepath):
         with open(filepath, encoding='utf-8') as f:
             content = f.read()
@@ -386,19 +446,19 @@ def search_memory(
 
             # Intent filter for MEMORY.md fallback lines
             line_lower = line.lower()
-            if intent == "debug" and not any(k in line_lower for k in ("trigger:", "signal:", "fix:", "mistake:")):
-                # Still include if no indexed results yet
+            if resolved_intent == "debug" and not any(
+                k in line_lower for k in ("trigger:", "signal:", "fix:", "mistake:")
+            ):
                 if len(results) >= 3:
                     continue
-            if intent == "plan" and "pattern" not in line_lower and "模式" not in line_lower:
+            if resolved_intent == "plan" and "pattern" not in line_lower and "模式" not in line_lower:
                 if len(results) >= 3:
                     continue
 
             start = max(0, i - 1)
             end = min(len(lines), i + 2)
             context = '\n'.join(lines[start:end])
-            if context not in results:
-                results.append(context)
+            _add(context)
 
     return results[:limit]
 
@@ -615,6 +675,8 @@ def main() -> int:
     parser.add_argument('--op', choices=[
         'init', 'add-experience', 'add-pattern', 'search', 'show', 'refine',
         'weekly-report', 'monthly-report', 'history',
+        # Graph index ops (Sprint 2)
+        'build-graph-indexes', 'search-causal', 'search-entity',
     ], required=True, help='操作类型')
     parser.add_argument('--exp', help='核心经验内容')
     parser.add_argument('--pattern', help='模式名称')
@@ -688,9 +750,50 @@ def main() -> int:
         report = generate_weekly_report(30, args.format)
         print(report)
 
+    # ── Sprint 2: Graph Index Ops ─────────────────────────────────────────
+    elif args.op == 'build-graph-indexes':
+        if not _GRAPH_INDEX_AVAILABLE:
+            print("错误: memory_graph_index.py 未找到，无法构建图索引")
+            return 1
+        c_total, e_total = rebuild_all_indexes()
+        print(f"因果索引已构建: {c_total} 条 Reflexion 经验")
+        print(f"实体索引已构建: {e_total} 条含实体引用的经验")
+
+    elif args.op == 'search-causal':
+        if not args.query:
+            print("错误: --query 必须指定（错误信号或触发场景关键词）")
+            return 1
+        if not _GRAPH_INDEX_AVAILABLE:
+            print("错误: memory_graph_index.py 未找到")
+            return 1
+        hits = search_causal(args.query, limit=args.limit)
+        if hits:
+            print(f"因果搜索 [{args.query!r}] 找到 {len(hits)} 条 Fix 方案:")
+            for i, h in enumerate(hits, 1):
+                print(f"\n--- Fix {i} [{h.get('_match_field','?')}={h.get('_matched_key','')!r}] ---")
+                print(h.get("fix", ""))
+                print(f"  Full: {h.get('text','')[:120]}")
+        else:
+            print(f"因果图中未找到与 '{args.query}' 匹配的修复方案")
+
+    elif args.op == 'search-entity':
+        if not args.query:
+            print("错误: --query 必须指定（文件名或模块名）")
+            return 1
+        if not _GRAPH_INDEX_AVAILABLE:
+            print("错误: memory_graph_index.py 未找到")
+            return 1
+        hits = search_entity(args.query, limit=args.limit)
+        if hits:
+            print(f"实体搜索 [{args.query!r}] 找到 {len(hits)} 条历史经验:")
+            for i, h in enumerate(hits, 1):
+                print(f"\n--- 经验 {i} [entity={h.get('_matched_entity','')}] ---")
+                print(h.get("snippet", ""))
+        else:
+            print(f"实体图中未找到与 '{args.query}' 相关的历史经验")
+
     return 0
 
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main())
