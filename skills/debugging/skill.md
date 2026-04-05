@@ -1,6 +1,6 @@
 ---
 name: debugging
-version: 1.0.0
+version: 1.1.0
 status: implemented
 description: |
   调试阶段 - 系统化问题定位和修复
@@ -53,6 +53,24 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 </HARD-GATE>
 
 ## Core Process
+
+### Step 0.5: Reflexion 检索 — 读取历史反思（新增）
+
+> 对标 Reflexion (arXiv 2303.11366)：在开始调试前，先检索本项目过去的同类错误反思，避免重复踩坑。
+
+```bash
+# 搜索相关历史反思（关键词取自错误信息/问题描述）
+python3 scripts/memory_longterm.py \
+  --op search \
+  --query "${问题关键词，如: import error / type annotation / contract gate}" \
+  --limit 3 2>/dev/null || true
+```
+
+**处理规则**：
+- 找到相关反思 → 在 Step 1 分析中优先考虑历史教训，不重复失败路径
+- 无相关反思 → 正常进入 Step 1，调试结束后在 Step 5.5 写入新反思
+
+---
 
 ### Step 1: 闻味道 (Sense the Problem)
 
@@ -217,6 +235,45 @@ python3 -m ruff check . 2>&1 | head -20 || true
 - 复盘文档
 - 更新建议
 - 知识沉淀
+
+---
+
+### Step 5.5: Reflexion Entry — 写入语言反思（新增）
+
+> 对标 Reflexion (arXiv 2303.11366)：每次调试结束后生成结构化 verbal 反思，存入长期记忆，供下次同类问题检索使用。
+
+**反思格式**（Reflexion paper Algorithm 1 对齐）：
+
+```
+当 [具体触发场景/错误类型] 时，
+我错误地 [具体错误行为/错误假设]。
+正确做法应该是 [正确行为]，
+因为 [根本原因]。
+下次遇到 [关键识别特征] 应立即 [正确行动]。
+```
+
+**写入命令**：
+
+```bash
+python3 scripts/memory_longterm.py \
+  --op add-experience \
+  --exp "Task:[问题类型] Trigger:[触发场景] Mistake:[错误行为] Fix:[正确做法] Signal:[识别特征]"
+```
+
+**示例**：
+
+```bash
+python3 scripts/memory_longterm.py \
+  --op add-experience \
+  --exp "Task:type-annotation Trigger:Python 3.9 union syntax \
+  Mistake:used str|Path without __future__ import \
+  Fix:add 'from __future__ import annotations' at module top \
+  Signal:TypeError unsupported operand type(s) for |"
+```
+
+**何时可以跳过**：
+- DONE 状态且问题极简单（typo 级别）→ 可跳过
+- 其他情况一律写入
 
 ---
 
