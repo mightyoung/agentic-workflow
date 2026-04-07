@@ -24,12 +24,12 @@ import pytest
 _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
 sys.path.insert(0, _SCRIPTS)
 
-from memory_longterm import (
+from memory_longterm import (  # noqa: E402, I001
     _effective_confidence,
-    add_experience,
     add_to_index,
     generate_weekly_report,
     read_task_history,
+    record_reflection_experience,
     search_index,
     search_memory,
 )
@@ -117,7 +117,7 @@ class TestAddToIndex:
         add_to_index("experience", "entry A", confidence=0.7)
         add_to_index("experience", "entry B", confidence=0.6)
         with open(".memory_index.jsonl") as f:
-            lines = [l for l in f if l.strip()]
+            lines = [line for line in f if line.strip()]
         assert len(lines) == 2
 
     def test_returns_entry_id(self, tmp_path):
@@ -245,6 +245,32 @@ class TestSearchMemoryIntent:
         memory_md.write_text("## 核心经验\n- keyword fallback test entry\n")
         results = search_memory("fallback test", filepath=str(memory_md))
         assert any("fallback" in r.lower() for r in results)
+
+    def test_record_reflection_experience(self, tmp_path):
+        """Reflexion-style entries are written to MEMORY.md and the index."""
+        memory_md = tmp_path / "MEMORY.md"
+        ok = record_reflection_experience(
+            task="Debug auth flow",
+            trigger="EXECUTING::retry::quality_gate",
+            mistake="AssertionError: token mismatch",
+            fix="Inspect the token fixture and rerun the test",
+            signal="quality_gate_failed | pytest",
+            filepath=str(memory_md),
+            confidence=0.8,
+            scope="project",
+            tags=["debug", "auth"],
+        )
+
+        assert ok is True
+        assert memory_md.exists()
+        assert Path(".memory_index.jsonl").exists()
+
+        content = memory_md.read_text(encoding="utf-8")
+        assert "Task: Debug auth flow" in content
+        assert "Trigger: EXECUTING::retry::quality_gate" in content
+
+        results = search_memory("AssertionError", filepath=str(memory_md), intent="debug")
+        assert any("Debug auth flow" in r for r in results)
 
 
 class TestTaskHistory(unittest.TestCase):

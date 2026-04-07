@@ -165,20 +165,28 @@ class TestE2EBusinessChains(unittest.TestCase):
         """检查特定类型工件的内容是否符合最小结构和质量标准"""
         artifact_path = Path(self.workdir)
         if artifact_type == "findings":
-            # Look for session-aware naming first, fallback to legacy naming
-            candidates = list(artifact_path.glob("findings_*.md")) + list(artifact_path.glob("findings.md"))
+            # Look for session-aware naming in the dedicated research findings directory first
+            findings_dir = artifact_path / ".research" / "findings"
+            candidates = list(findings_dir.glob("findings_*.md")) + [findings_dir / "findings_latest.md"]
+            # Keep legacy root-level fallback only for older worktrees
+            candidates += list(artifact_path.glob("findings_*.md")) + list(artifact_path.glob("findings.md"))
+            candidates = [path for path in candidates if path.exists()]
             if candidates:
                 # Use most recently modified
                 artifact_path = max(candidates, key=lambda p: p.stat().st_mtime)
             else:
-                artifact_path = artifact_path / "findings.md"
+                artifact_path = findings_dir / "findings_latest.md"
         elif artifact_type == "review":
-            # Look for session-aware naming first, fallback to legacy naming
-            candidates = list(artifact_path.glob("review_*.md")) + list(artifact_path.glob("review.md"))
+            # Look for session-aware naming in the dedicated review directory first
+            review_dir = artifact_path / ".reviews" / "review"
+            candidates = list(review_dir.glob("review_*.md")) + [review_dir / "review_latest.md"]
+            # Keep legacy root-level fallback only for older worktrees
+            candidates += list(artifact_path.glob("review_*.md")) + list(artifact_path.glob("review.md"))
+            candidates = [path for path in candidates if path.exists()]
             if candidates:
                 artifact_path = max(candidates, key=lambda p: p.stat().st_mtime)
             else:
-                artifact_path = artifact_path / "review.md"
+                artifact_path = review_dir / "review_latest.md"
         elif artifact_type in ("summary", "completion_summary"):
             # Look for session-aware naming first, fallback to legacy naming
             candidates = list(artifact_path.glob("completion_summary_*.md")) + list(artifact_path.glob("completion_summary.md"))

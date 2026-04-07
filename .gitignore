@@ -10,12 +10,18 @@ tmp/
 temp/
 .artifacts.json
 .artifacts.json.lock
+.research/
+.reviews/
 .memory_index.jsonl
+.memory_causal_index.json
+.memory_entity_index.json
 MEMORY.md
 .quality_gate_*.json
 .team_registry.json
 .checkpoints/
 handoff_*.md
+reflection_*.md
+reflection_*.md.lock
 findings_*.md.lock
 review_*.md.lock
 code_*.md.lock
@@ -36,6 +42,7 @@ memory/
 # Task plans and findings
 task_plan*.md
 findings*.md
+review*.md
 progress*.md
 
 # OS files
@@ -82,3 +89,6 @@ tests/*.json.backup
 *.tmp
 *.bak
 *.orig
+
+# Session observations
+.observations.jsonl

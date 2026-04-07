@@ -19,11 +19,11 @@ This section describes what actually works **today** via the scripts layer.
 | ROUTER | ✅ | — | Keyword-based routing |
 | OFFICE-HOURS | ✅ | — | Product consultation |
 | EXPLORING | ✅ | — | Socratic deep exploration |
-| RESEARCH | ✅ | findings_{session}.md | Web search → findings report (falls back to keyword-based if search unavailable) |
+| RESEARCH | ✅ | .research/findings/findings_{session}.md | Web search → findings report (also writes .research/findings/findings_latest.md) |
 | THINKING | ✅ | — | Expert reasoning |
 | PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | Task breakdown with spec-kit chain |
 | EXECUTING | ✅ | — | TDD-driven implementation |
-| REVIEWING | ✅ | review_{session}.md | Real code analysis when files present (falls back to contract-scoped fallback) |
+| REVIEWING | ✅ | .reviews/review/review_{session}.md | Real code analysis when files present (also writes .reviews/review/review_latest.md) |
 | DEBUGGING | ✅ | — | 5-step systematic debugging |
 | REFINING | ✅ | — | Feedback loop iteration |
 | COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
@@ -62,7 +62,7 @@ The actual executable surface:
 | `.artifacts.json` | ✅ Active | Artifact registry (progress, plan, session, tracker) |
 | `SESSION-STATE.md` | ✅ Active | Session state (markdown) |
 | `progress.md` | ✅ Active | Phase progress (markdown) |
-| `task_plan.md` | 🔄 Legacy | Compatibility projection for old runtime/frontier |
+| `task_plan.md` | 🔄 Legacy | Compatibility projection only; new planning uses `.specs/<feature>/...` |
 
 ## Quickstart
 
@@ -87,6 +87,12 @@ python3 scripts/workflow_engine.py --op=advance --phase=EXECUTING --workdir .
 # Recommend next phases
 python3 scripts/workflow_engine.py --op=recommend --workdir .
 ```
+
+`snapshot` 现在会返回下一阶段的上下文提示：
+
+- `memory_hints`: relevant long-term memory summaries
+- `memory_query`: the search query used for retrieval
+- `memory_intent`: `plan` / `review` / `debug` / `auto`
 
 ### Unified State Management (NEW)
 
@@ -219,7 +225,8 @@ new_state = migrate_state(old_state)
 
 **已注册工件类型**:
 - `progress.md` -> type: progress
-- `task_plan.md` -> type: plan (legacy)
+- `.specs/<feature>/tasks.md` -> type: plan (canonical)
+- `task_plan.md` -> type: plan (legacy compatibility projection)
 - `SESSION-STATE.md` -> type: session
 - `.task_tracker.json` -> type: tracker
 

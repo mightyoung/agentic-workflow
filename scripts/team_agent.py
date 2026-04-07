@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 import search_adapter
+from findings_paths import ensure_findings_dir, findings_latest_path
+from review_paths import ensure_review_dir, review_latest_path
 from safe_io import safe_write_text_locked
 from unified_state import ArtifactType, register_artifact
 
@@ -83,6 +85,23 @@ class TeamRunResults(TypedDict):
     tasks_failed: int
     outputs: list[dict[str, Any]]
     artifacts: list[str]
+
+
+class WorkerEnvelope(TypedDict):
+    """Structured worker output passed back to the lead agent.
+
+    Keep the lead-side payload small and schema-driven so raw tool output stays
+    in the worker artifact, not in the coordination channel.
+    """
+    worker_type: str
+    task: str
+    success: bool
+    summary: str
+    artifact_refs: list[str]
+    duration_seconds: float
+    degraded_mode: bool
+    warning: str | None
+    error: str | None
 
 
 # ============================================================================
@@ -213,23 +232,138 @@ class WorkerAgent:
                 duration_seconds=duration,
             )
 
+    @staticmethod
+    def _summarize_output(output: str, limit: int | None = None) -> str:
+        """Create a compact, schema-friendly summary for lead-side consumption.
+
+        AgentSys P0: The summary is the ONLY thing that crosses to lead context.
+        Raw tool output stays in artifacts. This method enforces the boundary.
+        Default limit is MAX_SUMMARY_LENGTH (500 chars) to keep lead payload small.
+        """
+        if not output:
+            return ""
+        effective_limit = limit if limit is not None else WorkerAgent.MAX_SUMMARY_LENGTH
+        normalized = " ".join(output.split())
+        if len(normalized) <= effective_limit:
+            return normalized
+        return normalized[: effective_limit - 1].rstrip() + "…"
+
+    # AgentSys P0: Hard limits to prevent raw output leaking into lead context
+    MAX_SUMMARY_LENGTH: int = 500  # Lead-safe summary max chars
+    MAX_WARNING_LENGTH: int = 200   # Warning field max chars
+
+    @staticmethod
+    def _validate_envelope(envelope: WorkerEnvelope) -> None:
+        """Validate the lead-facing envelope before it leaves the worker boundary.
+
+        AgentSys enforcement:
+        - All required keys must be present
+        - Summary must be a short, lead-safe string (not raw output)
+        - Artifact refs must be valid paths
+        - No raw tool output in any envelope field
+        """
+        required_keys = {
+            "worker_type",
+            "task",
+            "success",
+            "summary",
+            "artifact_refs",
+            "duration_seconds",
+            "degraded_mode",
+            "warning",
+            "error",
+        }
+        missing = required_keys.difference(envelope.keys())
+        if missing:
+            raise ValueError(f"invalid worker envelope: missing keys {sorted(missing)}")
+
+        if not isinstance(envelope["summary"], str):
+            raise ValueError("invalid worker envelope: summary must be a string")
+        if not isinstance(envelope["artifact_refs"], list) or not all(
+            isinstance(item, str) for item in envelope["artifact_refs"]
+        ):
+            raise ValueError("invalid worker envelope: artifact_refs must be a list[str]")
+        if envelope["success"] and not envelope["summary"].strip():
+            raise ValueError("invalid worker envelope: success results must include a summary")
+        if envelope["duration_seconds"] < 0:
+            raise ValueError("invalid worker envelope: duration_seconds must be non-negative")
+
+        # AgentSys P0: Prevent raw output from leaking into lead context
+        # These fields must ONLY contain structured summaries, NOT raw tool output
+        max_summary_len = WorkerAgent.MAX_SUMMARY_LENGTH
+        max_warning_len = WorkerAgent.MAX_WARNING_LENGTH
+        if len(envelope["summary"]) > max_summary_len:
+            raise ValueError(
+                f"invalid worker envelope: summary exceeds {max_summary_len} chars. "
+                f"Raw output must stay in artifact files, not in envelope."
+            )
+        if envelope["warning"] and len(envelope["warning"]) > max_warning_len:
+            raise ValueError(
+                f"invalid worker envelope: warning exceeds {max_warning_len} chars. "
+                f"Short warning only, raw output in artifacts."
+            )
+        if envelope["error"] and len(envelope["error"]) > max_warning_len:
+            raise ValueError(
+                f"invalid worker envelope: error exceeds {max_warning_len} chars. "
+                f"Short error only, full trace in artifacts."
+            )
+
+    def build_envelope(self, task: str, result: WorkerResult) -> WorkerEnvelope:
+        """Convert a raw WorkerResult into a structured, lead-safe envelope."""
+        degraded_mode = False
+        warning = None
+        if self.worker_type == WorkerType.RESEARCHER and result.success and result.artifacts:
+            degraded_mode = any("degraded" in Path(path).name for path in result.artifacts)
+
+        if result.success and self.worker_type == WorkerType.RESEARCHER and result.output:
+            if "degraded" in result.output.lower():
+                degraded_mode = True
+                warning = "research output indicates degraded mode"
+
+        summary = self._summarize_output(result.output)
+        if not summary and result.success:
+            summary = f"{self.worker_type.value} completed {task}"
+
+        return WorkerEnvelope(
+            worker_type=self.worker_type.value,
+            task=task,
+            success=result.success,
+            summary=summary,
+            artifact_refs=list(result.artifacts),
+            duration_seconds=result.duration_seconds,
+            degraded_mode=degraded_mode,
+            warning=warning,
+            error=result.error,
+        )
+
     def _do_research(self, task: str, context: dict[str, Any] | None) -> tuple[str, list[str]]:
         """Research worker: 搜索研究"""
         query = task
         response, used_fallback = search_adapter.search_with_fallback(query, num_results=5)
 
-        findings = []
-        for r in response.results:
-            findings.append(f"## {r.title}\n{r.snippet}\nSource: {r.url}")
+        findings: list[str] = []
+        if response.results:
+            for r in response.results:
+                findings.append(f"## {r.title}\n{r.snippet}\nSource: {r.url}")
+            evidence_status = "- External sources were found and summarized"
+            conclusions = "- Research produced source-backed notes for downstream planning"
+        else:
+            findings.append("## No verifiable sources\nNo usable external sources were returned for this query.")
+            evidence_status = "- No verifiable external sources were returned"
+            conclusions = "- Treat this result as degraded and re-run research with a narrower query"
 
-        output = f"# Research Findings\n\nQuery: {query}\n\n" + "\n\n".join(findings)
+        output = f"# Research Findings\n\nQuery: {query}\n\n## Evidence Status\n{evidence_status}\n\n## Key Findings\n" + "\n\n".join(findings)
+        output += f"\n\n## Conclusions\n{conclusions}"
         output += f"\n\n**Search Engine**: {response.search_engine}"
-        if response.metadata.get("degraded_mode"):
+        if used_fallback or response.metadata.get("degraded_mode"):
             output += f"\n**Warning**: {response.metadata.get('degraded_reason', 'Degraded mode')}"
 
         # Write findings artifact via safe_write_text_locked
-        findings_path = self.workdir / f"findings_{self.session_id}.md"
+        findings_dir = ensure_findings_dir(self.workdir)
+        findings_path = findings_dir / f"findings_{self.session_id}.md"
+        findings_latest = findings_latest_path(self.workdir)
         safe_write_text_locked(findings_path, output)
+        safe_write_text_locked(findings_latest, output)
         # Register artifact with unified pipeline
         register_artifact(str(self.workdir), ArtifactType.FINDINGS, str(findings_path), self.worker_type.value, "team-agent",
                          metadata={"task": task, "session_id": self.session_id})
@@ -291,8 +425,11 @@ class WorkerAgent:
                 f"Real agent execution is disabled (`use_real_agent=False`).\n"
                 f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
             )
-            review_path = self.workdir / f"review_{self.session_id}.md"
+            review_dir = ensure_review_dir(self.workdir)
+            review_path = review_dir / f"review_{self.session_id}.md"
+            review_latest = review_latest_path(self.workdir)
             safe_write_text_locked(review_path, skipped_msg)
+            safe_write_text_locked(review_latest, skipped_msg)
             register_artifact(str(self.workdir), ArtifactType.REVIEW, str(review_path), self.worker_type.value, "team-agent",
                             metadata={"task": task, "session_id": self.session_id, "skipped": True})
             return skipped_msg, [str(review_path)]
@@ -309,8 +446,11 @@ class WorkerAgent:
             for f in context["owned_files"]:
                 output += f"- {f}\n"
 
-        review_path = self.workdir / f"review_{self.session_id}.md"
+        review_dir = ensure_review_dir(self.workdir)
+        review_path = review_dir / f"review_{self.session_id}.md"
+        review_latest = review_latest_path(self.workdir)
         safe_write_text_locked(review_path, output)
+        safe_write_text_locked(review_latest, output)
         register_artifact(str(self.workdir), ArtifactType.REVIEW, str(review_path), self.worker_type.value, "team-agent",
                         metadata={"task": task, "session_id": self.session_id})
         return output, [str(review_path)]
@@ -428,6 +568,8 @@ class TeamAgent:
 
         worker = WorkerAgent(task.assigned_worker, str(self.workdir), use_real_agent=self.use_real_agent)
         result = worker.execute(task.description, context=self.contract)
+        envelope = worker.build_envelope(task.description, result)
+        WorkerAgent._validate_envelope(envelope)
 
         task.result = result
         task.status = "completed" if result.success else "failed"
@@ -440,9 +582,7 @@ class TeamAgent:
             to_worker=WorkerType.LEAD,
             content={
                 "task_id": task_id,
-                "success": result.success,
-                "output": result.output[:500] if result.output else "",
-                "error": result.error,
+                "envelope": envelope,
             },
             parent_id=task_id,
         )
@@ -544,11 +684,13 @@ class TeamAgent:
             results["artifacts"].extend(result.artifacts)
         else:
             results["tasks_failed"] += 1
+        envelope = task.result and WorkerAgent._summarize_output(task.result.output) or ""
         results["outputs"].append({
             "task_id": task_id,
             "worker": task.assigned_worker.value,
             "success": result.success,
-            "output": result.output[:200] if result.output else "",
+            "summary": envelope,
+            "artifact_refs": result.artifacts,
             "error": result.error,
         })
 
@@ -590,6 +732,44 @@ class TeamAgent:
                 }
                 for tid, t in self.tasks.items()
             },
+            "messages_count": len(self.messages),
+        }
+
+    def sanitize_for_handoff(self) -> dict[str, Any]:
+        """AgentSys P0: Strip raw outputs, keep only lead-safe structured summaries.
+
+        This is the boundary function: checkpoint/handoff must NEVER carry raw
+        tool output. Only summaries and artifact references cross to lead context.
+        Raw outputs stay in worker artifacts on disk.
+
+        Returns:
+            Handoff-safe dict with only summaries, artifact refs, and metadata.
+        """
+        sanitized_tasks: list[dict[str, Any]] = []
+        for tid, t in self.tasks.items():
+            task_summary: dict[str, Any] = {
+                "id": tid,
+                "description": t.description,
+                "assigned_worker": t.assigned_worker.value if t.assigned_worker else None,
+                "status": t.status,
+                "success": t.result.success if t.result else None,
+                "duration_seconds": t.result.duration_seconds if t.result else None,
+            }
+            # Only include lead-safe fields: summary and artifact refs
+            # NEVER include raw output in handoff
+            if t.result:
+                task_summary["summary"] = WorkerAgent._summarize_output(
+                    t.result.output, limit=WorkerAgent.MAX_SUMMARY_LENGTH
+                )
+                task_summary["artifact_refs"] = list(t.result.artifacts) if t.result.artifacts else []
+                task_summary["error"] = (t.result.error or "")[:WorkerAgent.MAX_WARNING_LENGTH] if t.result.error else None
+            sanitized_tasks.append(task_summary)
+
+        return {
+            "session_id": self.session_id,
+            "task": self.task,
+            "total_tasks": len(sanitized_tasks),
+            "tasks": sanitized_tasks,
             "messages_count": len(self.messages),
         }
 

@@ -22,9 +22,11 @@ python3 scripts/workflow_engine.py --op resume --workdir .
 | `.specs/<feature>/spec.md` | 用户故事 + 验收标准 |
 | `.specs/<feature>/plan.md` | 技术方案 + 约束 |
 | `.specs/<feature>/tasks.md` | 可执行任务清单 |
-| `task_plan.md` | 兼容旧 runtime |
-| `findings_{session}.md` | RESEARCH 阶段输出 |
-| `review_{session}.md` | REVIEWING 阶段输出 |
+| `task_plan.md` | 仅 legacy 兼容投影，非新任务主入口 |
+| `.research/findings/findings_{session}.md` | RESEARCH 阶段输出 |
+| `.research/findings/findings_latest.md` | 最近一次 RESEARCH 输出的便捷别名 |
+| `.reviews/review/review_{session}.md` | REVIEWING 阶段输出 |
+| `.reviews/review/review_latest.md` | 最近一次 REVIEWING 输出的便捷别名 |
 
 ### 进度格式
 

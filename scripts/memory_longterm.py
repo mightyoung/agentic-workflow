@@ -35,8 +35,6 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from memory_graph_index import (  # noqa: E402
-        MEMORY_CAUSAL_FILE,
-        MEMORY_ENTITY_FILE,
         rebuild_all_indexes,
         search_causal,
         search_entity,
@@ -278,15 +276,18 @@ def ensure_memory_exists(filepath: str = DEFAULT_MEMORY_FILE) -> bool:
 def add_experience(
     experience: str,
     filepath: str = DEFAULT_MEMORY_FILE,
+    index_file: str = MEMORY_INDEX_FILE,
     confidence: float = 0.5,
     scope: str = "project",
     project_id: str | None = None,
+    tags: list[str] | None = None,
 ) -> bool:
     """添加核心经验（同时写入 MEMORY.md 和 .memory_index.jsonl）。
 
     Args:
         experience: 经验描述（支持 "Task:... Trigger:... Mistake:... Fix:... Signal:..." 格式）
         filepath: MEMORY.md 路径
+        index_file: 结构化索引 JSONL 路径
         confidence: 置信度 0.3-0.9（越高越可靠）
         scope: "project"（当前项目）| "global"（跨项目）
         project_id: git remote hash；None 时自动检测
@@ -328,10 +329,52 @@ def add_experience(
         confidence=confidence,
         scope=scope,
         project_id=project_id,
+        tags=tags,
+        index_file=index_file,
     )
 
     print(f"已添加核心经验 [confidence={confidence:.1f}, scope={scope}]: {experience[:50]}...")
     return True
+
+
+def record_reflection_experience(
+    *,
+    task: str,
+    trigger: str,
+    mistake: str,
+    fix: str,
+    signal: str,
+    filepath: str = DEFAULT_MEMORY_FILE,
+    index_file: str = MEMORY_INDEX_FILE,
+    confidence: float = 0.7,
+    scope: str = "project",
+    project_id: str | None = None,
+    tags: list[str] | None = None,
+) -> bool:
+    """Record a Reflexion-style experience entry into long-term memory.
+
+    The entry is persisted both to MEMORY.md and the structured JSONL index so
+    it can be retrieved later through debug/plan/review intent routing.
+    """
+    reflection = (
+        f"Task: {task} "
+        f"Trigger: {trigger} "
+        f"Mistake: {mistake} "
+        f"Fix: {fix} "
+        f"Signal: {signal}"
+    )
+    merged_tags = ["reflexion", "failure"]
+    if tags:
+        merged_tags.extend(tags)
+    return add_experience(
+        reflection,
+        filepath=filepath,
+        index_file=index_file,
+        confidence=confidence,
+        scope=scope,
+        project_id=project_id,
+        tags=merged_tags,
+    )
 
 
 def add_pattern(pattern_name: str, description: str, filepath: str = DEFAULT_MEMORY_FILE) -> bool:

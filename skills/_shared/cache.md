@@ -19,7 +19,7 @@ tags: [core, optimization, cache]
 
 **缓存内容**:
 - 搜索查询和结果
-- findings_{session}.md 内容
+- `.research/findings/findings_{session}.md` 内容
 - 技术选型决策
 
 **缓存键生成**:
@@ -44,7 +44,7 @@ def research_cache_key(query: str, context: dict) -> str:
 - cache_key: research:{hash}
 - query: 原始查询
 - context: {项目类型, 技术栈, 约束条件}
-- findings: findings_{session}.md 内容
+- findings: `.research/findings/findings_{session}.md` 内容
 - created_at: 时间戳
 - expires_at: 过期时间 (TTL)
 - hit_count: 命中次数

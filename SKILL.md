@@ -53,11 +53,11 @@ requires:
 
 | 当前阶段 | 下一阶段 | 必读内容 |
 |---|---|---|
-| RESEARCH | THINKING | 读 `findings_{session}.md` |
-| THINKING | PLANNING | 基于分析结论拆分任务，生成 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
-| PLANNING | EXECUTING | 逐项执行 `.specs/<feature>/tasks.md`；`task_plan.md` 仅作 legacy 投影 |
-| EXECUTING | REVIEWING | 运行 `git diff` 查看代码变更，并更新 `.contract.json` |
-| REVIEWING | REFINING | 针对 issues 逐项修复，并产出 `review_{session}.md` |
+| RESEARCH | THINKING | 读 `.research/findings/findings_{session}.md`（优先）或 `.research/findings/findings_latest.md` |
+| THINKING | PLANNING | 先读当前 phase 上下文里的 `memory_hints` / `memory_query` / `memory_intent`，再基于分析结论拆分任务，生成 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
+| PLANNING | EXECUTING | 逐项执行 `.specs/<feature>/tasks.md`；如有 `memory_hints`，优先复用历史失败模式与约束；`task_plan.md` 仅在 legacy 兼容场景投影 |
+| EXECUTING | REVIEWING | 运行 `git diff` 查看代码变更，必要时参考 `memory_hints` 避免重复踩已知失败模式，并更新 `.contract.json` |
+| REVIEWING | REFINING | 针对 issues 逐项修复，先检查 `memory_hints` / `memory_query` / `memory_intent`，再产出 `.reviews/review/review_{session}.md` |
 
 ## 核心原则 (铁律，不可违反)
 
@@ -99,6 +99,41 @@ python3 scripts/workflow_engine.py --op status --workdir .
 - `.specs/<feature>/plan.md` — 技术方案与约束
 - `.specs/<feature>/tasks.md` — 执行任务清单
 - `.contract.json` — 履约契约（COMPLETE 门禁）
-- `task_plan.md` — legacy 兼容投影，非主线
-- `findings_{session}.md` — RESEARCH 输出的研究结果（THINKING 必读）
-- `review_{session}.md` — REVIEWING 输出的审查意见（REFINING 必读）
+- `task_plan.md` — legacy 兼容投影，仅在旧 runtime 需要时使用
+- `.research/findings/findings_{session}.md` — RESEARCH 输出的研究结果（THINKING 必读，目录版）
+- `.research/findings/findings_latest.md` — 最近一次研究结果的便捷别名
+- `.reviews/review/review_{session}.md` — REVIEWING 输出的审查意见（REFINING 必读，目录版）
+- `.reviews/review/review_latest.md` — 最近一次审查结果的便捷别名
+
+## 禁止引用的过时文件
+
+- `SESSION-STATE.md` — 已移除
+- `~/.gstack` — 历史设计
+- 假设 telemetry daemon、preload 或 session 守护进程存在
+
+## Iron Law
+
+```
+NO PHASE SKIP — FULL_WORKFLOW 触发时禁止跳过任何必经阶段
+NO FIX WITHOUT ROOT CAUSE — DEBUGGING 时禁止在未确认根因前修改代码
+NO COMPLETE WITHOUT VERIFICATION — 禁止在未运行验证命令前声称任务完成
+```
+
+## Red Flags（自我检查）
+
+| 想法 | 现实 |
+|------|------|
+| "这是个简单问题，直接回答" | 简单问题也可能需要 DEBUGGING/REVIEWING |
+| "先做再说，做完再计划" | PLANNING 在 EXECUTING 之前，顺序不可颠倒 |
+| "用户没说要走完整流程" | FULL_WORKFLOW 触发词见上表，不需要用户显式声明 |
+| "我已经知道答案了" | 先验证，再声称完成 |
+| "REVIEWING 可以快速过一遍" | REVIEWING 必须运行 git diff + quality_gate + pytest |
+
+## 验证前禁止完成
+
+宣称任务完成之前，必须：
+1. 运行相关测试（pytest / npm test）并看到通过结果
+2. 对于代码变更：运行 `git diff` 确认实际变更
+3. 对于 REVIEWING：输出含具体 file:line 的审查意见
+
+无证据 = 未完成。不得仅凭"我认为完成了"声称完成。

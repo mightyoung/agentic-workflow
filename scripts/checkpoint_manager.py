@@ -186,7 +186,45 @@ def conditional_checkpoint(
         plan_tasks = []
         next_tasks = []
 
-    # Create checkpoint JSON
+    # AgentSys P0: If team state exists, sanitize it for handoff
+    # Raw worker outputs must NEVER appear in checkpoint/handoff - only summaries
+    team_state_for_handoff: dict[str, Any] | None = None
+    try:
+        from team_agent import TeamAgent
+        registry_path = Path(workdir) / ".team_registry.json"
+        if registry_path.exists():
+            import json as json_lib
+            registry = json_lib.loads(registry_path.read_text(encoding="utf-8"))
+            sessions = registry.get("team_sessions", [])
+            if sessions:
+                # Get most recent team session
+                latest = max(sessions, key=lambda s: s.get("timestamp", ""))
+                state_data = latest.get("state", {})
+                # Reconstruct sanitized team state
+                sanitized_tasks = []
+                for tid, tdata in state_data.get("tasks", {}).items():
+                    # AgentSys P0: Only include summary, never raw output
+                    task_entry = {
+                        "id": tid,
+                        "description": tdata.get("description", ""),
+                        "assigned_worker": tdata.get("assigned_worker"),
+                        "status": tdata.get("status"),
+                        "success": tdata.get("success"),
+                        "summary": (tdata.get("output_summary") or "")[:500],  # Lead-safe only
+                        "artifact_refs": tdata.get("artifacts", []),
+                        "error": (tdata.get("error") or "")[:200] if tdata.get("error") else None,
+                        "duration_seconds": tdata.get("duration_seconds"),
+                    }
+                    sanitized_tasks.append(task_entry)
+                team_state_for_handoff = {
+                    "session_id": latest.get("session_id"),
+                    "task": latest.get("task"),
+                    "tasks": sanitized_tasks,
+                }
+    except Exception:
+        team_state_for_handoff = None
+
+    # Create checkpoint JSON (AgentSys P0: no raw outputs, only summaries)
     checkpoint_data = {
         "checkpoint_id": checkpoint_id,
         "session_id": session_id,
@@ -199,6 +237,8 @@ def conditional_checkpoint(
         "artifacts": state.artifacts if hasattr(state, "artifacts") else [],
         "decisions": [d.to_dict() if hasattr(d, "to_dict") else d for d in state.decisions] if hasattr(state, "decisions") else [],
         "file_changes": state.file_changes if hasattr(state, "file_changes") else [],
+        # AgentSys P0: Include sanitized team state (lead-safe summaries only)
+        "team_state": team_state_for_handoff,
     }
 
     # Write checkpoint JSON
@@ -269,6 +309,15 @@ def conditional_checkpoint(
         handoff_content += "\n## Recent Decisions\n"
         for d in recent_decisions:
             handoff_content += f"- {d}\n"
+
+    # AgentSys P0: Include sanitized team state (no raw outputs)
+    if team_state_for_handoff and team_state_for_handoff.get("tasks"):
+        handoff_content += "\n## Team Tasks (Lead-Safe Summaries Only)\n"
+        for t in team_state_for_handoff["tasks"][:10]:
+            status_icon = "✓" if t.get("success") else "✗" if t.get("status") == "failed" else "○"
+            worker = t.get("assigned_worker", "?")
+            summary = t.get("summary", "no summary")
+            handoff_content += f"- [{status_icon}] [{worker}] {summary[:120]}\n"
 
     # List key artifacts
     artifacts = list(state.artifacts) if hasattr(state, "artifacts") and state.artifacts else []

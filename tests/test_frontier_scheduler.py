@@ -15,11 +15,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))  # noqa: E402
 
 import workflow_engine  # noqa: E402
+from search_adapter import SearchResponse, SearchResult  # noqa: E402
 from team_agent import TeamAgent, WorkerType  # noqa: E402
 from unified_state import load_state, save_state  # noqa: E402
 from workflow_engine import (  # noqa: E402
@@ -291,6 +293,11 @@ class TestTeamRunIntegration(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
+        self.search_patcher = patch(
+            "team_agent.search_adapter.search_with_fallback",
+            side_effect=self._fake_search_with_fallback,
+        )
+        self.search_patcher.start()
         refs = Path(self.temp_dir) / "references" / "templates"
         refs.mkdir(parents=True, exist_ok=True)
         (refs / "task_plan.md").write_text(
@@ -303,8 +310,30 @@ class TestTeamRunIntegration(unittest.TestCase):
         )
 
     def tearDown(self):
+        self.search_patcher.stop()
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @staticmethod
+    def _fake_search_with_fallback(query: str, num_results: int = 5, fallback_content: str | None = None):
+        results = [
+            SearchResult(
+                title=f"Result {idx + 1}",
+                url=f"https://example.com/{idx + 1}",
+                snippet=f"Snippet for {query} #{idx + 1}",
+                source="stub",
+                reliability="B",
+            )
+            for idx in range(num_results)
+        ]
+        response = SearchResponse(
+            query=query,
+            results=results,
+            total_results=len(results),
+            search_engine="stub-search",
+            metadata={"degraded_mode": False},
+        )
+        return response, False
 
     def test_team_run_consumes_frontier_groups(self):
         """TeamAgent.run() consumes parallel_candidates and conflict_groups"""
@@ -390,7 +419,13 @@ class TestTeamRunIntegration(unittest.TestCase):
         contract = workflow_engine.parse_phase_contract(self.temp_dir)
 
         # Create team with frontier/contract - no extra add_task
-        team = TeamAgent(self.temp_dir, task="Test", contract=contract, frontier=frontier)
+        team = TeamAgent(
+            self.temp_dir,
+            task="Test",
+            contract=contract,
+            frontier=frontier,
+            use_real_agent=False,
+        )
 
         # Initially no tasks
         self.assertEqual(len(team.tasks), 0)
@@ -406,7 +441,7 @@ class TestTeamRunIntegration(unittest.TestCase):
 
     def test_team_artifact_registration(self):
         """Team outputs are registered as artifacts"""
-        team = TeamAgent(self.temp_dir, task="Test")
+        team = TeamAgent(self.temp_dir, task="Test", use_real_agent=False)
         task_id = team.add_task("Research Python", WorkerType.RESEARCHER)
         result = team.execute_task(task_id)
 
@@ -453,7 +488,7 @@ class TestTeamRunIntegration(unittest.TestCase):
 
     def test_team_run_accepts_phase_and_register_artifacts(self):
         """TeamAgent.run() accepts phase and register_artifacts params"""
-        team = TeamAgent(self.temp_dir, task="Test")
+        team = TeamAgent(self.temp_dir, task="Test", use_real_agent=False)
         team.add_task("Do something", WorkerType.CODER)
 
         # Run with phase and register_artifacts
@@ -489,10 +524,37 @@ class TestTeamArtifactPersistence(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
+        self.search_patcher = patch(
+            "team_agent.search_adapter.search_with_fallback",
+            side_effect=self._fake_search_with_fallback,
+        )
+        self.search_patcher.start()
 
     def tearDown(self):
+        self.search_patcher.stop()
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @staticmethod
+    def _fake_search_with_fallback(query: str, num_results: int = 5, fallback_content: str | None = None):
+        results = [
+            SearchResult(
+                title=f"Result {idx + 1}",
+                url=f"https://example.com/{idx + 1}",
+                snippet=f"Snippet for {query} #{idx + 1}",
+                source="stub",
+                reliability="B",
+            )
+            for idx in range(num_results)
+        ]
+        response = SearchResponse(
+            query=query,
+            results=results,
+            total_results=len(results),
+            search_engine="stub-search",
+            metadata={"degraded_mode": False},
+        )
+        return response, False
 
     def test_coder_produces_artifact(self):
         """Coder worker produces artifact file (skip real agent, test pipeline)"""
@@ -528,9 +590,26 @@ class TestTeamArtifactPersistence(unittest.TestCase):
         for artifact_path in result.artifacts:
             self.assertTrue(Path(artifact_path).exists())
 
+    def test_worker_result_is_summarized_for_lead(self):
+        """Lead receives a structured envelope instead of raw worker output."""
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
+        task_id = team.add_task("Review code", WorkerType.REVIEWER)
+
+        result = team.execute_task(task_id)
+
+        self.assertTrue(result.success)
+        self.assertGreater(len(team.messages), 0)
+        message = team.messages[-1]
+        self.assertIn("envelope", message.content)
+        envelope = message.content["envelope"]
+        self.assertIn("summary", envelope)
+        self.assertIn("artifact_refs", envelope)
+        self.assertNotIn("output", message.content)
+        self.assertLessEqual(len(envelope["summary"]), 260)
+
     def test_researcher_produces_artifact(self):
         """Researcher worker produces artifact file"""
-        team = TeamAgent(self.temp_dir, task="Test task")
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
         task_id = team.add_task("Research best practices", WorkerType.RESEARCHER)
         result = team.execute_task(task_id)
 
@@ -612,7 +691,7 @@ class TestTeamArtifactPersistence(unittest.TestCase):
 
     def test_team_run_registers_artifacts(self):
         """TeamAgent.run() registers worker artifacts"""
-        team = TeamAgent(self.temp_dir, task="Test task")
+        team = TeamAgent(self.temp_dir, task="Test task", use_real_agent=False)
         team.add_task("Research task", WorkerType.RESEARCHER)
         team.add_task("Code task", WorkerType.CODER)
 

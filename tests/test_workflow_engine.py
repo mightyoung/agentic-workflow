@@ -13,6 +13,8 @@ from pathlib import Path
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import memory_longterm  # noqa: E402
+import search_adapter  # noqa: E402
 import unified_state  # noqa: E402
 import workflow_engine  # noqa: E402
 
@@ -43,9 +45,19 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertTrue(result["plan_created"])
         self.assertTrue((Path(self.temp_dir) / "SESSION-STATE.md").exists())
         self.assertTrue((Path(self.temp_dir) / "progress.md").exists())
-        self.assertTrue((Path(self.temp_dir) / "task_plan.md").exists())
+        self.assertFalse((Path(self.temp_dir) / "task_plan.md").exists())
+        self.assertTrue((Path(self.temp_dir) / ".specs").exists())
         self.assertTrue((Path(self.temp_dir) / ".workflow_state.json").exists())
         self.assertTrue((Path(self.temp_dir) / ".task_tracker.json").exists())
+
+        specs_root = Path(self.temp_dir) / ".specs"
+        feature_dirs = list(specs_root.glob("*/"))
+        self.assertGreater(len(feature_dirs), 0)
+        feature_dir = feature_dirs[0]
+        self.assertTrue((feature_dir / "spec.md").exists())
+        self.assertTrue((feature_dir / "plan.md").exists())
+        self.assertTrue((feature_dir / "tasks.md").exists())
+        self.assertTrue((Path(self.temp_dir) / ".contract.json").exists())
 
         # Use unified state
         state = unified_state.load_state(self.temp_dir)
@@ -134,6 +146,67 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(next_tasks[0]["id"], "TASK-001")
         self.assertEqual(next_tasks[1]["id"], "TASK-002")
 
+    def test_canonical_tasks_md_takes_precedence_over_legacy_task_plan(self):
+        specs_dir = Path(self.temp_dir) / ".specs" / "feature-a"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        (specs_dir / "tasks.md").write_text(
+"""## Setup
+
+- [ ] **US1-1:** Canonical setup [P]
+  - **Files:** `src/canonical.py`
+  - **Verification:** `pytest tests/test_canonical.py -v`
+""",
+            encoding="utf-8",
+        )
+
+        legacy_plan = Path(self.temp_dir) / "task_plan.md"
+        legacy_plan.write_text(
+            """# Task Plan: Legacy
+
+### P0
+- [ ] TASK-LEGACY-1: Legacy task
+  - status: backlog
+  - verification: pytest
+""",
+            encoding="utf-8",
+        )
+
+        tasks = workflow_engine.parse_tasks_md(self.temp_dir)
+        next_tasks = workflow_engine.next_plan_tasks(self.temp_dir)
+        frontier = workflow_engine.compute_frontier(self.temp_dir)
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["id"], "US1-1")
+        self.assertEqual(next_tasks[0]["id"], "US1-1")
+        self.assertEqual(frontier["executable_frontier"][0]["id"], "US1-1")
+        self.assertEqual(snapshot["plan_source"], "tasks.md")
+
+    def test_update_task_status_updates_canonical_tasks_md(self):
+        specs_dir = Path(self.temp_dir) / ".specs" / "feature-b"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        tasks_path = specs_dir / "tasks.md"
+        tasks_path.write_text(
+            """# Tasks
+
+## User Story 1
+
+- [ ] **US1-1:** Implement canonical flow [P]
+  - **Files:** `src/canonical.py`
+  - **Verification:** `pytest tests/test_canonical.py -v`
+""",
+            encoding="utf-8",
+        )
+
+        result = workflow_engine.update_task_status_in_plan(self.temp_dir, "US1-1", "completed")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["source"], "tasks.md")
+        updated = tasks_path.read_text(encoding="utf-8")
+        self.assertIn("**Status:** completed", updated)
+        next_tasks = workflow_engine.next_plan_tasks(self.temp_dir)
+        self.assertEqual(next_tasks, [])
+
     def test_snapshot_includes_plan_tasks(self):
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
         plan_path = Path(self.temp_dir) / "task_plan.md"
@@ -150,7 +223,98 @@ class TestWorkflowEngine(unittest.TestCase):
         )
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
-        self.assertEqual(snapshot["next_plan_tasks"][0]["id"], "TASK-001")
+        self.assertEqual(snapshot["plan_source"], "tasks.md")
+        self.assertEqual(snapshot["next_plan_tasks"][0]["id"], "US1-1")
+
+    def test_snapshot_includes_context_for_next_phase_memory_hints(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        memory_md = Path(self.temp_dir) / "MEMORY.md"
+        memory_longterm.record_reflection_experience(
+            task="帮我制定一个开发计划",
+            trigger="PLANNING::plan",
+            mistake="Skipped validation of acceptance criteria",
+            fix="Add explicit acceptance criteria and verification methods",
+            signal="planning_gap",
+            filepath=str(memory_md),
+            index_file=str(Path(self.temp_dir) / ".memory_index.jsonl"),
+            confidence=0.8,
+            scope="project",
+            tags=["planning", "contract"],
+        )
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        context = snapshot["context_for_next_phase"]
+        self.assertIn("memory_hints", context)
+        self.assertGreater(len(context["memory_hints"]), 0)
+        self.assertIn("memory_query", context)
+        self.assertIn("memory_intent", context)
+
+    def test_research_findings_are_written_to_dedicated_directory(self):
+        workflow_engine.initialize_workflow("帮我搜索最佳实践", workdir=self.temp_dir)
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        session_id = state.session_id or "unknown"
+
+        fake_response = search_adapter.SearchResponse(
+            query="帮我搜索最佳实践",
+            results=[
+                search_adapter.SearchResult(
+                    title="Example Best Practice",
+                    url="https://example.com/best-practice",
+                    snippet="Use clear contracts and structured memory boundaries.",
+                    source="web",
+                )
+            ],
+            total_results=1,
+            search_engine="duckduckgo",
+            metadata={"degraded_mode": True, "degraded_reason": "test stub"},
+        )
+
+        original_search = workflow_engine.search_adapter.search
+        workflow_engine.search_adapter.search = lambda query, num_results=5: fake_response
+        try:
+            workflow_engine.advance_workflow("THINKING", workdir=self.temp_dir)
+        finally:
+            workflow_engine.search_adapter.search = original_search
+
+        findings_dir = Path(self.temp_dir) / ".research" / "findings"
+        session_file = findings_dir / f"findings_{session_id}.md"
+        latest_file = findings_dir / "findings_latest.md"
+
+        self.assertTrue(findings_dir.exists())
+        self.assertTrue(session_file.exists())
+        self.assertTrue(latest_file.exists())
+        self.assertFalse(list(Path(self.temp_dir).glob("findings_*.md")))
+
+    def test_research_no_results_generates_explicit_degraded_report(self):
+        workflow_engine.initialize_workflow("帮我搜索最佳实践", workdir=self.temp_dir)
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        session_id = state.session_id or "unknown"
+
+        empty_response = search_adapter.SearchResponse(
+            query="帮我搜索最佳实践",
+            results=[],
+            total_results=0,
+            search_engine="duckduckgo",
+            error="Search unavailable",
+            metadata={"degraded_mode": True, "degraded_reason": "test stub empty"},
+        )
+
+        original_search = workflow_engine.search_adapter.search
+        workflow_engine.search_adapter.search = lambda query, num_results=5: empty_response
+        try:
+            workflow_engine.advance_workflow("THINKING", workdir=self.temp_dir)
+        finally:
+            workflow_engine.search_adapter.search = original_search
+
+        findings_dir = Path(self.temp_dir) / ".research" / "findings"
+        session_file = findings_dir / f"findings_{session_id}.md"
+        content = session_file.read_text(encoding="utf-8")
+
+        self.assertIn("No verifiable external sources", content)
+        self.assertIn("degraded", content.lower())
+        self.assertGreater(len(content.strip()), 100)
 
 
 class TestQualityGateCompletionBlock(unittest.TestCase):
@@ -359,3 +523,54 @@ class TestNewPhases(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
         self.assertIn("analyze gate failed", str(ctx.exception))
+
+    def test_handle_workflow_failure_records_reflection_memory(self):
+        """Failure handling should persist a reflection artifact and long-term memory entry."""
+        workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
+
+        result = workflow_engine.handle_workflow_failure(
+            self.temp_dir,
+            error="AssertionError: email not found",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["reflection_recorded"])
+
+        reflection_path = Path(result["reflection_path"])
+        self.assertTrue(reflection_path.exists())
+
+        memory_md = Path(self.temp_dir) / "MEMORY.md"
+        memory_index = Path(self.temp_dir) / ".memory_index.jsonl"
+        self.assertTrue(memory_md.exists())
+        self.assertTrue(memory_index.exists())
+
+        memory_content = memory_md.read_text(encoding="utf-8")
+        self.assertIn("Task:", memory_content)
+        self.assertIn("Fix:", memory_content)
+
+    def test_phase_context_includes_memory_hints(self):
+        """Next phase context should expose relevant long-term memory hints."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+
+        memory_md = Path(self.temp_dir) / "MEMORY.md"
+        memory_longterm.record_reflection_experience(
+            task="帮我制定一个开发计划",
+            trigger="PLANNING::plan",
+            mistake="Skipped validation of acceptance criteria",
+            fix="Add explicit acceptance criteria and verification methods",
+            signal="planning_gap",
+            filepath=str(memory_md),
+            index_file=str(Path(self.temp_dir) / ".memory_index.jsonl"),
+            confidence=0.8,
+            scope="project",
+            tags=["planning", "contract"],
+        )
+
+        state = unified_state.load_state(self.temp_dir)
+        context = workflow_engine._build_phase_context("PLANNING", self.temp_dir, state.session_id)
+        self.assertIn("memory_hints", context)
+        self.assertGreater(len(context["memory_hints"]), 0)
+        self.assertIn("memory_query", context)
+        self.assertIn("memory_intent", context)

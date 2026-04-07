@@ -1,12 +1,12 @@
 ---
 name: executing
-version: 1.1.0
+version: 1.2.0
 status: implemented
 description: |
   执行阶段 - TDD 开发循环和代码实现
   当前版本对齐 .specs/<feature>/tasks.md、.contract.json、run_tracker.py 和 step_recorder.py
-  注意: Trajectory持久化在 trajectory_logger.py 中实现
-tags: [phase, executing, tdd]
+  Reflexion 强化: mid-task reflection checkpoint + AgentSys 子 agent schema 验证
+tags: [phase, executing, tdd, reflexion, agentsys]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]
 ---
@@ -27,6 +27,7 @@ EXECUTING 阶段负责把计划转成实际变更。
 - TDD 或最小可验证实现
 - 使用项目内状态文件
 - 使用 `run_tracker.py` / `step_recorder.py` 做轻量执行追踪
+- 先读取当前 phase 上下文里的 `memory_hints`、`memory_query` 和 `memory_intent`，避免重复踩已经被修复过的失败模式
 
 ## Entry Criteria
 
@@ -106,6 +107,33 @@ EXECUTING 阶段负责把计划转成实际变更。
 
 **注意**: 并行 agent 使用 Claude Code 的 Agent tool（`run_in_background: true`），**不是** Python subprocess。
 
+#### 1.5.1 子 Agent 输出 Schema 验证 (AgentSys, arXiv 2602.07398)
+
+> 受 AgentSys 层级隔离思路启发：子 agent 返回结果必须通过 schema 验证，
+> 非法/畸形输出丢弃并重试，防止脏数据污染主执行上下文。
+
+**子 agent 返回必须包含以下字段**（缺少任一则视为失败）：
+
+```json
+{
+  "task_id": "T001",
+  "status": "DONE | DONE_WITH_CONCERNS | FAILED",
+  "files_changed": ["src/foo.py", "tests/test_foo.py"],
+  "test_result": "PASS | FAIL | SKIPPED",
+  "concerns": "可选：遗留问题描述"
+}
+```
+
+**验证规则**：
+| 检查项 | 规则 | 失败处理 |
+|--------|------|---------|
+| `status` 字段存在 | 必须是 DONE/DONE_WITH_CONCERNS/FAILED 之一 | 丢弃结果，重派 agent |
+| `test_result` 字段存在 | 必须是 PASS/FAIL/SKIPPED 之一 | 丢弃结果，重派 agent |
+| `files_changed` 非空 | 至少包含一个文件路径 | 警告但不阻塞 |
+| 结果不含外部 raw 数据 | 不允许嵌入 API 响应体/网页内容 | 截断到 500 字符 |
+
+**重派上限**：同一子任务最多重派 2 次，超过则标记为 FAILED 并由主流程接管。
+
 ### 2. Prefer TDD When Practical
 
 推荐顺序：
@@ -152,6 +180,43 @@ cat >> SHARED_TASK_NOTES.md << 'EOF'
 - **影响文件**: src/auth.py, tests/test_auth.py
 EOF
 ```
+
+### 2.7. Mid-Task Reflection Checkpoint (Reflexion, arXiv 2303.11366)
+
+> 受 Reflexion 启发：每完成一个 P0 任务后，自动检索因果记忆，
+> 在犯已知错误之前拦截，而非事后修复。
+
+**触发条件**：每个 P0 任务完成后（状态变为 DONE/DONE_WITH_CONCERNS）自动执行。
+
+**执行流程**：
+
+```bash
+# Step 1: 检索与当前任务相关的已知因果链
+python3 scripts/memory_longterm.py --op search-causal --query "<当前任务涉及的文件或模块名>"
+
+# Step 2: 检索实体级历史（该文件曾经出过什么问题）
+python3 scripts/memory_longterm.py --op search-entity --query "<主要修改的文件名>"
+```
+
+**反思决策矩阵**：
+
+| 检索结果 | 动作 |
+|---------|------|
+| Signal 精确匹配（因果链命中） | **STOP** — 阅读 Fix 字段，检查本次实现是否已避免同一 Mistake |
+| Entity 历史命中（文件有 bug 记录） | **WARNING** — 输出历史 bug 摘要，人工确认是否复现 |
+| 无匹配 | **CONTINUE** — 继续下一个任务 |
+
+**输出格式**（匹配时必须输出）：
+
+```markdown
+### Mid-Task Reflection — [任务 ID]
+- **因果链匹配**: [Signal] → [Fix] (来自经验 #ID)
+- **本次是否已规避**: [是/否 + 简要说明]
+- **实体历史**: [文件名] 曾在 [日期] 出现 [问题描述]
+- **决策**: CONTINUE / 需要补充修复
+```
+
+**注意**：如果 `memory_longterm.py` 或图索引不可用，静默跳过（不阻塞执行流）。
 
 ### 3. Keep State Local
 

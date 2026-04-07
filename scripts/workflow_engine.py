@@ -27,6 +27,18 @@ from contract_manager import (
     update_contract_json,
     validate_contract_gate,
 )
+from findings_paths import (
+    ensure_findings_dir,
+    findings_latest_path,
+    findings_session_path,
+    legacy_findings_paths,
+)
+from review_paths import (
+    ensure_review_dir,
+    legacy_review_paths,
+    review_latest_path,
+    review_session_path,
+)
 from safe_io import safe_write_json, safe_write_text_locked
 from skill_loader import SkillPromptFormatter, load_skill
 from team_agent import TeamAgent
@@ -120,9 +132,15 @@ def _generate_and_register_summary(
         task_info += f"- Reason: {failure_reason}\n\n"
 
     # Aggregate research findings content if available
-    findings_session_path = Path(workdir) / f"findings_{session_id}.md"
-    if findings_session_path.exists():
-        findings_content = findings_session_path.read_text(encoding="utf-8")
+    findings_session_file = findings_session_path(workdir, session_id)
+    findings_latest_file = findings_latest_path(workdir)
+    findings_content = ""
+    for candidate_path in [findings_session_file, findings_latest_file, *legacy_findings_paths(workdir)]:
+        if candidate_path.exists():
+            findings_content = candidate_path.read_text(encoding="utf-8")
+            break
+
+    if findings_content:
         lines = findings_content.split("\n")
 
         # Extract Research Question
@@ -152,9 +170,15 @@ def _generate_and_register_summary(
                 break
 
     # Aggregate review findings content if available
-    review_session_path = Path(workdir) / f"review_{session_id}.md"
-    if review_session_path.exists():
-        review_content = review_session_path.read_text(encoding="utf-8")
+    review_session_file = review_session_path(workdir, session_id)
+    review_latest_file = review_latest_path(workdir)
+    review_content = ""
+    for candidate_path in [review_session_file, review_latest_file, *legacy_review_paths(workdir)]:
+        if candidate_path.exists():
+            review_content = candidate_path.read_text(encoding="utf-8")
+            break
+
+    if review_content:
         lines = review_content.split("\n")
 
         # Extract Review Scope
@@ -251,7 +275,7 @@ def _create_plan_from_template(task_name: str, workdir: str) -> Path | None:
         return destination
 
 
-def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Path | None, Path | None]:
+def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Path | None, Path | None, Path | None]:
     """
     Create spec.md and plan.md artifacts in .specs/<feature_id>/ directory.
 
@@ -262,7 +286,7 @@ def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, 
         session_id: Session identifier
 
     Returns:
-        (spec_path, plan_path) tuple - either may be None if creation failed
+        (spec_path, plan_path, tasks_path) tuple - any may be None if creation failed
     """
     # Generate feature_id from task_name
     feature_id = re.sub(r"[^a-zA-Z0-9]+", "_", task_name.lower())[:50]
@@ -271,6 +295,7 @@ def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, 
 
     spec_path = None
     plan_path = None
+    tasks_path = None
 
     # Create spec.md from template if available
     template_dir = Path(workdir) / "scripts" / "templates"
@@ -378,7 +403,37 @@ def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, 
 """
         safe_write_text_locked(plan_path, content)
 
-    return spec_path, plan_path
+    # Create tasks.md from the generated spec so the canonical planning chain exists
+    try:
+        import task_decomposer
+
+        decomposed_tasks = task_decomposer.decompose_from_spec(workdir, feature_id)
+        tasks_content = task_decomposer.generate_tasks_md(decomposed_tasks, str(spec_path), session_id, feature_id)
+        tasks_path = specs_dir / "tasks.md"
+        safe_write_text_locked(tasks_path, tasks_content)
+    except Exception:
+        # Fallback: create a minimal canonical tasks.md so downstream code can consume it
+        tasks_path = specs_dir / "tasks.md"
+        fallback_content = f"""# Tasks
+
+> **Provenance Header**
+> Generated-By: agentic-workflow
+> Session: {session_id}
+> Source-Spec: {spec_path}
+> Timestamp: {datetime.now().isoformat()}
+
+---
+
+## Setup
+
+- [ ] **TASK-US1-1:** Initial task [P]
+  - **Files:** `src/`
+  - **Verification:** `pytest -v`
+        - **Blocked-By:**
+"""
+        safe_write_text_locked(tasks_path, fallback_content)
+
+    return spec_path, plan_path, tasks_path
 
 
 def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> dict[str, Any]:
@@ -392,15 +447,81 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     workdir_path = Path(workdir)
     files_to_read: list[str] = []
     summary = ""
+    memory_hints: list[str] = []
+    memory_query = ""
+    memory_intent = "auto"
+
+    try:
+        state = load_state(workdir)
+    except Exception:
+        state = None
+
+    task_text = ""
+    if state and state.task:
+        task_text = state.task.description or state.task.title or ""
+    if not task_text:
+        task_text = session_id
+
+    if current_phase in ("PLANNING", "THINKING"):
+        memory_intent = "plan"
+    elif current_phase == "REVIEWING":
+        memory_intent = "review"
+    elif current_phase in ("DEBUGGING", "REFINING"):
+        memory_intent = "debug"
+
+    try:
+        from memory_longterm import search_memory
+
+        memory_query = task_text or current_phase
+        memory_hints = search_memory(
+            memory_query,
+            filepath=str(workdir_path / "MEMORY.md"),
+            scope="project",
+            limit=3,
+            intent=memory_intent,
+        )
+    except Exception:
+        memory_hints = []
+        memory_query = ""
+
+    # MAGMA P2: Also search semantic and temporal views for richer context
+    try:
+        from memory_views import search_views
+        view_results = search_views(
+            task_text or current_phase,
+            intent=memory_intent,
+            limit=3,
+        )
+        # Add semantic hits as memory hints if not already covered
+        semantic_hints = view_results.get("semantic", [])
+        for hit in semantic_hints[:2]:
+            snippet = hit.get("snippet", "")
+            if snippet and snippet not in memory_hints:
+                memory_hints.append(f"[semantic] {snippet}")
+        # Add temporal context if recent and relevant
+        temporal_hints = view_results.get("temporal", [])
+        for hit in temporal_hints[:1]:
+            month = hit.get("_month", "")
+            snippet = hit.get("text", "")
+            if snippet and month:
+                hint = f"[temporal:{month}] {snippet[:80]}"
+                if hint not in memory_hints:
+                    memory_hints.append(hint)
+    except Exception:
+        pass  # MAGMA views are best-effort
 
     if current_phase == "RESEARCH":
         # RESEARCH produces findings — THINKING should read them
-        findings = workdir_path / f"findings_{session_id}.md"
+        findings = findings_session_path(workdir_path, session_id)
+        findings_latest = findings_latest_path(workdir_path)
         if findings.exists():
             files_to_read.append(str(findings))
             summary = "Research findings available. Read findings before analysis."
+        elif findings_latest.exists():
+            files_to_read.append(str(findings_latest))
+            summary = "Research findings available. Read findings before analysis."
         else:
-            findings_glob = list(workdir_path.glob("findings*.md"))
+            findings_glob = legacy_findings_paths(workdir_path)
             if findings_glob:
                 files_to_read.append(str(findings_glob[0]))
                 summary = "Research findings available."
@@ -424,9 +545,39 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
         # THINKING produces analysis — PLANNING should use conclusions
         summary = "Analysis complete. Use conclusions to inform task planning."
 
+    if memory_hints and summary:
+        summary += " Relevant long-term memory is available."
+    elif memory_hints:
+        summary = "Relevant long-term memory is available."
+
+    # Reflexion P1: Pre-flight experience check before high-stakes phases
+    # This retrieves actionable experience from the ledger before planning/review/debug
+    experience_check: dict[str, Any] = {
+        "has_relevant_experience": False,
+        "recommendations": [],
+        "warning": None,
+        "patterns_found": 0,
+    }
+    if current_phase in ("PLANNING", "REVIEWING", "DEBUGGING", "EXECUTING", "ANALYZING"):
+        try:
+            from experience_ledger import check_experience_before_action
+            experience_check = check_experience_before_action(
+                phase=current_phase,
+                context=task_text,
+                workdir=workdir,
+            )
+        except Exception:
+            # Experience ledger is best-effort - don't fail the workflow
+            pass
+
     return {
         "files_to_read": files_to_read,
         "summary": summary,
+        "memory_query": memory_query,
+        "memory_intent": memory_intent,
+        "memory_hints": memory_hints,
+        # Reflexion P1: Include experience recommendations in phase context
+        "experience_check": experience_check,
     }
 
 
@@ -532,10 +683,11 @@ def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
     current_section = None
 
     # Patterns for parsing
-    task_pattern = re.compile(r"^- \[\] \*\*(TASK-[^:]+):\*\* ([^\[]+)(?:\[P\])?")
+    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] \*\*(?P<id>[^:]+):\*\* (?P<title>.+?)(?:\s+\[P\])?$")
     file_pattern = re.compile(r"\*\*Files:\*\*\s*`?([^`]+)`?")
     verification_pattern = re.compile(r"\*\*Verification:\*\*\s*(?:\[P\]\s*)?([^\n]+)")
     blocked_by_pattern = re.compile(r"\*\*Blocked-By:\*\*\s*([^\n]+)")
+    status_pattern = re.compile(r"\*\*Status:\*\*\s*([^\n]+)")
     section_pattern = re.compile(r"^## (.+)$")
 
     current_task: dict[str, Any] | None = None
@@ -555,8 +707,9 @@ def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
             if current_task:
                 tasks.append(current_task)
 
-            task_id = task_match.group(1)
-            title = task_match.group(2).strip()
+            task_id = task_match.group("id")
+            title = task_match.group("title").strip()
+            is_done = task_match.group("done").lower() == "x"
 
             # Determine priority from section or task ID
             priority = "P1"
@@ -568,7 +721,7 @@ def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
             current_task = {
                 "id": task_id,
                 "title": title,
-                "status": "backlog",
+                "status": "completed" if is_done else "backlog",
                 "priority": priority,
                 "owned_files": [],
                 "dependencies": [],
@@ -593,10 +746,46 @@ def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
                 deps_str = blocked_match.group(1).strip()
                 current_task["dependencies"] = [d.strip() for d in deps_str.split(",")]
 
+            status_match = status_pattern.search(line)
+            if status_match:
+                current_task["status"] = status_match.group(1).strip()
+
     if current_task:
         tasks.append(current_task)
 
     return tasks
+
+
+def load_planning_tasks(workdir: str = ".") -> tuple[list[dict[str, Any]], str]:
+    """
+    Load planning tasks, preferring the canonical spec-kit chain.
+
+    Returns:
+        (tasks, source_name) where source_name is "tasks.md", "task_plan.md", or "none".
+    """
+    tasks = parse_tasks_md(workdir)
+    if tasks:
+        return tasks, "tasks.md"
+
+    legacy_tasks = parse_task_plan(workdir)
+    if legacy_tasks:
+        return legacy_tasks, "task_plan.md"
+
+    return [], "none"
+
+
+def _find_canonical_tasks_path(workdir: str = ".") -> Path | None:
+    """Find the most recent canonical tasks.md file under .specs/."""
+    specs_dir = Path(workdir) / ".specs"
+    if not specs_dir.exists():
+        return None
+
+    feature_dirs = sorted(specs_dir.glob("*/"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for feature_dir in feature_dirs:
+        tasks_path = feature_dir / "tasks.md"
+        if tasks_path.exists():
+            return tasks_path
+    return None
 
 
 def next_plan_tasks(workdir: str = ".", limit: int = 3) -> list[dict[str, Any]]:
@@ -610,9 +799,7 @@ def next_plan_tasks(workdir: str = ".", limit: int = 3) -> list[dict[str, Any]]:
     """
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, None: 9}
     # Prefer tasks.md (spec-kit style) over task_plan.md when available
-    all_tasks = parse_tasks_md(workdir)
-    if not all_tasks:
-        all_tasks = parse_task_plan(workdir)
+    all_tasks, _source = load_planning_tasks(workdir)
     completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
 
     candidates = []
@@ -654,9 +841,7 @@ def compute_frontier(workdir: str = ".") -> dict[str, Any]:
     Prefers tasks.md (spec-kit style) over task_plan.md when available for richer owned_files semantics.
     """
     # Prefer tasks.md (spec-kit style) over task_plan.md when available
-    all_tasks = parse_tasks_md(workdir)
-    if not all_tasks:
-        all_tasks = parse_task_plan(workdir)
+    all_tasks, source = load_planning_tasks(workdir)
     if not all_tasks:
         return {
             "executable_frontier": [],
@@ -666,6 +851,7 @@ def compute_frontier(workdir: str = ".") -> dict[str, Any]:
             "conflict_groups": [],
             "completed_count": 0,
             "total_count": 0,
+            "plan_source": "none",
         }
 
     completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
@@ -760,6 +946,7 @@ def compute_frontier(workdir: str = ".") -> dict[str, Any]:
         "conflict_groups": conflict_groups,
         "completed_count": len(completed_ids),
         "total_count": len(all_tasks),
+        "plan_source": source,
     }
 
 
@@ -851,7 +1038,7 @@ def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
     Returns:
         (is_valid, error_list)
     """
-    tasks = parse_task_plan(workdir)
+    tasks, _source = load_planning_tasks(workdir)
     if not tasks:
         return True, []
 
@@ -903,38 +1090,54 @@ def update_task_status_in_plan(
     Returns:
         更新结果
     """
-    plan_path = Path(workdir) / "task_plan.md"
-    if not plan_path.exists():
-        return {"success": False, "error": "task_plan.md not found"}
-
     if status not in ("backlog", "in_progress", "completed", "blocked"):
         return {"success": False, "error": f"Invalid status: {status}"}
 
+    plan_path = _find_canonical_tasks_path(workdir)
+    source = "tasks.md"
+    if plan_path is None:
+        plan_path = Path(workdir) / "task_plan.md"
+        source = "task_plan.md"
+
+    if not plan_path.exists():
+        return {"success": False, "error": "task_plan.md not found"}
+
     content = plan_path.read_text(encoding="utf-8")
     lines = content.split("\n")
-    new_lines = []
+    new_lines: list[str] = []
     task_found = False
     in_target_task = False
 
-    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+):")
-    field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+):")
+    legacy_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
+    canonical_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] \*\*(?P<id>[^:]+):\*\* (?P<title>.+)$")
+    status_pattern = re.compile(r"^\s+- \*\*Status:\*\*")
+
+    task_pattern = canonical_task_pattern if source == "tasks.md" else legacy_task_pattern
 
     for line in lines:
-        task_match = task_pattern.match(line.rstrip())
+        line_stripped = line.rstrip()
+        task_match = task_pattern.match(line_stripped)
         if task_match:
             in_target_task = task_match.group("id") == task_id
             if in_target_task:
                 task_found = True
-                # Update checkbox
                 done_marker = "x" if status == "completed" else " "
-                new_lines.append(f"- [{done_marker}] {task_match.group('id')}:" + line.split(":", 1)[1])
+                if source == "tasks.md":
+                    task_title = task_match.group("title").rstrip()
+                    new_lines.append(f"- [{done_marker}] **{task_match.group('id')}:** {task_title}")
+                    new_lines.append(f"  - **Status:** {status}")
+                else:
+                    task_title = task_match.group("title").rstrip()
+                    new_lines.append(f"- [{done_marker}] {task_match.group('id')}: {task_title}")
                 continue
 
         if in_target_task:
-            field_match = field_pattern.match(line)
-            if field_match:
-                key = field_match.group("key")
-                if key == "status":
+            if source == "tasks.md" and status_pattern.match(line_stripped):
+                continue
+            if source == "task_plan.md":
+                field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+):")
+                field_match = field_pattern.match(line)
+                if field_match and field_match.group("key") == "status":
                     new_lines.append(f"  - status: {status}")
                     continue
 
@@ -944,7 +1147,7 @@ def update_task_status_in_plan(
         return {"success": False, "error": f"Task {task_id} not found"}
 
     safe_write_text_locked(plan_path, "\n".join(new_lines))
-    return {"success": True, "task_id": task_id, "status": status}
+    return {"success": True, "task_id": task_id, "status": status, "source": source}
 
 
 def allowed_next_phases(phase: str) -> list[str]:
@@ -1105,19 +1308,15 @@ def initialize_workflow(
         task_tracker.start_task(task_id, str(tracker_path))
         task_tracker.update_status(task_id, "in_progress", progress=0, path=str(tracker_path))
 
-    plan_path: Path | None = None
     contract_path: Path | None = None
     spec_path: Path | None = None
+    plan_md_path: Path | None = None
+    tasks_path: Path | None = None
     if auto_create_plan and current_phase == "PLANNING":
-        plan_path = _create_plan_from_template(prompt, workdir)
-        if plan_path is not None:
-            # Register plan artifact (authoritative tracking via registry only)
-            register_artifact(workdir, ArtifactType.PLAN, str(plan_path), current_phase, "system")
-
         # Create spec.md and plan.md in .specs/<feature_id>/ directory
         task_title = state.task.title if state.task else prompt[:50]
         task_desc = state.task.description if state.task else prompt
-        spec_path, plan_md_path = _create_spec_artifacts(
+        spec_path, plan_md_path, tasks_path = _create_spec_artifacts(
             task_title, task_desc, workdir, state.session_id
         )
         if spec_path is not None:
@@ -1126,6 +1325,9 @@ def initialize_workflow(
         if plan_md_path is not None:
             register_artifact(workdir, ArtifactType.CUSTOM, str(plan_md_path), current_phase, "system",
                            metadata={"deliverable": "plan", "type": "plan.md"})
+        if tasks_path is not None:
+            register_artifact(workdir, ArtifactType.CUSTOM, str(tasks_path), current_phase, "system",
+                           metadata={"deliverable": "tasks", "type": "tasks.md"})
 
         # Create Anthropic-style phase contract
         contract_path = _create_phase_contract(task_title, task_desc, workdir)
@@ -1152,7 +1354,7 @@ def initialize_workflow(
         "trigger_type": trigger_type,
         "phase": current_phase,
         "created_task": created_task,
-        "plan_created": plan_path is not None,
+        "plan_created": any(path is not None for path in (spec_path, plan_md_path, tasks_path, contract_path)),
         "recommended_next_phases": recommend_next_phases(current_phase, trigger_type),
         "state_file": str(workflow_state_path(workdir)),
         "trajectory_session_id": state.session_id,
@@ -1202,6 +1404,52 @@ def advance_workflow(
 
     current_phase = state.phase.get("current", "IDLE")
     validate_transition(current_phase, phase)
+
+    # P2 ToT: Check if deliberation is warranted before complex transitions
+    deliberation_result: dict[str, Any] = {}
+    try:
+        from deliberate_mode import should_deliberate
+        # Determine trigger type based on phase transition context
+        deliberation_trigger = None
+        if phase == "EXECUTING" and current_phase in ("PLANNING", "ANALYZING"):
+            deliberation_trigger = "planning_conflict"
+        elif phase == "DEBUGGING":
+            deliberation_trigger = "debug_failure"
+        elif phase == "REVIEWING":
+            deliberation_trigger = "review_divergence"
+        # Check state metadata for high complexity
+        complexity = state.metadata.get("complexity", "") if state.metadata else ""
+        if complexity in ("L", "XL") and deliberation_trigger is None:
+            deliberation_trigger = "high_complexity"
+
+        if deliberation_trigger and should_deliberate(workdir, deliberation_trigger, state):
+            from deliberate_mode import deliberate
+            frontier = compute_frontier(workdir)
+            task_desc = state.task.description or state.task.title or "" if state.task else ""
+            context = {
+                "task_description": task_desc,
+                "frontier": frontier,
+            }
+            result = deliberate(workdir, deliberation_trigger, context)
+            deliberation_result = {
+                "trigger": result.trigger,
+                "recommended_branch": result.recommended_branch_id,
+                "branches": [
+                    {"id": b.branch_id, "title": b.title, "score": b.score, "confidence": b.confidence}
+                    for b in result.branches
+                ],
+                "path": result.deliberation_path,
+            }
+            # Log deliberation decision
+            if state.session_id in _active_loggers:
+                logger = _active_loggers[state.session_id]
+                logger.log_decision(
+                    f"Deliberation ({deliberation_trigger}): {len(result.branches)} branches considered",
+                    f"Recommended: {result.recommended_branch_id}",
+                )
+    except Exception:
+        # Deliberation is best-effort - don't block workflow
+        deliberation_result = {}
 
     # Log phase transition in trajectory
     if state.session_id in _active_loggers:
@@ -1303,7 +1551,9 @@ def advance_workflow(
                 "- Proceed to planning phase with verified research findings",
             ]
 
-            findings_path = Path(workdir) / f"findings_{session_id}.md"
+            findings_dir = ensure_findings_dir(workdir)
+            findings_path = findings_dir / f"findings_{session_id}.md"
+            findings_latest = findings_latest_path(workdir)
             engine_label = search_response.search_engine
             if search_response.search_engine == "duckduckgo":
                 engine_label = f"{search_response.search_engine} [DEGRADED - DuckDuckGo HTML fallback]"
@@ -1351,43 +1601,21 @@ def advance_workflow(
             if degraded_reason:
                 metadata["degraded_reason"] = degraded_reason
         else:
-            # Fall back to template-based findings (search failed or unavailable)
-            desc_lower = task_desc.lower()
-            findings_list = []
+            # Search failed or returned no usable results.
+            # Emit an explicit degraded report instead of pretending we found evidence.
+            search_note = search_response.error if search_response.error else "Search unavailable"
+            findings_dir = ensure_findings_dir(workdir)
+            findings_path = findings_dir / f"findings_{session_id}.md"
+            findings_latest = findings_latest_path(workdir)
 
-            # Generate specific findings based on what the task is asking about
-            if "最佳实践" in desc_lower or "best practice" in desc_lower:
-                findings_list.append(f"1. **Best Practices for {key_terms_str}**: Identified established patterns and approaches that represent current industry consensus for this domain.")
-            if "架构" in desc_lower or "architecture" in desc_lower:
-                findings_list.append(f"2. **Architectural Patterns for {key_terms_str}**: Found multiple architectural approaches with different trade-offs in complexity, scalability, and maintainability.")
-            if "安全" in desc_lower or "security" in desc_lower:
-                findings_list.append(f"3. **Security Considerations for {key_terms_str}**: Key security concerns and mitigation strategies documented based on common vulnerability patterns.")
-            if "性能" in desc_lower or "performance" in desc_lower:
-                findings_list.append(f"4. **Performance Optimization for {key_terms_str}**: Benchmark strategies and optimization opportunities identified for typical workloads.")
-            if "微服务" in desc_lower or "microservice" in desc_lower:
-                findings_list.append(f"5. **Microservice Considerations for {key_terms_str}**: Service decomposition strategies and inter-service communication patterns reviewed.")
-            if "数据库" in desc_lower or "database" in desc_lower or "db" in desc_lower:
-                findings_list.append(f"6. **Data Persistence for {key_terms_str}**: Database selection criteria and schema design considerations documented.")
-            if "容错" in desc_lower or "fault" in desc_lower or " resilience" in desc_lower:
-                findings_list.append(f"7. **Resilience Patterns for {key_terms_str}**: Fault tolerance strategies including retry, circuit breaker, and graceful degradation approaches reviewed.")
-
-            # If no specific aspects found, generate findings based on key terms
-            if not findings_list:
-                findings_list.append(f"1. **Domain Analysis of {key_terms_str}**: Research identified core concepts and fundamental approaches for this domain.")
-                findings_list.append(f"2. **Implementation Considerations for {key_terms_str}**: Key factors and potential challenges documented for implementation planning.")
-
-            # Generate recommendations based on findings
-            recommendations = []
-            if "架构" in desc_lower or "architecture" in desc_lower:
-                recommendations.append("- Select architectural pattern based on specific scalability and maintainability requirements")
-            if "安全" in desc_lower or "security" in desc_lower:
-                recommendations.append("- Prioritize security review before production deployment")
-            if "性能" in desc_lower or "performance" in desc_lower:
-                recommendations.append("- Establish performance benchmarks early in development cycle")
-            recommendations.append("- Proceed to planning phase with documented research findings")
-            recommendations.append("- Validate research conclusions against specific project requirements")
-
-            findings_path = Path(workdir) / f"findings_{session_id}.md"
+            findings_list = [
+                f"1. **No verifiable external sources for {key_terms_str}**: configured search providers returned no usable evidence for this research question.",
+            ]
+            recommendations = [
+                "- Re-run RESEARCH with a more specific query or narrower scope",
+                "- Verify external search access before relying on this result",
+                "- Fall back to manual source collection if search remains unavailable",
+            ]
             findings_content = f"""# Research Findings: {task_title}
 
 ## Research Question
@@ -1396,20 +1624,23 @@ def advance_workflow(
 ## Method
 - Research conducted at: {datetime.now().isoformat()}
 - Focus: {key_terms_str}
-- Note: Template-based analysis (web search unavailable)
+- Search status: degraded
+- Note: {search_note}
+
+## Evidence Status
+- No verifiable external sources were returned for this query
+- This report records the failure mode instead of fabricating findings
 
 ## Key Findings
 {chr(10).join(findings_list)}
 
 ## Conclusions
-- Research completed focusing on: {key_terms_str}
-- Findings provide actionable insights for implementation planning
-- Further validation against specific project constraints recommended
+- Research could not be validated with external sources
+- The current result should be treated as a degraded placeholder, not evidence-backed research
 
 ## Recommendations
 {chr(10).join(recommendations)}
 """
-            search_note = search_response.error if search_response.error else "Search unavailable"
             metadata = {
                 "deliverable": "findings",
                 "session_id": session_id,
@@ -1419,9 +1650,12 @@ def advance_workflow(
                 "key_terms": key_terms_str,
                 "search_error": search_note,
                 "used_real_search": False,
+                "degraded_mode": True,
+                "degraded_reason": search_note,
             }
 
         safe_write_text_locked(findings_path, findings_content)
+        safe_write_text_locked(findings_latest, findings_content)
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system", metadata=metadata)
 
     if current_phase == "REVIEWING" and phase != "REVIEWING":
@@ -1605,7 +1839,9 @@ def advance_workflow(
                 if contract.get("owned_files"):
                     contract_info += f"\n**Contract Files:** {', '.join(contract['owned_files'][:3])}\n"
 
-            review_path = Path(workdir) / f"review_{session_id}.md"
+            review_dir = ensure_review_dir(workdir)
+            review_path = review_dir / f"review_{session_id}.md"
+            review_latest = review_latest_path(workdir)
             degraded_note = ""
             if review_source == "workdir_scan":
                 degraded_note = """> **⚠️ Degraded Mode**: Review used workdir_scan fallback (no owned_files in tasks.md, .contract.json, task_plan.md, and no file_changes recorded). Results are less targeted than owned_files/file_changes directed review.
@@ -1693,7 +1929,9 @@ def advance_workflow(
             recommendations.append("- Verify implementation against specific acceptance criteria")
             recommendations.append("- Add integration tests for critical business paths")
 
-            review_path = Path(workdir) / f"review_{session_id}.md"
+            review_dir = ensure_review_dir(workdir)
+            review_path = review_dir / f"review_{session_id}.md"
+            review_latest = review_latest_path(workdir)
             review_content = f"""# Code Review: {task_title}
 
 ## Review Scope
@@ -1734,6 +1972,7 @@ def advance_workflow(
             }
 
         safe_write_text_locked(review_path, review_content)
+        safe_write_text_locked(review_latest, review_content)
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system", metadata=metadata)
 
     # Block COMPLETE transition if quality gate failed for code tasks
@@ -1798,6 +2037,17 @@ def advance_workflow(
             skill_name = skill.metadata.name
             register_artifact(workdir, ArtifactType.PROGRESS, str(skill_prompt_path), phase, "system",
                              metadata={"skill_name": skill_name, "phase": phase})
+            # SKILL0 P3: Record skill usage for telemetry
+            try:
+                from skill_telemetry import record_skill_usage
+                record_skill_usage(
+                    skill_name=skill_name,
+                    phase=phase,
+                    workdir=workdir,
+                    metadata={"session_id": session_id, "outcome": "loaded"},
+                )
+            except Exception:
+                pass  # Skill telemetry is best-effort
     except Exception:
         # Skill loading is best-effort - don't fail the phase transition
         pass
@@ -1816,6 +2066,12 @@ def advance_workflow(
     # Build context for next phase — what the AI should read before proceeding
     context_for_next_phase = _build_phase_context(phase, workdir, state.session_id or "unknown")
 
+    # Reflexion P1: Surface experience warning prominently if found
+    experience_warning = None
+    exp_check = context_for_next_phase.get("experience_check", {})
+    if isinstance(exp_check, dict) and exp_check.get("warning"):
+        experience_warning = exp_check["warning"]
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -1830,6 +2086,10 @@ def advance_workflow(
         "total_phases": total_phases,
         "complexity": state.metadata.get("complexity") if state.metadata else None,
         "context_for_next_phase": context_for_next_phase,
+        # Reflexion P1: Top-level experience warning for visibility
+        "experience_warning": experience_warning,
+        # P2 ToT: Deliberation result (if deliberation was triggered)
+        "deliberation": deliberation_result if deliberation_result else None,
     }
 
 
@@ -2235,6 +2495,10 @@ def handle_workflow_failure(
     if error_type == "syntax_error":
         strategy = "debugging"
         retry_hint = "syntax error cannot be fixed by retry"
+    else:
+        retry_hint = ""
+
+    reflection_artifact: dict[str, Any] = {}
 
     if strategy == "retry":
         # Get retry count and error history from decisions
@@ -2255,6 +2519,17 @@ def handle_workflow_failure(
             "retry_count": retry_count,
         })
         retry_hint = reflex.hint
+
+        reflection_artifact = _persist_failure_reflection(
+            workdir,
+            state,
+            error,
+            error_type,
+            confidence,
+            retry_hint,
+            strategy,
+            quality_gate_details=quality_gate_details,
+        )
 
         if error_type == "test_failure" and retry_count >= 1:
             # After one test failure retry, suggest debugging
@@ -2277,12 +2552,12 @@ def handle_workflow_failure(
                 metadata={
                     "retry_count": new_retry_count,
                     "error": error,
-                    "error_type": error_type,
-                    "error_confidence": confidence,
-                    "error_history": error_history,
-                    "reflection": reflex.reflection,
-                    "reflection_hint": retry_hint,
-                },
+                "error_type": error_type,
+                "error_confidence": confidence,
+                "error_history": error_history,
+                "reflection": reflex.reflection,
+                "reflection_hint": retry_hint,
+            },
             ))
             save_state(workdir, state)
 
@@ -2294,14 +2569,27 @@ def handle_workflow_failure(
                 "error_type": error_type,
                 "confidence": confidence,
                 "message": f"Retrying {current_phase} (attempt {new_retry_count}/{adjusted_max_retries})",
+                "reflection_recorded": bool(reflection_artifact),
             }
             if retry_hint:
                 result["retry_hint"] = retry_hint
             if quality_gate_details:
                 result["quality_gate_details"] = quality_gate_details
+            if reflection_artifact:
+                result.update(reflection_artifact)
             return result
 
     if strategy == "debugging":
+        reflection_artifact = _persist_failure_reflection(
+            workdir,
+            state,
+            error,
+            error_type,
+            confidence,
+            retry_hint,
+            strategy,
+            quality_gate_details=quality_gate_details,
+        )
         if can_transition(current_phase, "DEBUGGING"):
             state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")
             save_state(workdir, state)
@@ -2319,14 +2607,28 @@ def handle_workflow_failure(
                 "error": error,
                 "error_type": error_type,
                 "error_history": _get_error_history(state),
+                "reflection_recorded": bool(reflection_artifact),
+                **reflection_artifact,
             }
         else:
             return {
                 "success": False,
                 "error": f"Cannot transition from {current_phase} to DEBUGGING",
+                "reflection_recorded": bool(reflection_artifact),
+                **reflection_artifact,
             }
 
     if strategy == "abort":
+        reflection_artifact = _persist_failure_reflection(
+            workdir,
+            state,
+            error,
+            error_type,
+            confidence,
+            retry_hint,
+            strategy,
+            quality_gate_details=quality_gate_details,
+        )
         complete_workflow(workdir, "failed", error)
         return {
             "success": True,
@@ -2334,6 +2636,8 @@ def handle_workflow_failure(
             "final_state": "failed",
             "error": error,
             "error_type": error_type,
+            "reflection_recorded": bool(reflection_artifact),
+            **reflection_artifact,
         }
 
     return {"success": False, "error": f"Unknown strategy: {strategy}"}
@@ -2358,10 +2662,126 @@ def _extract_quality_gate_details(workdir: str) -> dict[str, Any] | None:
         return None
 
 
+def _persist_failure_reflection(
+    workdir: str,
+    state,
+    error: str,
+    error_type: str,
+    confidence: float,
+    retry_hint: str,
+    strategy: str,
+    quality_gate_details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist a Reflexion-style failure note into artifacts and long-term memory."""
+    from memory_longterm import record_reflection_experience, search_memory
+    from unified_state import ArtifactType, register_artifact
+
+    session_id = state.session_id or "unknown"
+    current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
+    task_title = state.task.title if state.task else "Unknown task"
+    task_desc = state.task.description if state.task else task_title
+    memory_path = str(Path(workdir) / "MEMORY.md")
+    memory_index_path = str(Path(workdir) / ".memory_index.jsonl")
+
+    try:
+        relevant_experiences = search_memory(
+            error,
+            filepath=memory_path,
+            scope="project",
+            limit=3,
+            intent="debug",
+        )
+    except Exception:
+        relevant_experiences = []
+
+    trigger = f"{current_phase}::{strategy}"
+    if quality_gate_details:
+        trigger = f"{trigger}::quality_gate"
+
+    signal_parts = [error_type]
+    if quality_gate_details and quality_gate_details.get("failed_checks"):
+        signal_parts.append(",".join(str(item) for item in quality_gate_details["failed_checks"][:3]))
+    signal = " | ".join(signal_parts)
+
+    next_hint = retry_hint or "inspect the failure and retry with tighter scope"
+    reflection_path = Path(workdir) / f"reflection_{session_id}.md"
+    reflection_content = f"""# Failure Reflection
+
+## Context
+- Session: {session_id}
+- Phase: {current_phase}
+- Strategy: {strategy}
+- Error Type: {error_type}
+- Confidence: {confidence:.2f}
+
+## Task
+{task_desc}
+
+## Reflection
+Task: {task_title}
+Trigger: {trigger}
+Mistake: {error[:500]}
+Fix: {next_hint}
+Signal: {signal}
+
+## Relevant Experiences
+"""
+    if relevant_experiences:
+        for item in relevant_experiences:
+            reflection_content += f"- {item}\n"
+    else:
+        reflection_content += "- None found\n"
+
+    reflection_content += f"""
+
+## Next Action
+{next_hint}
+"""
+
+    safe_write_text_locked(reflection_path, reflection_content)
+    register_artifact(
+        workdir,
+        ArtifactType.CUSTOM,
+        str(reflection_path),
+        current_phase,
+        "system",
+        metadata={
+            "kind": "reflection",
+            "error_type": error_type,
+            "confidence": confidence,
+            "strategy": strategy,
+            "relevant_experiences": relevant_experiences,
+        },
+    )
+
+    try:
+        record_reflection_experience(
+            task=task_desc,
+            trigger=trigger,
+            mistake=error[:500],
+            fix=next_hint,
+            signal=signal,
+            filepath=memory_path,
+            index_file=memory_index_path,
+            confidence=max(0.3, min(0.9, confidence if confidence else 0.7)),
+            scope="project",
+            tags=[error_type, current_phase.lower()],
+        )
+    except Exception:
+        pass
+
+    return {
+        "reflection_path": str(reflection_path),
+        "relevant_experiences": relevant_experiences,
+    }
+
+
 def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     state = load_state(workdir)
     tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
     task = None
+    plan_tasks, plan_source = load_planning_tasks(workdir)
+    next_tasks = next_plan_tasks(workdir)
 
     if state is None:
         return {
@@ -2369,17 +2789,23 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "valid": False,
             "errors": ["state file does not exist"],
             "recommended_next_phases": [],
-            "plan_tasks": [],
-            "next_plan_tasks": [],
+            "plan_tasks": plan_tasks,
+            "plan_source": plan_source,
+            "next_plan_tasks": next_tasks,
+            "context_for_next_phase": {
+                "files_to_read": [],
+                "summary": "",
+                "memory_query": "",
+                "memory_intent": "auto",
+                "memory_hints": [],
+            },
         }
 
     if state.task and state.task.task_id:
         task = task_tracker.get_task(state.task.task_id, str(tracker_path))
 
-    plan_tasks = parse_task_plan(workdir)
-    next_tasks = next_plan_tasks(workdir)
-
     current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
+    context_for_next_phase = _build_phase_context(current_phase, workdir, state.session_id or "unknown")
 
     # Load artifact registry for full audit trail
     from unified_state import _load_artifact_registry
@@ -2400,7 +2826,9 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "task": task,
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,
+        "plan_source": plan_source,
         "next_plan_tasks": next_tasks,
+        "context_for_next_phase": context_for_next_phase,
         "state_file": str(workflow_state_path(workdir)),
         # artifact_registry is the authoritative source - state.artifacts removed from interface
         "artifact_registry": artifact_registry.get("artifacts", []),
@@ -2500,7 +2928,8 @@ def main() -> int:
         return 0
 
     if args.op == "plan":
-        print(json.dumps({"tasks": parse_task_plan(args.workdir), "next_tasks": next_plan_tasks(args.workdir)}, ensure_ascii=False, indent=2))
+        tasks, source = load_planning_tasks(args.workdir)
+        print(json.dumps({"tasks": tasks, "next_tasks": next_plan_tasks(args.workdir), "plan_source": source}, ensure_ascii=False, indent=2))
         return 0
 
     if args.op == "frontier":

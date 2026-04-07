@@ -27,6 +27,9 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 3. `.specs/<feature>/tasks.md` - 可执行任务清单
 4. `.contract.json` - 履约契约（goals/verification/owned_files）
 
+在开始拆分前，优先检查当前 phase 上下文里的 `memory_hints`、`memory_query` 和 `memory_intent`。
+如果长期记忆里已经有相似失败、重复约束或已验证的修复模式，规划时应先复用这些经验，再决定是否新增任务。
+
 **兼容投影层** (legacy):
 - `task_plan.md` - 仍可读取，供旧 runtime/frontier 使用
 - 不再作为主要输出

@@ -26,5 +26,5 @@ status: disabled
 - `.specs/<feature>/plan.md`
 - `.specs/<feature>/tasks.md`
 - `.contract.json`
-- `findings_{session}.md`
-- `review_{session}.md`
+- `.research/findings/findings_{session}.md`
+- `.reviews/review/review_{session}.md`
