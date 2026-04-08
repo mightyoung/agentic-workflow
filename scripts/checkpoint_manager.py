@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from safe_io import safe_write_text_locked
+from memory_ops import get_thinking_summary as get_session_thinking_summary
 from unified_state import (
     get_failure_event_summary,
     get_planning_summary,
@@ -230,6 +231,8 @@ def conditional_checkpoint(
         team_state_for_handoff = None
 
     # Create checkpoint JSON (AgentSys P0: no raw outputs, only summaries)
+    session_state_path = Path(workdir) / "SESSION-STATE.md"
+    thinking_summary = get_session_thinking_summary(str(session_state_path))
     checkpoint_data = {
         "checkpoint_id": checkpoint_id,
         "session_id": session_id,
@@ -238,6 +241,7 @@ def conditional_checkpoint(
         "phase": current_phase,
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
+        "thinking_summary": thinking_summary,
         "review_summary": get_review_summary(workdir),
         "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
@@ -286,6 +290,18 @@ def conditional_checkpoint(
     # Build handoff content
     runtime_profile_summary = get_runtime_profile_summary(state)
     failure_event_summary = get_failure_event_summary(state)
+    if not thinking_summary and current_phase == "THINKING" and state.task:
+        try:
+            from runtime_profile import build_thinking_summary
+
+            task_desc = state.task.description or state.task.title or ""
+            runtime_complexity = runtime_profile_summary.get("complexity")
+            if not runtime_complexity and state.metadata:
+                runtime_complexity = state.metadata.get("complexity")
+            runtime_complexity = str(runtime_complexity or "M")
+            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+        except Exception:
+            thinking_summary = {}
 
     handoff_content = f"""# Checkpoint Handoff: {checkpoint_id}
 
@@ -316,6 +332,15 @@ def conditional_checkpoint(
 - Worktree recommended: {checkpoint_data['planning_summary'].get('worktree_recommended', False)}
 - Worktree reason: {checkpoint_data['planning_summary'].get('worktree_reason') or 'unset'}
 - Plan digest: {checkpoint_data['planning_summary'].get('plan_digest') or 'unset'}
+
+## THINKING Summary
+- Workflow label: {thinking_summary.get('workflow_label') or 'unset'}
+- Workflow: {thinking_summary.get('workflow') or 'unset'}
+- Major contradiction: {thinking_summary.get('major_contradiction') or 'unset'}
+- Stage judgment: {thinking_summary.get('stage_judgment') or 'unset'}
+- Local attack point: {thinking_summary.get('local_attack_point') or 'unset'}
+- Recommendation: {thinking_summary.get('recommendation') or 'unset'}
+- Memory hints count: {thinking_summary.get('memory_hints_count', 0)}
 
 ## Review Summary
 - Review found: {checkpoint_data['review_summary'].get('review_found', False)}

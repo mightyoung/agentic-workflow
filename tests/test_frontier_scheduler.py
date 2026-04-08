@@ -21,6 +21,7 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))  # noqa: E402
 
 import workflow_engine  # noqa: E402
+from memory_ops import update_thinking_summary  # noqa: E402
 from search_adapter import SearchResponse, SearchResult  # noqa: E402
 from team_agent import TeamAgent, WorkerType  # noqa: E402
 from unified_state import load_state, save_state  # noqa: E402
@@ -305,6 +306,67 @@ class TestConditionalCheckpoint(unittest.TestCase):
             self.assertIn("## Review Summary", handoff_content)
             self.assertIn("Failure events: 1", handoff_content)
             self.assertIn("Escalation events: 1", handoff_content)
+
+    def test_checkpoint_includes_thinking_summary(self):
+        """Checkpoint surfaces THINKING summary in JSON and handoff."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".workflow_state.json"
+            state_file.write_text(json.dumps({
+                "session_id": "test-session",
+                "phase": {
+                    "current": "THINKING",
+                    "history": [{"phase": "THINKING", "entered_at": "2026-04-01T00:00:00", "exited_at": None}]
+                },
+                "task": {
+                    "task_id": "T001",
+                    "title": "Test thinking task",
+                    "status": "in_progress",
+                    "description": "新项目启动：需要先判断主要矛盾",
+                    "priority": "P1",
+                    "owned_files": [],
+                    "dependencies": [],
+                    "verification": "",
+                    "created_at": "2026-04-01T00:00:00",
+                    "completed_at": None,
+                    "progress": 0
+                },
+                "decisions": [],
+                "file_changes": [],
+                "artifacts": [],
+                "metadata": {
+                    "complexity": "M"
+                },
+            }), encoding="utf-8")
+
+            session_state = Path(tmpdir) / "SESSION-STATE.md"
+            update_thinking_summary(
+                str(session_state),
+                {
+                    "workflow_label": "新项目启动",
+                    "workflow": "workflow_1_new_project",
+                    "major_contradiction": "目标完整性 vs 交付节奏",
+                    "stage_judgment": "战略防御",
+                    "local_attack_point": "最小可验证切口",
+                    "recommendation": "先做事实收集",
+                    "memory_hints_count": 2,
+                },
+            )
+
+            result = conditional_checkpoint(tmpdir)
+            self.assertTrue(result["checkpoint_saved"])
+
+            checkpoint_file = Path(tmpdir) / ".checkpoints" / f"{result['checkpoint_id']}.json"
+            checkpoint_json = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint_json["thinking_summary"]["workflow_label"], "新项目启动")
+            self.assertIn("目标完整性", checkpoint_json["thinking_summary"]["major_contradiction"])
+            self.assertEqual(checkpoint_json["thinking_summary"]["memory_hints_count"], 2)
+
+            handoff_file = Path(tmpdir) / f"handoff_{result['checkpoint_id']}.md"
+            handoff_content = handoff_file.read_text(encoding="utf-8")
+            self.assertIn("## THINKING Summary", handoff_content)
+            self.assertIn("Workflow label: 新项目启动", handoff_content)
+            self.assertIn("Major contradiction: 目标完整性 vs 交付节奏", handoff_content)
+            self.assertIn("Memory hints count: 2", handoff_content)
 
 
 class TestParsePhaseContract(unittest.TestCase):

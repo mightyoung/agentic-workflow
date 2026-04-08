@@ -429,6 +429,43 @@ def update_thinking_summary(
     return True
 
 
+def get_thinking_summary(path: str) -> dict[str, Any]:
+    """从 SESSION-STATE.md 读取 THINKING 摘要。"""
+    if not os.path.exists(path):
+        return {}
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = (
+        r"## THINKING摘要\n"
+        r"(?:- \*\*workflow_label\*\*: (.*)\n"
+        r"- \*\*workflow\*\*: (.*)\n"
+        r"- \*\*major_contradiction\*\*: (.*)\n"
+        r"- \*\*stage_judgment\*\*: (.*)\n"
+        r"- \*\*local_attack_point\*\*: (.*)\n"
+        r"- \*\*recommendation\*\*: (.*)\n"
+        r"- \*\*memory_hints_count\*\*: (\d+)\n)?"
+    )
+    match = re.search(pattern, content)
+    if not match:
+        return {}
+
+    groups = match.groups()
+    if not groups or len(groups) < 7 or groups[0] is None:
+        return {}
+
+    return {
+        "workflow_label": groups[0].strip(),
+        "workflow": groups[1].strip(),
+        "major_contradiction": groups[2].strip(),
+        "stage_judgment": groups[3].strip(),
+        "local_attack_point": groups[4].strip(),
+        "recommendation": groups[5].strip(),
+        "memory_hints_count": int(groups[6]),
+    }
+
+
 def update_resume_summary(
     path: str,
     resume_from: str,
