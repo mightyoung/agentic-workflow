@@ -41,7 +41,11 @@ from review_paths import (
     review_latest_path,
     review_session_path,
 )
-from runtime_profile import build_skill_context
+from runtime_profile import (
+    build_skill_context,
+    skill_policy_for_phase,
+    should_use_skill_for_phase,
+)
 from safe_io import safe_write_json, safe_write_text_locked
 from skill_loader import SkillPromptFormatter, load_skill
 from team_agent import TeamAgent
@@ -1220,14 +1224,20 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
     current_phase = _phase_display_name(trigger_type, routed_phase)
 
     # CHAT intent: direct answer, no skill needed
+    skill_policy = skill_policy_for_phase(current_phase, complexity, trigger_type)
+
     if trigger_type == "DIRECT_ANSWER":
         skill_context = ""
         tokens_expected = 500
         use_skill = False
     else:
-        # Build skill context inline using sunk PHASE_PROMPTS
-        skill_context, tokens_expected = build_skill_context(current_phase, complexity)
-        use_skill = True
+        use_skill = should_use_skill_for_phase(current_phase, complexity, trigger_type)
+        if use_skill:
+            # Build skill context inline using sunk PHASE_PROMPTS
+            skill_context, tokens_expected = build_skill_context(current_phase, complexity)
+        else:
+            skill_context = ""
+            tokens_expected = 500
 
     profile: dict[str, Any] = {
         "trigger_type": trigger_type,
@@ -1238,12 +1248,13 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         "skill_context": skill_context,
         "tokens_expected": tokens_expected,
         "use_skill": use_skill,
+        "skill_policy": skill_policy,
         "intent": None,
         "profile_source": "router",
     }
 
-    # Middleware signal overlay: FULL_WORKFLOW and CHAT override router defaults.
-    # This is kept for backward compatibility with the experimental middleware layer.
+    # Middleware signal overlay: when the experimental middleware layer is present,
+    # its normalized intent/skill policy can override router defaults.
     # ContextMiddleware / SkillMiddleware signals are now sunk into this function.
     try:
         request = MiddlewareRequest(text=prompt, metadata={"cwd": workdir})
@@ -1251,6 +1262,8 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
 
         if request.intent is not None:
             profile["intent"] = request.intent
+            profile["skill_policy"] = getattr(request, "skill_policy", profile["skill_policy"])
+            profile["profile_source"] = "middleware+router"
 
         if request.intent == "CHAT":
             profile["trigger_type"] = "DIRECT_ANSWER"
@@ -1258,6 +1271,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
             profile["use_skill"] = False
             profile["skill_context"] = ""
             profile["tokens_expected"] = 500
+            profile["skill_policy"] = "disable"
             profile["profile_source"] = "middleware+router"
         elif request.intent == "FULL_WORKFLOW":
             profile["trigger_type"] = "FULL_WORKFLOW"
@@ -1268,10 +1282,6 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
                     phase.value if hasattr(phase, "value") else str(phase)
                     for phase in request.metadata["phase_sequence"]
                 ]
-            # Override with middleware-built skill context for FULL_WORKFLOW
-            profile["skill_context"] = request.skill_context
-            profile["tokens_expected"] = request.tokens_expected
-            profile["use_skill"] = request.use_skill
             profile["profile_source"] = "middleware+router"
     except Exception:
         # Keep router-derived defaults when middleware is unavailable.
@@ -1437,6 +1447,7 @@ def initialize_workflow(
         "state_file": str(workflow_state_path(workdir)),
         "trajectory_session_id": state.session_id,
         "complexity": complexity,
+        "skill_policy": runtime_profile["skill_policy"],
         "skill_context": runtime_profile["skill_context"],
         "tokens_expected": runtime_profile["tokens_expected"],
         "use_skill": runtime_profile["use_skill"],

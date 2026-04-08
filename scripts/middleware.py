@@ -35,7 +35,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 
-from runtime_profile import build_skill_context, token_budget_for_complexity
+from runtime_profile import (
+    build_skill_context,
+    skill_policy_for_phase,
+    should_use_skill_for_phase,
+    token_budget_for_complexity,
+)
 
 # ============================================================================
 # 数据模型
@@ -78,6 +83,7 @@ class Request:
     skill_context: str = ""
     tokens_expected: int = 0
     use_skill: bool = True
+    skill_policy: str = ""
 
 
 @dataclass
@@ -197,9 +203,10 @@ class IntentMiddleware(MiddlewareProtocol):
         if any(neg in text_lower for neg in self.NEGATIVE_INTENTS):
             request.intent = "CHAT"
             request.use_skill = False
+            request.skill_policy = "disable"
             return MiddlewareResult(
                 continue_chain=False,
-                request_modifications={"intent": "CHAT", "use_skill": False},
+                request_modifications={"intent": "CHAT", "use_skill": False, "skill_policy": "disable"},
                 skip_reason="负面意图检测到"
             )
 
@@ -208,6 +215,12 @@ class IntentMiddleware(MiddlewareProtocol):
             request.intent = "FULL_WORKFLOW"
             request.phase = Phase.RESEARCH  # 从 RESEARCH 开始完整流程
             request.complexity = Complexity.XL
+            request.use_skill = should_use_skill_for_phase(
+                request.phase.value, request.complexity.value, request.intent
+            )
+            request.skill_policy = skill_policy_for_phase(
+                request.phase.value, request.complexity.value, request.intent
+            )
             request.metadata["phase_sequence"] = [
                 Phase.RESEARCH,
                 Phase.THINKING,
@@ -223,6 +236,8 @@ class IntentMiddleware(MiddlewareProtocol):
                     "intent": "FULL_WORKFLOW",
                     "phase": Phase.RESEARCH,
                     "complexity": Complexity.XL,
+                    "use_skill": request.use_skill,
+                    "skill_policy": request.skill_policy,
                     "phase_sequence": request.metadata["phase_sequence"],
                 },
             )
@@ -241,26 +256,40 @@ class IntentMiddleware(MiddlewareProtocol):
                 }
                 request.intent = intent_name
                 request.phase = phase_map.get(intent_name, Phase.EXECUTING)
-
-                # THINKING/RESEARCH 默认不需要skill (基于实验数据)
-                if intent_name in ["THINKING", "RESEARCH"]:
-                    request.use_skill = False
+                request.skill_policy = skill_policy_for_phase(
+                    request.phase.value, request.complexity.value, request.intent
+                )
+                request.use_skill = should_use_skill_for_phase(
+                    request.phase.value, request.complexity.value, request.intent
+                )
 
                 return MiddlewareResult(
                     continue_chain=True,
                     request_modifications={
                         "intent": intent_name,
                         "phase": request.phase,
-                        "use_skill": request.use_skill
+                        "use_skill": request.use_skill,
+                        "skill_policy": request.skill_policy,
                     }
                 )
 
         # 默认意图
         request.intent = "EXECUTE"
         request.phase = Phase.EXECUTING
+        request.skill_policy = skill_policy_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
+        request.use_skill = should_use_skill_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
         return MiddlewareResult(
             continue_chain=True,
-            request_modifications={"intent": "EXECUTE", "phase": Phase.EXECUTING}
+            request_modifications={
+                "intent": "EXECUTE",
+                "phase": Phase.EXECUTING,
+                "use_skill": request.use_skill,
+                "skill_policy": request.skill_policy,
+            }
         )
 
 
@@ -317,18 +346,20 @@ class ComplexityMiddleware(MiddlewareProtocol):
         phase_sequence = self._get_phase_sequence(request.complexity)
         request.metadata["phase_sequence"] = phase_sequence
 
-        # 简单任务决策:
-        # - XS/S + EXECUTING: 仍可使用skill (TDD有效, 66.7%胜率)
-        # - XS/S + DEBUGGING: 禁用skill (简单bug直接修复)
-        # - THINKING/RESEARCH: 在IntentMiddleware已禁用
-        if request.complexity in [Complexity.XS, Complexity.S] and request.phase == Phase.DEBUGGING:
-            request.use_skill = False
+        request.skill_policy = skill_policy_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
+        request.use_skill = should_use_skill_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
 
         return MiddlewareResult(
             continue_chain=True,
             request_modifications={
                 "complexity": request.complexity,
-                "phase_sequence": phase_sequence
+                "phase_sequence": phase_sequence,
+                "use_skill": request.use_skill,
+                "skill_policy": request.skill_policy,
             }
         )
 
@@ -370,7 +401,8 @@ class SkillMiddleware(MiddlewareProtocol):
                 continue_chain=True,
                 request_modifications={
                     "skill_context": "",
-                    "tokens_expected": 500
+                    "tokens_expected": 500,
+                    "skill_policy": request.skill_policy,
                 }
             )
 
@@ -392,7 +424,8 @@ class SkillMiddleware(MiddlewareProtocol):
             continue_chain=True,
             request_modifications={
                 "skill_context": prompt,
-                "tokens_expected": request.tokens_expected
+                "tokens_expected": request.tokens_expected,
+                "skill_policy": request.skill_policy,
             }
         )
 

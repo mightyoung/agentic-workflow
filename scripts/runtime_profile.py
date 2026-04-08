@@ -13,6 +13,16 @@ MINIMAL_CORE = """## 原则
 - 有证据再声称完成
 - 先验证再结论"""
 
+SKILL_POLICY_RECOMMENDATIONS = {
+    "EXECUTING": "default_enable",
+    "REVIEWING": "conditional_enable",
+    "DEBUGGING": "conditional_enable_after_optimization",
+    "RESEARCH": "defer_or_lighten",
+    "PLANNING": "defer",
+    "THINKING": "disable",
+    "FULL_WORKFLOW": "disable",
+}
+
 PHASE_PROMPTS = {
     "EXECUTING": """## EXECUTING 执行
 
@@ -140,3 +150,37 @@ def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
 def token_budget_for_complexity(complexity: str) -> int:
     """Return the shared token budget heuristic for a complexity level."""
     return COMPLEXITY_TOKENS.get(complexity, 1500)
+
+
+def skill_policy_for_phase(phase: str, complexity: str, intent: str | None = None) -> str:
+    """Return the recommended skill policy for a phase/complexity pair."""
+    phase = (phase or "").upper()
+    complexity = (complexity or "").upper()
+    intent = (intent or "").upper()
+
+    if phase == "CHAT" or intent == "FULL_WORKFLOW":
+        return "disable"
+    if phase == "DEBUGGING":
+        if complexity in {"XS", "S"}:
+            return "conditional_enable_after_optimization"
+        return SKILL_POLICY_RECOMMENDATIONS["DEBUGGING"]
+    if phase == "REVIEWING":
+        if complexity in {"XS", "S"}:
+            return "conditional_enable"
+        return SKILL_POLICY_RECOMMENDATIONS["REVIEWING"]
+    return SKILL_POLICY_RECOMMENDATIONS.get(phase, "default_enable")
+
+
+def should_use_skill_for_phase(phase: str, complexity: str, intent: str | None = None) -> bool:
+    """Return the default skill on/off decision for a phase/complexity pair."""
+    phase = (phase or "").upper()
+    complexity = (complexity or "").upper()
+    intent = (intent or "").upper()
+
+    if phase in {"CHAT", "THINKING", "RESEARCH", "PLANNING"} or intent == "FULL_WORKFLOW":
+        return False
+    if phase == "DEBUGGING":
+        return complexity not in {"XS", "S"}
+    if phase == "REVIEWING":
+        return complexity not in {"XS", "S"}
+    return True

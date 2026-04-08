@@ -182,7 +182,7 @@ class MiddlewareOrchestrationTester:
             Request(text="帮我做一个项目计划"),
             [
                 ("intent", "PLANNING"),
-                ("use_skill", True),
+                ("use_skill", False),
             ]
         )
 
@@ -204,7 +204,7 @@ class MiddlewareOrchestrationTester:
             [
                 ("intent", "FULL_WORKFLOW"),
                 ("phase", Phase.RESEARCH),
-                ("use_skill", True),
+                ("use_skill", False),
             ]
         )
 

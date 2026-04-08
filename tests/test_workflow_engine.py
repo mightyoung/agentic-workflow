@@ -79,9 +79,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(result["phase"], "RESEARCH")
         self.assertEqual(result["complexity"], "XL")
         self.assertEqual(result["profile_source"], "middleware+router")
-        self.assertTrue(result["use_skill"])
+        self.assertFalse(result["use_skill"])
         self.assertGreater(result["tokens_expected"], 0)
-        self.assertIn("RESEARCH", result["skill_context"])
+        self.assertEqual(result["skill_policy"], "disable")
+        self.assertEqual(result["skill_context"], "")
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
