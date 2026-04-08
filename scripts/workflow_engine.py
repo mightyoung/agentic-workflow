@@ -1262,7 +1262,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         tokens_expected = 500
         use_skill = False
     else:
-        use_skill = should_use_skill_for_phase(current_phase, complexity, trigger_type)
+        use_skill = should_use_skill_for_phase(current_phase, complexity, trigger_type, prompt)
         if use_skill:
             # Build skill context inline using sunk PHASE_PROMPTS
             skill_context, tokens_expected = build_skill_context(current_phase, complexity)
@@ -1271,7 +1271,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
             tokens_expected = 500
 
     skill_activation_level = (
-        skill_activation_level_for_phase(current_phase, complexity, trigger_type) if use_skill else 0
+        skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
     )
 
     profile: dict[str, Any] = {
@@ -1324,7 +1324,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
                 ]
             profile["profile_source"] = "middleware+router"
             profile["skill_activation_level"] = 0 if not profile["use_skill"] else skill_activation_level_for_phase(
-                profile["phase"], profile["complexity"], profile["intent"]
+                profile["phase"], profile["complexity"], profile["intent"], prompt
             )
     except Exception:
         # Keep router-derived defaults when middleware is unavailable.

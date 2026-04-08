@@ -150,6 +150,47 @@ COMPLEXITY_TOKENS = {
     "XL": 2500,
 }
 
+DEBUGGING_LOCAL_HINTS = (
+    "单文件",
+    "单个文件",
+    "单点",
+    "局部",
+    "小修复",
+    "小改动",
+    "微调",
+    "这个 bug",
+    "这个bug",
+    "这个错误",
+    "one file",
+    "single file",
+    "minor fix",
+    "small fix",
+)
+
+DEBUGGING_GLOBAL_HINTS = (
+    "系统",
+    "架构",
+    "重构",
+    "全局",
+    "多文件",
+    "多处",
+    "全链路",
+    "大改",
+    "migration",
+    "refactor",
+    "architecture",
+)
+
+
+def _is_local_debugging_task(task_text: str | None) -> bool:
+    """Heuristic for debugging tasks that are likely local/simple repairs."""
+    text = (task_text or "").strip().lower()
+    if not text:
+        return False
+    if any(hint in text for hint in DEBUGGING_GLOBAL_HINTS):
+        return False
+    return any(hint in text for hint in DEBUGGING_LOCAL_HINTS)
+
 
 def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
     """Build skill context and expected tokens from phase and complexity."""
@@ -246,13 +287,18 @@ def skill_policy_for_phase(phase: str, complexity: str, intent: str | None = Non
     return SKILL_POLICY_RECOMMENDATIONS.get(phase, "default_enable")
 
 
-def skill_activation_level_for_phase(phase: str, complexity: str, intent: str | None = None) -> int:
+def skill_activation_level_for_phase(
+    phase: str,
+    complexity: str,
+    intent: str | None = None,
+    task_text: str | None = None,
+) -> int:
     """Return the default skill activation level for a phase/complexity pair."""
     phase = (phase or "").upper()
     complexity = (complexity or "").upper()
     intent = (intent or "").upper()
 
-    if not should_use_skill_for_phase(phase, complexity, intent):
+    if not should_use_skill_for_phase(phase, complexity, intent, task_text):
         return 0
     if phase == "EXECUTING":
         return 75 if complexity not in {"XS", "S"} else 50
@@ -274,7 +320,12 @@ def escalate_skill_activation_level(current_level: int) -> int:
     return 100
 
 
-def should_use_skill_for_phase(phase: str, complexity: str, intent: str | None = None) -> bool:
+def should_use_skill_for_phase(
+    phase: str,
+    complexity: str,
+    intent: str | None = None,
+    task_text: str | None = None,
+) -> bool:
     """Return the default skill on/off decision for a phase/complexity pair."""
     phase = (phase or "").upper()
     complexity = (complexity or "").upper()
@@ -283,7 +334,11 @@ def should_use_skill_for_phase(phase: str, complexity: str, intent: str | None =
     if phase in {"CHAT", "THINKING", "RESEARCH", "PLANNING"} or intent == "FULL_WORKFLOW":
         return False
     if phase == "DEBUGGING":
-        return complexity not in {"XS", "S"}
+        if complexity in {"XS", "S"}:
+            return False
+        if _is_local_debugging_task(task_text):
+            return False
+        return True
     if phase == "REVIEWING":
         return complexity not in {"XS", "S"}
     return True

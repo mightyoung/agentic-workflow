@@ -135,6 +135,16 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(runtime_profile.skill_activation_level_for_phase("EXECUTING", "M"), 75)
         self.assertEqual(runtime_profile.skill_activation_level_for_phase("DEBUGGING", "M"), 25)
 
+    def test_runtime_profile_degrades_local_debugging_tasks(self):
+        local_debug_text = "修复这个单文件 bug 并补一个回归"
+        self.assertFalse(
+            runtime_profile.should_use_skill_for_phase("DEBUGGING", "M", "DEBUGGING", local_debug_text)
+        )
+        self.assertEqual(
+            runtime_profile.skill_activation_level_for_phase("DEBUGGING", "M", "DEBUGGING", local_debug_text),
+            0,
+        )
+
     def test_runtime_profile_shrinks_planning_and_debugging_prompts(self):
         planning_prompt, planning_tokens = runtime_profile.build_skill_context("PLANNING", "XS")
         debugging_light_prompt, debugging_light_tokens = runtime_profile.build_skill_context("DEBUGGING", "XS")

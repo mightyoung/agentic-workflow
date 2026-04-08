@@ -224,13 +224,13 @@ class IntentMiddleware(MiddlewareProtocol):
             request.phase = Phase.RESEARCH  # 从 RESEARCH 开始完整流程
             request.complexity = Complexity.XL
             request.use_skill = should_use_skill_for_phase(
-                request.phase.value, request.complexity.value, request.intent
+                request.phase.value, request.complexity.value, request.intent, request.text
             )
             request.skill_policy = skill_policy_for_phase(
                 request.phase.value, request.complexity.value, request.intent
             )
             request.skill_activation_level = skill_activation_level_for_phase(
-                request.phase.value, request.complexity.value, request.intent
+                request.phase.value, request.complexity.value, request.intent, request.text
             )
             request.metadata["phase_sequence"] = [
                 Phase.RESEARCH,
@@ -272,10 +272,10 @@ class IntentMiddleware(MiddlewareProtocol):
                     request.phase.value, request.complexity.value, request.intent
                 )
                 request.use_skill = should_use_skill_for_phase(
-                    request.phase.value, request.complexity.value, request.intent
+                    request.phase.value, request.complexity.value, request.intent, request.text
                 )
                 request.skill_activation_level = skill_activation_level_for_phase(
-                    request.phase.value, request.complexity.value, request.intent
+                    request.phase.value, request.complexity.value, request.intent, request.text
                 )
 
                 return MiddlewareResult(
@@ -296,10 +296,10 @@ class IntentMiddleware(MiddlewareProtocol):
             request.phase.value, request.complexity.value, request.intent
         )
         request.use_skill = should_use_skill_for_phase(
-            request.phase.value, request.complexity.value, request.intent
+            request.phase.value, request.complexity.value, request.intent, request.text
         )
         request.skill_activation_level = skill_activation_level_for_phase(
-            request.phase.value, request.complexity.value, request.intent
+            request.phase.value, request.complexity.value, request.intent, request.text
         )
         return MiddlewareResult(
             continue_chain=True,
@@ -372,10 +372,10 @@ class ComplexityMiddleware(MiddlewareProtocol):
             request.phase.value, request.complexity.value, request.intent
         )
         request.use_skill = should_use_skill_for_phase(
-            request.phase.value, request.complexity.value, request.intent
+            request.phase.value, request.complexity.value, request.intent, request.text
         )
         request.skill_activation_level = skill_activation_level_for_phase(
-            request.phase.value, request.complexity.value, request.intent
+            request.phase.value, request.complexity.value, request.intent, request.text
         )
 
         return MiddlewareResult(
@@ -446,7 +446,7 @@ class SkillMiddleware(MiddlewareProtocol):
 
         request.tokens_expected = max(token_budget_for_complexity(request.complexity.value), tokens)
         request.skill_activation_level = skill_activation_level_for_phase(
-            request.phase.value, request.complexity.value, request.intent
+            request.phase.value, request.complexity.value, request.intent, request.text
         )
 
         request.skill_context = prompt
