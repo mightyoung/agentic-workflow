@@ -674,11 +674,13 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
     planning_summary: dict[str, Any] = {}
     review_summary: dict[str, Any] = {}
     try:
-        from memory_ops import get_planning_summary, get_review_summary, get_thinking_summary
+        from memory_ops import get_planning_summary, get_review_summary
+        from unified_state import get_thinking_summary as get_state_thinking_summary, load_state
 
-        thinking_summary = get_thinking_summary(str(Path(workdir) / "SESSION-STATE.md"))
-        planning_summary = get_planning_summary(str(Path(workdir) / "SESSION-STATE.md"))
-        review_summary = get_review_summary(str(Path(workdir) / "SESSION-STATE.md"))
+        session_state = str(Path(workdir) / "SESSION-STATE.md")
+        planning_summary = get_planning_summary(session_state)
+        review_summary = get_review_summary(session_state)
+        thinking_summary = get_state_thinking_summary(workdir, load_state(workdir))
     except Exception:
         thinking_summary = {}
         planning_summary = {}

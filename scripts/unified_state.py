@@ -429,7 +429,8 @@ def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> di
     if state is None:
         return {}
 
-    if state.phase.get("current") != "THINKING" or not state.task:
+    current_phase = state.phase.get("current") if state.phase else "IDLE"
+    if current_phase in {"COMPLETE", "failed", "aborted", "IDLE"} or not state.task:
         return {}
 
     try:

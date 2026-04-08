@@ -947,6 +947,26 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 
+    def test_resume_workflow_falls_back_when_thinking_sidecar_is_placeholder(self):
+        """Thinking summary should fall back to live state when sidecar is placeholder."""
+        init_result = workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        update_thinking_summary(
+            str(Path(self.temp_dir) / "SESSION-STATE.md"),
+            {},
+        )
+
+        result = workflow_engine.resume_workflow(self.temp_dir, init_result["session_id"])
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
+        self.assertEqual(result["thinking_summary"]["major_contradiction"], "事实 vs 假设")
+        self.assertEqual(result["thinking_summary"]["stage_judgment"], "战术速决")
+
+        resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
+        self.assertIsNotNone(resumed_trajectory)
+        assert resumed_trajectory is not None
+        self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
+
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
