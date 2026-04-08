@@ -2623,7 +2623,9 @@ def resume_workflow(
     if state is not None:
         runtime_profile_summary = get_runtime_profile_summary(state)
         failure_event_summary = get_failure_event_summary(state)
-        planning_summary = get_planning_summary(workdir, state)
+        state_planning_summary = get_planning_summary(workdir, state)
+        if not planning_summary or planning_summary.get("plan_source") in {None, "", "none"}:
+            planning_summary = state_planning_summary
         # 记录恢复决策
         from datetime import datetime
 
@@ -2655,7 +2657,7 @@ def resume_workflow(
     else:
         runtime_profile_summary = {}
         failure_event_summary = {}
-        planning_summary = get_planning_summary(workdir, None)
+        planning_summary = planning_summary or get_planning_summary(workdir, None)
 
     session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
     memory_ops.update_resume_summary(
