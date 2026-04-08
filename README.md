@@ -20,7 +20,7 @@ This section describes what actually works **today** via the scripts layer.
 | OFFICE-HOURS | ✅ | — | Product consultation |
 | EXPLORING | ✅ | — | Socratic deep exploration |
 | RESEARCH | ✅ | .research/findings/findings_{session}.md | Web search → findings report (policy: defer_or_lighten, activation: 0%, also writes .research/findings/findings_latest.md) |
-| THINKING | ✅ | — | Expert reasoning (policy: disable by default, activation: 0%) |
+| THINKING | ✅ | — | Expert reasoning with调查研究/矛盾分析/持久战略 summaries (policy: disable by default, activation: 0%) |
 | PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | File-first task breakdown; XS/S use lightweight progress only (policy: defer, activation: 0%) |
 | EXECUTING | ✅ | — | TDD-driven implementation (policy: default_enable, activation: 50%-75% by complexity) |
 | REVIEWING | ✅ | .reviews/review/review_{session}.md | Two-stage review: spec compliance + code quality, file-targeted before repo-wide fallback (policy: conditional_enable, activation: 50%, also writes .reviews/review/review_latest.md) |

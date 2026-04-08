@@ -43,6 +43,7 @@ from review_paths import (
 )
 from runtime_profile import (
     build_skill_context,
+    build_thinking_summary,
     debugging_activation_level_for_context,
     escalate_skill_activation_level,
     should_use_skill_for_phase,
@@ -500,6 +501,12 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     if not task_text:
         task_text = session_id
 
+    complexity = ""
+    if state and state.metadata:
+        complexity = str(state.metadata.get("complexity") or "")
+    if not complexity and task_text:
+        complexity, _ = router.estimate_complexity(task_text)
+
     if current_phase in ("PLANNING", "THINKING"):
         memory_intent = "plan"
     elif current_phase == "REVIEWING":
@@ -548,6 +555,28 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     except Exception:
         pass  # MAGMA views are best-effort
 
+    # Reflexion P1: Pre-flight experience check before high-stakes phases
+    # This retrieves actionable experience from the ledger before planning/review/debug
+    experience_check: dict[str, Any] = {
+        "has_relevant_experience": False,
+        "recommendations": [],
+        "warning": None,
+        "patterns_found": 0,
+    }
+    if current_phase in ("PLANNING", "REVIEWING", "DEBUGGING", "EXECUTING", "ANALYZING", "THINKING"):
+        try:
+            from experience_ledger import check_experience_before_action
+            experience_check = check_experience_before_action(
+                phase=current_phase,
+                context=task_text,
+                workdir=workdir,
+            )
+        except Exception:
+            # Experience ledger is best-effort - don't fail the workflow
+            pass
+
+    thinking_summary: dict[str, Any] = {}
+
     if current_phase == "RESEARCH":
         # RESEARCH produces findings — THINKING should read them
         findings = findings_session_path(workdir_path, session_id)
@@ -581,36 +610,24 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
 
     elif current_phase == "THINKING":
         # THINKING produces analysis — PLANNING should use conclusions
-        summary = "Analysis complete. Use conclusions to inform task planning."
+        thinking_summary = build_thinking_summary(task_text, complexity or "M", memory_hints, experience_check)
+        summary = (
+            f"{thinking_summary.get('workflow_label', 'THINKING')}："
+            f"调查研究 → 矛盾分析 → 群众路线 → 持久战略。"
+            f"当前阶段: {thinking_summary.get('stage_judgment', '战术速决')}。"
+            f"主要矛盾: {thinking_summary.get('major_contradiction', '事实 vs 假设')}。"
+            f"局部攻坚点: {thinking_summary.get('local_attack_point', '先找最小可验证切口')}。"
+        )
 
     if memory_hints and summary:
         summary += " Relevant long-term memory is available."
     elif memory_hints:
         summary = "Relevant long-term memory is available."
 
-    # Reflexion P1: Pre-flight experience check before high-stakes phases
-    # This retrieves actionable experience from the ledger before planning/review/debug
-    experience_check: dict[str, Any] = {
-        "has_relevant_experience": False,
-        "recommendations": [],
-        "warning": None,
-        "patterns_found": 0,
-    }
-    if current_phase in ("PLANNING", "REVIEWING", "DEBUGGING", "EXECUTING", "ANALYZING"):
-        try:
-            from experience_ledger import check_experience_before_action
-            experience_check = check_experience_before_action(
-                phase=current_phase,
-                context=task_text,
-                workdir=workdir,
-            )
-        except Exception:
-            # Experience ledger is best-effort - don't fail the workflow
-            pass
-
     return {
         "files_to_read": files_to_read,
         "summary": summary,
+        "thinking_summary": thinking_summary if current_phase == "THINKING" else {},
         "memory_query": memory_query,
         "memory_intent": memory_intent,
         "memory_hints": memory_hints,
@@ -1690,6 +1707,14 @@ def advance_workflow(
         str(session_path),
         get_planning_summary(workdir, state),
     )
+    if current_phase == "THINKING":
+        task_desc = state.task.description if state.task else (state.task.title if state.task else "")
+        runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
+        thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+        memory_ops.update_thinking_summary(
+            str(session_path),
+            thinking_summary,
+        )
 
     if task_status:
         task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))
@@ -3214,9 +3239,16 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "context_for_next_phase": {
                 "files_to_read": [],
                 "summary": "",
+                "thinking_summary": {},
                 "memory_query": "",
                 "memory_intent": "auto",
                 "memory_hints": [],
+                "experience_check": {
+                    "has_relevant_experience": False,
+                    "recommendations": [],
+                    "warning": None,
+                    "patterns_found": 0,
+                },
             },
         }
 

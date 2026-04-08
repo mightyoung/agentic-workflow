@@ -24,7 +24,7 @@ YOU CANNOT SKIP THIS CHECK. Even "simple" tasks escalate.
 | 复杂任务/完整流程 | 开发/构建/设计/实现 | RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE |
 | Bug修复 | bug/错误/调试/失败/报错 | DEBUGGING → EXECUTING → COMPLETE |
 | 项目规划 | 计划/规划/拆分/架构 | PLANNING → EXECUTING |
-| 技术调研 | 最佳实践/选型/怎么做/调研 | RESEARCH → THINKING |
+| 技术调研 | 最佳实践/选型/怎么做/调研 | RESEARCH → THINKING（调查研究 → 矛盾分析 → 阶段判断） |
 | 代码审查 | 审查/review/检查/分析 | REVIEWING |
 | 继续上次 | 继续/resume/恢复 | 读 `.workflow_state.json` 恢复 |
 | 简单任务 | 其他（单文件改动/明确小任务） | 直接 EXECUTING |
@@ -48,7 +48,7 @@ YOU CANNOT SKIP THIS CHECK. Even "simple" tasks escalate.
 | 当前阶段 | 必须传给下一阶段 |
 |---------|----------------|
 | RESEARCH | `.research/findings/findings_{session}.md`（优先）或 `.research/findings/findings_latest.md` — THINKING 开始前读取 |
-| THINKING | 分析结论 → PLANNING 基于结论创建 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
+| THINKING | 调查结论 / 主要矛盾 / 阶段判断 / 局部攻坚点 → PLANNING 基于结论创建 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
 | PLANNING | `.specs/<feature>/tasks.md` / `.contract.json` → EXECUTING 逐项执行；`task_plan.md` 仅 legacy fallback |
 | EXECUTING | 代码变更 → REVIEWING 运行 `git diff` |
 | REVIEWING | `.reviews/review/review_{session}.md`（优先）或 `.reviews/review/review_latest.md` → REFINING 针对性修复 |

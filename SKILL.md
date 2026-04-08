@@ -48,7 +48,7 @@ requires:
 | DEBUGGING | conditional_enable_after_optimization | 0%-25% | 小任务 0%，复杂故障 25%，先轻量排障，重复失败再升级 |
 | RESEARCH | defer_or_lighten | 0% | 仅在需要外部事实时启用 |
 | PLANNING | defer | 0% | XS/S 走 file-first 轻量计划，复杂任务再提升 |
-| THINKING | disable | 0% | 默认禁用 |
+| THINKING | disable | 0% | 默认禁用；但其阶段输出应包含调查结论、主要矛盾、阶段判断、局部攻坚点 |
 | FULL_WORKFLOW | disable | 0% | 由各阶段分别决策，不直接整体开启 |
 
 失败后，runtime 会把启用中的 skill 激活档位从当前档位逐步升级到 75%/100%，避免一开始就全量注入。
@@ -70,7 +70,7 @@ requires:
 | 当前阶段 | 下一阶段 | 必读内容 |
 |---|---|---|
 | RESEARCH | THINKING | 读 `.research/findings/findings_{session}.md`（优先）或 `.research/findings/findings_latest.md` |
-| THINKING | PLANNING | 先读当前 phase 上下文里的 `memory_hints` / `memory_query` / `memory_intent`，再基于分析结论拆分任务，生成 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
+| THINKING | PLANNING | 先读当前 phase 上下文里的 `memory_hints` / `memory_query` / `memory_intent`，再输出调查结论/主要矛盾/阶段判断/局部攻坚点，最后基于分析结论拆分任务，生成 `.specs/<feature>/spec.md / plan.md / tasks.md / .contract.json` |
 | PLANNING | EXECUTING | 逐项执行 `.specs/<feature>/tasks.md`；如有 `memory_hints`，优先复用历史失败模式与约束；`task_plan.md` 仅在 legacy 兼容场景投影 |
 | EXECUTING | REVIEWING | 运行 `git diff` 查看代码变更，必要时参考 `memory_hints` 避免重复踩已知失败模式，并更新 `.contract.json` |
 | REVIEWING | REFINING | 针对 issues 逐项修复，先检查 `memory_hints` / `memory_query` / `memory_intent`，再产出 `.reviews/review/review_{session}.md` |

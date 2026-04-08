@@ -171,6 +171,7 @@ class TestWorkflowEngine(unittest.TestCase):
         planning_prompt, planning_tokens = runtime_profile.build_skill_context("PLANNING", "XS")
         debugging_light_prompt, debugging_light_tokens = runtime_profile.build_skill_context("DEBUGGING", "XS")
         debugging_deep_prompt, debugging_deep_tokens = runtime_profile.build_skill_context("DEBUGGING", "M")
+        thinking_prompt, thinking_tokens = runtime_profile.build_skill_context("THINKING", "M")
 
         self.assertIn("轻量", planning_prompt)
         self.assertIn("progress", planning_prompt)
@@ -181,6 +182,33 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("回归测试", debugging_deep_prompt)
         self.assertEqual(debugging_light_tokens, 500)
         self.assertEqual(debugging_deep_tokens, 1000)
+        self.assertIn("调查研究", thinking_prompt)
+        self.assertIn("矛盾分析", thinking_prompt)
+        self.assertIn("群众路线", thinking_prompt)
+        self.assertIn("持久战略", thinking_prompt)
+        self.assertIn("主要矛盾", thinking_prompt)
+        self.assertIn("局部攻坚点", thinking_prompt)
+        self.assertEqual(thinking_tokens, 1000)
+
+    def test_thinking_context_includes_qiushi_summary(self):
+        workflow_engine.initialize_workflow("从零开始设计一个新系统", workdir=self.temp_dir)
+
+        result = workflow_engine.advance_workflow(
+            "THINKING",
+            workdir=self.temp_dir,
+            progress=30,
+            note="thinking summary check",
+        )
+
+        self.assertEqual(result["phase"], "THINKING")
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        thinking_summary = snapshot["context_for_next_phase"]["thinking_summary"]
+        self.assertEqual(thinking_summary["workflow_label"], "新项目启动")
+        self.assertIn("目标完整性", thinking_summary["major_contradiction"])
+        self.assertIn("最小可验证", thinking_summary["local_attack_point"])
+        self.assertIn("战略", thinking_summary["stage_judgment"])
+        self.assertIn("调查研究", snapshot["context_for_next_phase"]["summary"])
+        self.assertIn("群众路线", snapshot["context_for_next_phase"]["summary"])
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)

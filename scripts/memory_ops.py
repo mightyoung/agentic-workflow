@@ -87,6 +87,15 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **worktree_reason**: (未设置)
 - **plan_digest**: (未设置)
 
+## THINKING摘要
+- **workflow_label**: (未设置)
+- **workflow**: (未设置)
+- **major_contradiction**: (未设置)
+- **stage_judgment**: (未设置)
+- **local_attack_point**: (未设置)
+- **recommendation**: (未设置)
+- **memory_hints_count**: 0
+
 ## 恢复摘要
 - **original_session_id**: (未设置)
 - **resume_from**: (未设置)
@@ -376,6 +385,43 @@ def update_planning_summary(
         insert_after = r"(\## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?)"
         if re.search(insert_after, content):
             content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
+        else:
+            content += "\n" + section + "\n"
+
+    safe_write_text_locked(path, content)
+    return True
+
+
+def update_thinking_summary(
+    path: str,
+    thinking_summary: dict[str, Any] | None,
+) -> bool:
+    """更新 THINKING 摘要到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    thinking_summary = thinking_summary or {}
+    section = (
+        "## THINKING摘要\n"
+        f"- **workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
+        f"- **workflow**: {thinking_summary.get('workflow', '(未设置)')}\n"
+        f"- **major_contradiction**: {thinking_summary.get('major_contradiction', '(未设置)')}\n"
+        f"- **stage_judgment**: {thinking_summary.get('stage_judgment', '(未设置)')}\n"
+        f"- **local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
+        f"- **recommendation**: {thinking_summary.get('recommendation', '(未设置)')}\n"
+        f"- **memory_hints_count**: {thinking_summary.get('memory_hints_count', 0)}\n"
+    )
+
+    pattern = r"## THINKING摘要\n(?:- \*\*workflow_label\*\*: .*\n- \*\*workflow\*\*: .*\n- \*\*major_contradiction\*\*: .*\n- \*\*stage_judgment\*\*: .*\n- \*\*local_attack_point\*\*: .*\n- \*\*recommendation\*\*: .*\n- \*\*memory_hints_count\*\*: .*\n)?"
+    if re.search(pattern, content):
+        content = re.sub(pattern, section, content, count=1)
+    else:
+        marker = "\n## 恢复摘要\n"
+        if marker in content:
+            content = content.replace(marker, f"\n{section}\n## 恢复摘要\n", 1)
         else:
             content += "\n" + section + "\n"
 

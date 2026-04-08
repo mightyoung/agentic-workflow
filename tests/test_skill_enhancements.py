@@ -166,6 +166,11 @@ class TestSkillCrossConsistency(unittest.TestCase):
         self.assertLess(pos_neg05, pos_0)
         self.assertLess(pos_0, pos_1)
 
+    def test_thinking_borrows_qiushi_methods(self):
+        content = _read_skill("thinking")
+        for token in ["调查研究", "矛盾分析", "群众路线", "持久战略", "主要矛盾", "局部攻坚点"]:
+            self.assertIn(token, content)
+
     def test_executing_section_order(self):
         """Sections 1.5 → 1.5.1 → 2 → 2.5 → 2.7 → 3."""
         content = _read_skill("executing")

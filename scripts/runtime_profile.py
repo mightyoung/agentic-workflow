@@ -8,6 +8,8 @@ heuristics so the authoritative runtime and middleware prototype do not drift.
 
 from __future__ import annotations
 
+from typing import Any
+
 MINIMAL_CORE = """## 原则
 - 回答简洁,不废话
 - 有证据再声称完成
@@ -77,9 +79,17 @@ PHASE_PROMPTS = {
 
 **Mandatory Think**: 重大决策(git操作,阶段转换)前必须思考
 
+**求是式四步法**:
+1. 调查研究: 先收集代码、测试、日志、git history、用户反馈等第一手事实
+2. 矛盾分析: 找出主要矛盾、次要矛盾和矛盾的主要方面
+3. 群众路线: 把多源事实集中、归纳、再返回验证
+4. 持久战略: 判断当前阶段(防御/相持/反攻)与局部攻坚点
+
 回答:
-- 本质: [一句话]
-- 权衡: [最多3观点,各20字]
+- 调查结论: [一句话]
+- 主要矛盾: [A vs B]
+- 阶段判断: [战略防御/相持/反攻]
+- 局部攻坚点: [具体可做的小切口]
 - 建议: [1个明确建议]""",
     "RESEARCH": """## RESEARCH 搜索研究
 
@@ -181,6 +191,44 @@ DEBUGGING_GLOBAL_HINTS = (
     "architecture",
 )
 
+THINKING_NEW_PROJECT_HINTS = (
+    "从零开始",
+    "新项目",
+    "新系统",
+    "系统设计",
+    "架构设计",
+    "启动",
+    "landing",
+    "new project",
+    "from scratch",
+)
+
+THINKING_COMPLEX_PROBLEM_HINTS = (
+    "bug",
+    "错误",
+    "报错",
+    "失败",
+    "根因",
+    "调试",
+    "定位",
+    "卡住",
+    "复杂问题",
+    "疑难",
+    "复杂",
+)
+
+THINKING_ITERATION_HINTS = (
+    "优化",
+    "迭代",
+    "refine",
+    "improve",
+    "review",
+    "反馈",
+    "复盘",
+    "改进",
+    "再优化",
+)
+
 
 def _is_local_debugging_task(task_text: str | None) -> bool:
     """Heuristic for debugging tasks that are likely local/simple repairs."""
@@ -190,6 +238,10 @@ def _is_local_debugging_task(task_text: str | None) -> bool:
     if any(hint in text for hint in DEBUGGING_GLOBAL_HINTS):
         return False
     return any(hint in text for hint in DEBUGGING_LOCAL_HINTS)
+
+
+def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
+    return any(hint.lower() in text for hint in hints)
 
 
 def debugging_activation_level_for_context(
@@ -224,6 +276,82 @@ def debugging_activation_level_for_context(
         return 25
 
     return 50
+
+
+def build_thinking_summary(
+    task_text: str | None,
+    complexity: str,
+    memory_hints: list[str] | None = None,
+    experience_check: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a qiushi-inspired THINKING summary for the next phase context."""
+    text = (task_text or "").strip()
+    text_lower = text.lower()
+    memory_hints = memory_hints or []
+    experience_check = experience_check or {}
+    complexity = (complexity or "").upper()
+
+    is_new_project = _contains_any(text_lower, THINKING_NEW_PROJECT_HINTS)
+    is_complex_problem = _contains_any(text_lower, THINKING_COMPLEX_PROBLEM_HINTS)
+    is_iteration = _contains_any(text_lower, THINKING_ITERATION_HINTS)
+    is_long_horizon = complexity in {"L", "XL"} or is_new_project or "长期" in text_lower or "分阶段" in text_lower
+
+    if is_new_project:
+        workflow = "workflow_1_new_project"
+        workflow_label = "新项目启动"
+        workflow_steps = ["investigation-first", "contradiction-analysis", "spark-prairie-fire", "protracted-strategy"]
+        major_contradiction = "目标完整性 vs 资源/信息不足"
+        stage_judgment = "战略防御期" if is_long_horizon else "战略相持期"
+        local_attack_point = "先在最小可验证切片上建立根据地"
+        recommendation = "先做调查研究，再抓主要矛盾，最后再决定是否进入规划"
+    elif is_iteration:
+        workflow = "workflow_3_iteration"
+        workflow_label = "方案迭代优化"
+        workflow_steps = ["mass-line", "contradiction-analysis", "practice-cognition", "criticism-self-criticism", "mass-line"]
+        major_contradiction = "现有方案收益 vs 新问题成本"
+        stage_judgment = "战略相持期"
+        local_attack_point = "先把反馈收束成一个可验证的改进点"
+        recommendation = "先汇聚多源反馈，再聚焦最主要的改进矛盾"
+    elif is_complex_problem:
+        workflow = "workflow_2_complex_problem"
+        workflow_label = "复杂问题攻坚"
+        workflow_steps = ["investigation-first", "contradiction-analysis", "concentrate-forces", "practice-cognition", "criticism-self-criticism"]
+        major_contradiction = "现象 vs 根因"
+        stage_judgment = "战术攻坚"
+        local_attack_point = "先复现最小失败样本，围绕主要矛盾单点突破"
+        recommendation = "先调查再判断，先验证假说，再决定是否升级到规划/执行"
+    else:
+        workflow = "workflow_2_complex_problem"
+        workflow_label = "复杂问题攻坚"
+        workflow_steps = ["investigation-first", "contradiction-analysis", "concentrate-forces", "practice-cognition", "criticism-self-criticism"]
+        major_contradiction = "事实 vs 假设"
+        stage_judgment = "战术速决" if not is_long_horizon else "战略相持期"
+        local_attack_point = "先找到一个最小可验证的切口"
+        recommendation = "先把事实收齐，再围绕主要矛盾做最小可行判断"
+
+    investigation_focus = [
+        "代码库事实",
+        "测试结果",
+        "git history",
+        "日志/报错",
+        "用户反馈",
+    ]
+    if memory_hints:
+        investigation_focus.append("长期记忆 / 经验摘要")
+    if experience_check.get("has_relevant_experience"):
+        investigation_focus.append("历史经验回流")
+
+    return {
+        "workflow": workflow,
+        "workflow_label": workflow_label,
+        "workflow_steps": workflow_steps,
+        "investigation_focus": investigation_focus,
+        "major_contradiction": major_contradiction,
+        "stage_judgment": stage_judgment,
+        "local_attack_point": local_attack_point,
+        "recommendation": recommendation,
+        "memory_hints_count": len(memory_hints),
+    }
 
 
 def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
@@ -276,6 +404,48 @@ def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
 6. 重复失败时再考虑架构问题
 
 **输出**: 根因 / 最小修复 / 回归测试 / 是否需要升级"""
+    elif phase == "THINKING":
+        if complexity in {"XS", "S"}:
+            phase_prompt = """## THINKING 专家推理 (轻量)
+
+**目标**: 先调查事实,再识别主要矛盾,最后给出一个明确的局部攻坚点
+
+**求是式最小循环**:
+1. 调查研究: 收集代码、测试、日志、历史记录中的事实
+2. 矛盾分析: 找到主要矛盾和次要矛盾
+3. 群众路线: 汇聚多源信息,避免闭门造车
+4. 持久战略: 如果任务不止一轮,先判断阶段再推进
+
+**输出**:
+- 调查结论
+- 主要矛盾
+- 阶段判断
+- 局部攻坚点
+- 建议
+
+**原则**:
+- 先调查,后判断
+- 先抓主要矛盾,再谈方案
+- 不把未验证的假设当事实"""
+        else:
+            phase_prompt = """## THINKING 专家推理
+
+**核心**: 谁最懂这个?TA会怎么说?
+
+**Mandatory Think**: 重大决策(git操作,阶段转换)前必须思考
+
+**求是式四步法**:
+1. 调查研究: 先收集代码、测试、日志、git history、用户反馈等第一手事实
+2. 矛盾分析: 找出主要矛盾、次要矛盾和矛盾的主要方面
+3. 群众路线: 把多源事实集中、归纳、再返回验证
+4. 持久战略: 判断当前阶段(防御/相持/反攻)与局部攻坚点
+
+回答:
+- 调查结论: [一句话]
+- 主要矛盾: [A vs B]
+- 阶段判断: [战略防御/相持/反攻]
+- 局部攻坚点: [具体可做的小切口]
+- 建议: [1个明确建议]"""
     elif phase == "REVIEWING":
         phase_prompt = """## REVIEWING 代码审查
 
