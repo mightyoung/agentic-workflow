@@ -128,6 +128,20 @@ class ModulePolicy:
     completion_gap_pp: float
 
 
+@dataclass
+class ActivationSummary:
+    """分级激活汇总"""
+    activation_level: int
+    task_count: int
+    avg_final_score_with_skill: float
+    avg_final_score_without_skill: float
+    completion_rate_with_skill: float
+    completion_rate_without_skill: float
+    avg_quality_improvement_pct: float
+    avg_token_improvement_pct: float
+    avg_time_improvement_pct: float
+
+
 # =============================================================================
 # 测试任务集
 # =============================================================================
@@ -812,8 +826,33 @@ class ABExperimentRunner:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results: list[ComparisonResult] = []
+        self.activation_results: dict[int, list[ComparisonResult]] = {}
+        self.baseline_results: dict[str, ExecutionResult] = {}
+        self.activation_levels: list[int] = [25, 50, 75, 100]
 
-    async def execute_task_with_skill(self, task: TestTask) -> ExecutionResult:
+    @staticmethod
+    def _activation_tier(activation_level: int) -> str:
+        if activation_level >= 100:
+            return "full"
+        if activation_level >= 75:
+            return "high"
+        if activation_level >= 50:
+            return "medium"
+        return "light"
+
+    def _validation_lines(self, task: TestTask, activation_level: int) -> list[str]:
+        tier = self._activation_tier(activation_level)
+        if tier == "light":
+            count = min(2, len(task.validation_criteria))
+        elif tier == "medium":
+            count = min(3, len(task.validation_criteria))
+        elif tier == "high":
+            count = min(4, len(task.validation_criteria))
+        else:
+            count = len(task.validation_criteria)
+        return task.validation_criteria[:count]
+
+    async def execute_task_with_skill(self, task: TestTask, activation_level: int = 100) -> ExecutionResult:
         """使用 Skill 执行任务"""
         start_time = time.time()
 
@@ -823,21 +862,21 @@ class ABExperimentRunner:
 
         # 模拟不同的响应
         if task.module == TaskModule.EXECUTING:
-            response = self._generate_tdd_response(task)
+            response = self._generate_tdd_response(task, activation_level)
         elif task.module == TaskModule.DEBUGGING:
-            response = self._generate_debugging_response(task)
+            response = self._generate_debugging_response(task, activation_level)
         elif task.module == TaskModule.REVIEWING:
-            response = self._generate_review_response(task)
+            response = self._generate_review_response(task, activation_level)
         elif task.module == TaskModule.RESEARCH:
-            response = self._generate_research_response(task)
+            response = self._generate_research_response(task, activation_level)
         elif task.module == TaskModule.THINKING:
-            response = self._generate_thinking_response(task)
+            response = self._generate_thinking_response(task, activation_level)
         elif task.module == TaskModule.PLANNING:
-            response = self._generate_planning_response(task)
+            response = self._generate_planning_response(task, activation_level)
         elif task.module == TaskModule.FULL_WORKFLOW:
-            response = self._generate_full_workflow_response(task)
+            response = self._generate_full_workflow_response(task, activation_level)
         else:
-            response = self._generate_generic_response(task)
+            response = self._generate_generic_response(task, activation_level)
 
         execution_time = time.time() - start_time
 
@@ -855,7 +894,12 @@ class ABExperimentRunner:
             total_tokens=input_tokens + output_tokens,
             response_content=response,
             files_created=task.files_to_create,
-            metadata={"skill_version": "6.3", "phases_completed": self._get_phases(task.module)}
+            metadata={
+                "skill_version": "6.3",
+                "phases_completed": self._get_phases(task.module),
+                "activation_level": activation_level,
+                "activation_tier": self._activation_tier(activation_level),
+            }
         )
 
     async def execute_task_without_skill(self, task: TestTask) -> ExecutionResult:
@@ -864,8 +908,8 @@ class ABExperimentRunner:
 
         await asyncio.sleep(0.5)  # 模拟API延迟
 
-        # 模拟简化的响应（无规范约束）
-        response = self._generate_simple_response(task)
+        # 模拟“可工作的最小基线”响应，而不是完全空壳
+        response = self._generate_baseline_response(task)
 
         execution_time = time.time() - start_time
 
@@ -898,8 +942,100 @@ class ABExperimentRunner:
         }
         return phases_map.get(module, [])
 
-    def _generate_tdd_response(self, task: TestTask) -> str:
+    def _generate_tdd_response(self, task: TestTask, activation_level: int = 100) -> str:
         """生成 TDD 风格的响应"""
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# TDD Implementation for {task.name}
+
+## Test First
+- 写最小测试覆盖核心行为
+- 先确认失败再实现
+
+## Implementation
+- 先做最小可用实现
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# TDD Implementation for {task.name}
+
+## Test First (Red)
+
+```python
+import pytest
+
+def test_{task.id.replace("_", "_")}():
+    # Arrange
+    pass
+
+    # Act
+    pass
+
+    # Assert
+    assert True
+```
+
+## Implementation (Green)
+
+```python
+def {task.id.replace("_", "_")}():
+    # Minimal implementation
+    pass
+```
+
+## Refactor (Refactor)
+
+- Clean up code structure
+- Ensure best practices
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# TDD Implementation for {task.name}
+
+## Test First (Red)
+
+```python
+import pytest
+
+def test_{task.id.replace("_", "_")}():
+    # Arrange
+    pass
+
+    # Act
+    pass
+
+    # Assert
+    assert True
+```
+
+## Implementation (Green)
+
+```python
+def {task.id.replace("_", "_")}():
+    # Minimal implementation
+    pass
+```
+
+## Refactor (Refactor)
+
+- Clean up code structure
+- Ensure best practices
+- Add documentation
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
         return f'''# TDD Implementation for {task.name}
 
 ## Test First (Red)
@@ -933,18 +1069,50 @@ def {task.id.replace("_", "_")}():
 - Add documentation
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_debugging_response(self, task: TestTask) -> str:
+    def _generate_debugging_response(self, task: TestTask, activation_level: int = 100) -> str:
         """生成调试风格的响应"""
-        return f'''# Debugging Report for {task.name}
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Debugging Report for {task.name}
 
 ## 1. 闻味道 - Problem Identification
 - Issue detected: {task.description[:100]}
+
+## 2. 揪头发 - Root Cause Analysis
+Possible causes:
+1. Input validation missing
+2. Boundary condition not handled
+
+## 3. 照镜子 - Comparison
+Normal behavior vs Actual behavior identified.
+
+## 4. 执行 - Fix Implementation
+```python
+def fix_{task.id.replace("_", "_")}():
+    # Root cause fix applied
+    pass
+```
+
+## 5. 复盘 - Verification
+Fix verified and documented.
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Debugging Report for {task.name}
+
+## 1. 闻味道 - Problem Identification
+- Issue detected: {task.description[:100]}
+- Scope narrowed to boundary handling and state cleanup
 
 ## 2. 揪头发 - Root Cause Analysis
 Possible causes:
@@ -966,13 +1134,154 @@ def fix_{task.id.replace("_", "_")}():
 Fix verified and documented.
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Debugging Report for {task.name}
+
+## 1. 闻味道 - Problem Identification
+- Issue detected: {task.description[:100]}
+- Failure surface mapped to input validation, branching, and cleanup
+
+## 2. 揪头发 - Root Cause Analysis
+Possible causes:
+1. Input validation missing
+2. Boundary condition not handled
+3. Type checking absent
+4. Resource cleanup incomplete
+
+## 3. 照镜子 - Comparison
+Normal behavior vs Actual behavior identified.
+
+## 4. 执行 - Fix Implementation
+```python
+def fix_{task.id.replace("_", "_")}():
+    # Root cause fix applied
+    pass
+```
+
+## 5. 复盘 - Verification
+Fix verified and documented.
+- Regression test added
+- Boundary case checked
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
+        return f'''# Debugging Report for {task.name}
+
+## 1. 闻味道 - Problem Identification
+- Issue detected: {task.description[:100]}
+- Failure surface mapped to input validation, branching, resource cleanup, and regression risk
+
+## 2. 揪头发 - Root Cause Analysis
+Possible causes:
+1. Input validation missing
+2. Boundary condition not handled
+3. Type checking absent
+4. Resource cleanup incomplete
+5. Regression coverage missing
+
+## 3. 照镜子 - Comparison
+Normal behavior vs Actual behavior identified.
+
+## 4. 执行 - Fix Implementation
+```python
+def fix_{task.id.replace("_", "_")}():
+    # Root cause fix applied
+    pass
+```
+
+## 5. 复盘 - Verification
+Fix verified and documented.
+- Regression test added
+- Boundary case checked
+- Failure mode documented
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_review_response(self, task: TestTask) -> str:
+    def _generate_review_response(self, task: TestTask, activation_level: int = 100) -> str:
         """生成代码审查响应"""
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Code Review Report for {task.name}
+
+## Issues Found
+
+### 🔴 Critical
+- Security vulnerability detected
+
+### 🟡 Medium
+- Error handling could be improved
+
+## Recommendations
+1. Add input validation
+2. Implement proper error handling
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Code Review Report for {task.name}
+
+## Issues Found
+
+### 🔴 Critical
+- Security vulnerability detected
+
+### 🟡 Medium
+- Error handling could be improved
+- Performance optimization possible
+
+## Recommendations
+1. Add input validation
+2. Implement proper error handling
+3. Consider async patterns
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Code Review Report for {task.name}
+
+## Issues Found
+
+### 🔴 Critical
+- Security vulnerability detected
+
+### 🟡 Medium
+- Error handling could be improved
+- Performance optimization possible
+
+### 🟢 Low
+- Code style inconsistency
+
+## Recommendations
+1. Add input validation
+2. Implement proper error handling
+3. Consider async patterns
+4. Add regression tests
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
         return f'''# Code Review Report for {task.name}
 
 ## Issues Found
@@ -991,16 +1300,19 @@ Fix verified and documented.
 1. Add input validation
 2. Implement proper error handling
 3. Consider async patterns
+4. Add regression tests
+5. Document tradeoffs and edge cases
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_generic_response(self, task: TestTask) -> str:
+    def _generate_generic_response(self, task: TestTask, activation_level: int = 100) -> str:
         """生成通用响应"""
+        validation_lines = self._validation_lines(task, activation_level)
         return f'''# Response for {task.name}
 
 ## Overview
@@ -1017,13 +1329,33 @@ def implementation():
 All criteria met.
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2] if len(task.validation_criteria) > 2 else task.validation_criteria[0]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
 '''
 
-    def _generate_research_response(self, task: TestTask) -> str:
-        return f'''# Research Notes for {task.name}
+    def _generate_research_response(self, task: TestTask, activation_level: int = 100) -> str:
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Research Notes for {task.name}
+
+## Key Findings
+- async/await is best for I/O-bound work
+
+## Recommended Patterns
+- use async context managers
+
+## Applicable Scenarios
+- network clients
+- concurrent pipelines
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Research Notes for {task.name}
 
 ## Key Findings
 - async/await should be used for I/O bound concurrency
@@ -1035,7 +1367,6 @@ All criteria met.
 
 ## Common Anti-Patterns
 - blocking calls in event loops
-- unbounded task fan-out without backpressure
 
 ## Applicable Scenarios
 - network clients
@@ -1043,14 +1374,92 @@ All criteria met.
 - background job coordination
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Research Notes for {task.name}
+
+## Key Findings
+- async/await should be used for I/O bound concurrency
+- structured cancellation and error handling reduce failure cascades
+- bounded fan-out improves stability
+
+## Recommended Patterns
+- use async context managers for resource lifetimes
+- keep await points explicit and narrow
+- prefer task groups or bounded pools
+
+## Common Anti-Patterns
+- blocking calls in event loops
+- unbounded task fan-out without backpressure
+
+## Applicable Scenarios
+- network clients
+- concurrent pipelines
+- background job coordination
+- service orchestration
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
+        return f'''# Research Notes for {task.name}
+
+## Key Findings
+- async/await should be used for I/O bound concurrency
+- structured cancellation and error handling reduce failure cascades
+- bounded fan-out improves stability
+
+## Recommended Patterns
+- use async context managers for resource lifetimes
+- keep await points explicit and narrow
+- prefer task groups or bounded pools
+
+## Common Anti-Patterns
+- blocking calls in event loops
+- unbounded task fan-out without backpressure
+
+## Applicable Scenarios
+- network clients
+- concurrent pipelines
+- background job coordination
+- service orchestration
+- long-running workflows
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_planning_response(self, task: TestTask) -> str:
-        return f'''# Plan for {task.name}
+    def _generate_planning_response(self, task: TestTask, activation_level: int = 100) -> str:
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Plan for {task.name}
+
+## Task Breakdown
+- Define core steps
+- Implement minimum viable path
+
+## Dependencies
+- core data before handlers
+
+## Verification Order
+1. Unit tests
+2. Manual review
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Plan for {task.name}
 
 ## Task Breakdown
 - Define domain model
@@ -1072,13 +1481,133 @@ All criteria met.
 3. Manual review
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Plan for {task.name}
+
+## Task Breakdown
+- Define domain model
+- Implement core operations
+- Add validation and error handling
+- Add tests and documentation
+- Add rollout and rollback notes
+
+## Dependencies
+- data model before API handlers
+- validation before integration work
+- tests before merge
+
+## Risks
+- scope creep
+- unclear acceptance criteria
+- integration drift
+
+## Verification Order
+1. Unit tests
+2. Integration checks
+3. Manual review
+4. Regression comparison
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
+        return f'''# Plan for {task.name}
+
+## Task Breakdown
+- Define domain model
+- Implement core operations
+- Add validation and error handling
+- Add tests and documentation
+- Add rollout and rollback notes
+
+## Dependencies
+- data model before API handlers
+- validation before integration work
+- tests before merge
+
+## Risks
+- scope creep
+- unclear acceptance criteria
+- integration drift
+
+## Verification Order
+1. Unit tests
+2. Integration checks
+3. Manual review
+4. Regression comparison
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_thinking_response(self, task: TestTask) -> str:
+    def _generate_thinking_response(self, task: TestTask, activation_level: int = 100) -> str:
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Analytical Thinking for {task.name}
+
+## 本质
+- 识别问题的主约束。
+
+## 建议
+- 选择最小可验证路径。
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Analytical Thinking for {task.name}
+
+## 本质
+问题本质是将复杂目标拆成可验证的约束。
+
+## 权衡
+- 简洁实现 vs 可扩展性
+- 局部最优 vs 全局一致性
+
+## 建议
+- 优先选择最小可验证路径
+- 把失败模式显式写入约束
+- 保留后续扩展接口
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Analytical Thinking for {task.name}
+
+## 本质
+问题本质是将复杂目标拆成可验证的约束。
+
+## 权衡
+- 简洁实现 vs 可扩展性
+- 局部最优 vs 全局一致性
+- 自动化 vs 可解释性
+
+## 建议
+- 优先选择最小可验证路径
+- 把失败模式显式写入约束
+- 保留后续扩展接口
+- 让验证步骤可自动回放
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
         return f'''# Analytical Thinking for {task.name}
 
 ## 本质
@@ -1093,16 +1622,36 @@ All criteria met.
 - 优先选择最小可验证路径
 - 把失败模式显式写入约束
 - 保留后续扩展接口
+- 让验证步骤可自动回放
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_full_workflow_response(self, task: TestTask) -> str:
-        return f'''# Full Workflow Execution for {task.name}
+    def _generate_full_workflow_response(self, task: TestTask, activation_level: int = 100) -> str:
+        tier = self._activation_tier(activation_level)
+        validation_lines = self._validation_lines(task, activation_level)
+        if tier == "light":
+            return f'''# Full Workflow Execution for {task.name}
+
+## Research
+- Gather reference patterns
+
+## Planning
+- Break work into ordered tasks
+
+## Executing
+- Implement the chosen solution
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+'''
+        if tier == "medium":
+            return f'''# Full Workflow Execution for {task.name}
 
 ## Research
 - Gather reference patterns and constraints
@@ -1120,17 +1669,151 @@ All criteria met.
 - Check correctness, risks, and maintainability
 
 ## Validation Checklist
-- {task.validation_criteria[0]}
-- {task.validation_criteria[1]}
-- {task.validation_criteria[2]}
-- {task.validation_criteria[3]}
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+'''
+        if tier == "high":
+            return f'''# Full Workflow Execution for {task.name}
+
+## Research
+- Gather reference patterns and constraints
+- Validate assumptions and tradeoffs
+
+## Thinking
+- Compare solution families and tradeoffs
+- Identify the main risk
+
+## Planning
+- Break work into ordered tasks and dependencies
+- Define success criteria
+
+## Executing
+- Implement the chosen solution with tests
+
+## Reviewing
+- Check correctness, risks, and maintainability
+- Capture follow-up actions
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
+'''
+        return f'''# Full Workflow Execution for {task.name}
+
+## Research
+- Gather reference patterns and constraints
+- Validate assumptions and tradeoffs
+
+## Thinking
+- Compare solution families and tradeoffs
+- Identify the main risk
+- Select the minimum viable path
+
+## Planning
+- Break work into ordered tasks and dependencies
+- Define success criteria
+- Assign verification order
+
+## Executing
+- Implement the chosen solution with tests
+
+## Reviewing
+- Check correctness, risks, and maintainability
+- Capture follow-up actions
+
+## Validation Checklist
+- {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
+- {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
+- {validation_lines[2] if len(validation_lines) > 2 else task.validation_criteria[-1]}
+- {validation_lines[3] if len(validation_lines) > 3 else task.validation_criteria[-1]}
 '''
 
-    def _generate_simple_response(self, task: TestTask) -> str:
-        """生成简单响应（无规范）"""
-        return f'''def {task.id.replace("_", "_")}():
-    # Simple implementation
-    pass
+    def _generate_baseline_response(self, task: TestTask) -> str:
+        """生成最小可工作的基线响应。"""
+        checklist = self._validation_lines(task, 50)
+        if task.module == TaskModule.EXECUTING:
+            return f'''# Minimal TDD baseline for {task.name}
+
+## Test First
+- 先写最小测试，覆盖核心路径。
+
+## Implementation
+- 只实现必要行为，避免额外抽象。
+
+## Validation Checklist
+- {checklist[0] if len(checklist) > 0 else task.validation_criteria[0]}
+- {checklist[1] if len(checklist) > 1 else task.validation_criteria[-1]}
+'''
+        if task.module == TaskModule.DEBUGGING:
+            return f'''# Minimal Debugging Baseline for {task.name}
+
+## Problem Identification
+- 记录最明显的失败点。
+
+## Root Cause
+- 优先排查输入校验和边界条件。
+
+## Fix
+- 只做最小修复。
+
+## Verification
+- 运行回归测试并确认不再失败。
+'''
+        if task.module == TaskModule.REVIEWING:
+            return f'''# Minimal Review Baseline for {task.name}
+
+## Issues Found
+- Check correctness, error handling, and maintainability.
+
+## Recommendation
+- Add validation and tighten failure handling.
+'''
+        if task.module == TaskModule.RESEARCH:
+            return f'''# Minimal Research Baseline for {task.name}
+
+## Key Findings
+- Summarize the most relevant factual points.
+
+## Applicable Scenarios
+- List the obvious scenarios.
+'''
+        if task.module == TaskModule.PLANNING:
+            return f'''# Minimal Plan Baseline for {task.name}
+
+## Task Breakdown
+- Break work into a few ordered steps.
+
+## Dependencies
+- Note the most important dependency.
+'''
+        if task.module == TaskModule.THINKING:
+            return f'''# Minimal Analytical Baseline for {task.name}
+
+## 本质
+- 识别问题的主约束。
+
+## 建议
+- 选择最小可验证路径。
+'''
+        if task.module == TaskModule.FULL_WORKFLOW:
+            return f'''# Minimal Full Workflow Baseline for {task.name}
+
+## Research
+- Gather the minimum necessary context.
+
+## Planning
+- Order the work by dependency.
+
+## Executing
+- Implement the smallest working slice.
+'''
+        return f'''# Minimal Baseline for {task.name}
+
+## Overview
+{task.description[:120]}
 '''
 
     async def run_single_comparison(self, task: TestTask) -> ComparisonResult:
@@ -1211,6 +1894,83 @@ All criteria met.
 
         return comparison
 
+    async def run_activation_sweep(self, tasks: list[TestTask]) -> dict[int, list[ComparisonResult]]:
+        """运行分级激活实验。"""
+        if not self.activation_levels:
+            return {}
+
+        print("\n开始分级激活实验...")
+        sweep_results: dict[int, list[ComparisonResult]] = {}
+
+        for activation_level in self.activation_levels:
+            print(f"  [activation={activation_level}] 执行...")
+            level_results: list[ComparisonResult] = []
+            for task in tasks:
+                baseline = self.baseline_results.get(task.id)
+                if baseline is None:
+                    baseline = await self.execute_task_without_skill(task)
+                    self.baseline_results[task.id] = baseline
+                skill_result = await self.execute_task_with_skill(task, activation_level=activation_level)
+                efficiency = EfficiencyEvaluator.evaluate(skill_result, baseline)
+                quality = QualityEvaluator.evaluate(skill_result, baseline, task.validation_criteria)
+                tokens = TokenEvaluator.evaluate(skill_result, baseline)
+                completion = CompletionEvaluator.evaluate(
+                    skill_result,
+                    baseline,
+                    task.validation_criteria,
+                    task.files_to_create,
+                    task.module,
+                )
+
+                with_final = (
+                    efficiency["with_skill_time"] / max(skill_result.execution_time, 0.001) * 30 +
+                    quality["with_skill_score"] * 40 +
+                    (100 - tokens["with_skill_total"] / 100) * 15 +
+                    completion["with_skill_completion_pct"] * 15
+                )
+                without_final = (
+                    efficiency["without_skill_time"] / max(baseline.execution_time, 0.001) * 30 +
+                    quality["without_skill_score"] * 40 +
+                    (100 - tokens["without_skill_total"] / 100) * 15 +
+                    completion["without_skill_completion_pct"] * 15
+                )
+
+                level_results.append(
+                    ComparisonResult(
+                        task_id=task.id,
+                        difficulty=task.difficulty.value,
+                        module=task.module.value,
+                        with_skill_time=skill_result.execution_time,
+                        without_skill_time=baseline.execution_time,
+                        time_improvement_pct=efficiency["time_improvement_pct"],
+                        with_skill_tokens=skill_result.total_tokens,
+                        without_skill_tokens=baseline.total_tokens,
+                        token_improvement_pct=tokens["token_improvement_pct"],
+                        with_skill_quality_score=quality["with_skill_score"],
+                        without_skill_quality_score=quality["without_skill_score"],
+                        quality_improvement_pct=quality["quality_improvement_pct"],
+                        with_skill_correct=completion["with_skill_completed"],
+                        without_skill_correct=completion["without_skill_completed"],
+                        with_skill_completed=completion["with_skill_completed"],
+                        without_skill_completed=completion["without_skill_completed"],
+                        with_skill_final_score=with_final,
+                        without_skill_final_score=without_final,
+                        overall_improvement_pct=((with_final - without_final) / max(without_final, 1) * 100),
+                        metrics={
+                            "efficiency": efficiency,
+                            "quality": quality,
+                            "tokens": tokens,
+                            "completion": completion,
+                            "activation_level": activation_level,
+                            "activation_tier": self._activation_tier(activation_level),
+                        }
+                    )
+                )
+            sweep_results[activation_level] = level_results
+
+        self.activation_results = sweep_results
+        return sweep_results
+
     async def run_experiment(self, tasks: list[TestTask] = None) -> list[ComparisonResult]:
         """运行完整对照实验"""
         if tasks is None:
@@ -1238,6 +1998,9 @@ All criteria met.
         # 收集成功的结果
         self.results = [r for r in results if isinstance(r, ComparisonResult)]
 
+        # 分级激活实验
+        await self.run_activation_sweep(tasks)
+
         print(f"\n✅ 实验完成: {len(self.results)}/{len(tasks)} 个任务成功")
 
         return self.results
@@ -1258,6 +2021,7 @@ All criteria met.
 
         skill_completion_rate = sum(1 for r in self.results if r.with_skill_completed) / total * 100
         no_skill_completion_rate = sum(1 for r in self.results if r.without_skill_completed) / total * 100
+        activation_summaries = self._build_activation_summaries()
 
         # 按模块统计
         modules = {r.module for r in self.results}
@@ -1319,10 +2083,13 @@ All criteria met.
                 "overall_improvement_pct": round((avg_final_with - avg_final_without) / max(avg_final_without, 1) * 100, 1),
                 "completion_rate_with_skill": round(skill_completion_rate, 1),
                 "completion_rate_without_skill": round(no_skill_completion_rate, 1),
+                "task_count": total,
             },
             "by_module": by_module,
             "module_policies": [policy.__dict__ for policy in policies],
             "by_difficulty": by_difficulty,
+            "activation_levels": self.activation_levels,
+            "activation_summaries": [summary.__dict__ for summary in activation_summaries],
             "detailed_results": [
                 {
                     "task_id": r.task_id,
@@ -1411,6 +2178,26 @@ All criteria met.
                 f"{policy['quality_gain_pct']:+.1f}% | {policy['token_delta_pct']:+.1f}% | "
                 f"{policy['completion_gap_pp']:+.1f}pp | {policy['rationale']} |\n"
             )
+
+        if report.get("activation_summaries"):
+            md += """
+
+## 🎚️ 分级激活实验
+
+| 激活级别 | 任务数 | 含Skill均分 | 无Skill均分 | 完成率(有/无) | 质量改进 | Token改进 | 时间改进 |
+|----------|--------|------------|------------|--------------|---------|----------|---------|
+"""
+            for activation_summary in report["activation_summaries"]:
+                md += (
+                    f"| {activation_summary['activation_level']} | "
+                    f"{activation_summary['task_count']} | "
+                    f"{activation_summary['avg_final_score_with_skill']:.1f} | "
+                    f"{activation_summary['avg_final_score_without_skill']:.1f} | "
+                    f"{activation_summary['completion_rate_with_skill']:.1f}%/{activation_summary['completion_rate_without_skill']:.1f}% | "
+                    f"{activation_summary['avg_quality_improvement_pct']:+.1f}% | "
+                    f"{activation_summary['avg_token_improvement_pct']:+.1f}% | "
+                    f"{activation_summary['avg_time_improvement_pct']:+.1f}% |\n"
+                )
 
         md += """
 ---
@@ -1565,6 +2352,29 @@ All criteria met.
             policies.append(recommend(module, by_module[module]))
         return policies
 
+    def _build_activation_summaries(self) -> list[ActivationSummary]:
+        """将 activation_sweep 结果聚合成摘要。"""
+        summaries: list[ActivationSummary] = []
+        for activation_level in sorted(self.activation_results.keys()):
+            activation_results = self.activation_results[activation_level]
+            if not activation_results:
+                continue
+            total = len(activation_results)
+            summaries.append(
+                ActivationSummary(
+                    activation_level=activation_level,
+                    task_count=total,
+                    avg_final_score_with_skill=sum(r.with_skill_final_score for r in activation_results) / total,
+                    avg_final_score_without_skill=sum(r.without_skill_final_score for r in activation_results) / total,
+                    completion_rate_with_skill=sum(1 for r in activation_results if r.with_skill_completed) / total * 100,
+                    completion_rate_without_skill=sum(1 for r in activation_results if r.without_skill_completed) / total * 100,
+                    avg_quality_improvement_pct=sum(r.quality_improvement_pct for r in activation_results) / total,
+                    avg_token_improvement_pct=sum(r.token_improvement_pct for r in activation_results) / total,
+                    avg_time_improvement_pct=sum(r.time_improvement_pct for r in activation_results) / total,
+                )
+            )
+        return summaries
+
 
 # =============================================================================
 # 主函数
@@ -1579,6 +2389,13 @@ async def main():
     parser.add_argument("--modules", nargs="+", help="按模块过滤")
     parser.add_argument("--difficulty", choices=["easy", "medium", "hard"], help="按难度过滤")
     parser.add_argument("--output-dir", default="tests/bench/ab_experiment_results", help="输出目录")
+    parser.add_argument(
+        "--activation-levels",
+        nargs="+",
+        type=int,
+        default=[25, 50, 75, 100],
+        help="分级激活等级，例如 25 50 75 100",
+    )
     args = parser.parse_args()
 
     # 过滤任务
@@ -1596,6 +2413,7 @@ async def main():
 
     # 运行实验
     runner = ABExperimentRunner(output_dir=args.output_dir)
+    runner.activation_levels = sorted({level for level in args.activation_levels if 0 < level <= 100})
     await runner.run_experiment(tasks)
     report = runner.generate_report()
 
