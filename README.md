@@ -47,9 +47,7 @@ The actual executable surface:
 | `scripts/task_tracker.py` | ✅ Stable | Task progress tracking |
 | `scripts/search_adapter.py` | ✅ Stable | Web search adapter for RESEARCH (Exa/DuckDuckGo) |
 | `scripts/team_agent.py` | ✅ Stable | Small-team orchestration foundations (lead + typed workers) |
-| `scripts/middleware.py` | 🔬 Experimental | Intent/complexity/skill middleware prototype |
-| `scripts/workflow_engine_v2.py` | 🔬 Experimental | Middleware-based alternative workflow runtime prototype |
-| `scripts/integrated_engine.py` | 🔬 Experimental | Middleware + execution integration prototype |
+| `scripts/middleware.py` | 🔬 Experimental | Intent/complexity/skill middleware helper |
 | `scripts/experimental/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
 | `scripts/experimental/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration (heavyweight) |
 | `scripts/experimental/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
@@ -204,8 +202,6 @@ Experimental modules are documented separately in [docs/roadmap/experimental-mod
 
 Available experimental modules:
 - `middleware.py` - Middleware chain prototype for routing/orchestration experiments
-- `workflow_engine_v2.py` - Alternative workflow runtime prototype (not authoritative)
-- `integrated_engine.py` - Integration prototype for middleware + execution layers
 - `semantic_router.py` - Embedding-based routing (design reference)
 - `execution_loop.py` - ReAct/Plan-and-Execute patterns (design reference)
 - `parallel_executor.py` - Parallel Band execution (high complexity)

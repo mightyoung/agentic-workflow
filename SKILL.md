@@ -95,7 +95,7 @@ python3 scripts/workflow_engine.py --op status --workdir .
 ## Runtime 边界
 
 - `scripts/workflow_engine.py` 是唯一权威 runtime
-- `scripts/middleware.py`、`scripts/workflow_engine_v2.py`、`scripts/integrated_engine.py` 目前仅用于实验和对照验证
+- `scripts/middleware.py` 目前仅用于实验和对照验证
 - 这些原型不得替代主线的 state / artifact / contract / checkpoint 管线
 
 ## 关键文件约定
