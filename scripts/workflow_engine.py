@@ -1353,7 +1353,7 @@ def initialize_workflow(
 
     # Start trajectory logging
     logger = TrajectoryLogger(workdir, state.session_id)
-    logger.start(prompt, trigger_type)
+    logger.start(prompt, trigger_type, runtime_profile=runtime_profile)
     logger.enter_phase(current_phase)
     _active_loggers[state.session_id] = logger
 
@@ -1371,6 +1371,11 @@ def initialize_workflow(
 - phase: {current_phase}
 - status: active
 - updated: {datetime.now().isoformat()}
+
+## Skill Policy
+- policy: {runtime_profile["skill_policy"]}
+- use_skill: {runtime_profile["use_skill"]}
+- profile_source: {runtime_profile["profile_source"]}
 
 ## Session
 - session_id: {state.session_id}
@@ -2907,6 +2912,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     # Validate state
     from unified_state import validate_workflow_state
     is_valid, errors = validate_workflow_state(workdir)
+    runtime_profile_summary = state.metadata.get("runtime_profile", {}) if state.metadata else {}
 
     return {
         "exists": True,
@@ -2917,6 +2923,12 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "current_phase": current_phase,
         "trigger_type": state.trigger_type,
         "task": task,
+        "runtime_profile_summary": {
+            "skill_policy": runtime_profile_summary.get("skill_policy") if runtime_profile_summary else None,
+            "use_skill": runtime_profile_summary.get("use_skill") if runtime_profile_summary else None,
+            "tokens_expected": runtime_profile_summary.get("tokens_expected") if runtime_profile_summary else None,
+            "profile_source": runtime_profile_summary.get("profile_source") if runtime_profile_summary else None,
+        },
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,
         "plan_source": plan_source,

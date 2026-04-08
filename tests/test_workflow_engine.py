@@ -84,6 +84,11 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(result["skill_policy"], "disable")
         self.assertEqual(result["skill_context"], "")
 
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["runtime_profile_summary"]["skill_policy"], "disable")
+        self.assertFalse(snapshot["runtime_profile_summary"]["use_skill"])
+        self.assertEqual(snapshot["runtime_profile_summary"]["profile_source"], "middleware+router")
+
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
         self.assertEqual(init_result["phase"], "DEBUGGING")

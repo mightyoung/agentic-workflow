@@ -136,6 +136,7 @@ class Trajectory:
     created_at: str
     prompt: str = ""
     trigger_type: str = ""
+    runtime_profile: dict[str, Any] = field(default_factory=dict)
     current_phase: str = "IDLE"
     phases: list[PhaseRecord] = field(default_factory=list)
     final_state: str = "running"  # running, completed, failed, aborted
@@ -149,6 +150,7 @@ class Trajectory:
             "created_at": self.created_at,
             "prompt": self.prompt,
             "trigger_type": self.trigger_type,
+            "runtime_profile": self.runtime_profile,
             "current_phase": self.current_phase,
             "phases": [p.to_dict() for p in self.phases],
             "final_state": self.final_state,
@@ -197,12 +199,13 @@ class TrajectoryLogger:
         self._prompt: str = ""
         self._trigger_type: str = ""
         self._run_id: str = f"R{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        self._runtime_profile: dict[str, Any] = {}
 
     def _ensure_dirs(self):
         """确保目录存在"""
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def start(self, prompt: str, trigger_type: str) -> str:
+    def start(self, prompt: str, trigger_type: str, runtime_profile: dict[str, Any] | None = None) -> str:
         """
         开始轨迹记录
 
@@ -212,6 +215,7 @@ class TrajectoryLogger:
         self._ensure_dirs()
         self._prompt = prompt
         self._trigger_type = trigger_type
+        self._runtime_profile = runtime_profile or {}
 
         # 创建主轨迹文件
         self._trajectory_file = self.base_dir / "trajectory.json"
@@ -232,6 +236,7 @@ class TrajectoryLogger:
             created_at=datetime.now().isoformat(),
             prompt=prompt,
             trigger_type=trigger_type,
+            runtime_profile=self._runtime_profile,
             current_phase="IDLE",
         )
 
@@ -368,6 +373,7 @@ class TrajectoryLogger:
             created_at=now,
             prompt=self._prompt,
             trigger_type=self._trigger_type,
+            runtime_profile=self._runtime_profile,
             current_phase=self._current_phase or "COMPLETE",
             phases=self._load_phases(),
             final_state=final_state,
