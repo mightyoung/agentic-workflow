@@ -125,8 +125,12 @@ def _run_review_gate_if_applicable(workdir: str, is_code_task: bool) -> tuple[bo
         return False, "spec compliance stage missing"
     if review_summary.get("stage_2_status") != "reviewed":
         return False, "code quality stage missing"
+    if int(review_summary.get("files_reviewed", 0) or 0) <= 0:
+        return False, "review did not analyze any files"
     if review_summary.get("degraded_mode"):
         return False, "review is degraded"
+    if review_summary.get("review_source") in {"template", "none", "workdir_scan"}:
+        return False, f"review source is {review_summary.get('review_source')}"
     if not review_summary.get("verdict"):
         return False, "review verdict missing"
     return True, "review gate passed"
@@ -2036,6 +2040,9 @@ def advance_workflow(
 ## Review Date
 {datetime.now().isoformat()}
 
+## Files Reviewed
+**Files Reviewed**: {len(target_files)} code files
+
 ## Stage 1: Spec Compliance
 - Contract/owned_files alignment: reviewed against {review_source}
 - Acceptance coverage: checked via task contract and target files
@@ -2138,6 +2145,9 @@ def advance_workflow(
 ## Review Date
 {datetime.now().isoformat()}
 
+## Files Reviewed
+**Files Reviewed**: 0 code files
+
 ## Stage 1: Spec Compliance
 - Contract/owned_files alignment: no file-level contract available
 - Acceptance coverage: verified against task description only
@@ -2181,7 +2191,7 @@ def advance_workflow(
                 "stage_2_status": "reviewed",
                 "risk_level": risk_level,
                 "verdict": "REVIEWED",
-                "degraded_mode": False,
+                "degraded_mode": True,
                 "files_reviewed": 0,
             }
 

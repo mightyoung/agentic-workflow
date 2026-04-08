@@ -44,10 +44,10 @@ requires:
 | 阶段 | 默认策略 | 默认激活档位 | 说明 |
 |---|---|---|---|
 | EXECUTING | default_enable | 50%-75% | 全局基线 50%，M+ 75%，失败时可升级 |
-| REVIEWING | conditional_enable | 50% | 需要审查/高风险变更时启用 |
-| DEBUGGING | conditional_enable_after_optimization | 0%-25% | 小任务 0%，复杂故障 25%，优先在修复收益明确时启用 |
+| REVIEWING | conditional_enable | 50% | 优先文件级审查，要求 two-stage review 和 file:line 证据 |
+| DEBUGGING | conditional_enable_after_optimization | 0%-25% | 小任务 0%，复杂故障 25%，先轻量排障，重复失败再升级 |
 | RESEARCH | defer_or_lighten | 0% | 仅在需要外部事实时启用 |
-| PLANNING | defer | 0% | 默认走轻量规划，复杂任务再提升 |
+| PLANNING | defer | 0% | XS/S 走 file-first 轻量计划，复杂任务再提升 |
 | THINKING | disable | 0% | 默认禁用 |
 | FULL_WORKFLOW | disable | 0% | 由各阶段分别决策，不直接整体开启 |
 

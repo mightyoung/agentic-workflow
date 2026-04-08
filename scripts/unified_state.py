@@ -508,8 +508,12 @@ def get_review_summary(workdir: str) -> dict[str, Any]:
     risk_level = _extract(r"^\s*\*\*Overall\*\*:\s*(.+)$")
     verdict = _extract(r"^-\s*Status:\s*(.+)$")
     files_reviewed_str = _extract(r"^\s*\*\*Files Reviewed\*\*:\s*(\d+)\s*code files$")
+    if not files_reviewed_str:
+        files_reviewed_str = _extract(r"^## Reviewed Files \((\d+)\s*files analyzed\)$")
     files_reviewed = int(files_reviewed_str) if files_reviewed_str and files_reviewed_str.isdigit() else 0
     degraded_mode = "Degraded Mode" in content or "degraded mode" in content.lower()
+    if review_status == "reviewed" and files_reviewed <= 0 and "template-based fallback" in content.lower():
+        degraded_mode = True
 
     return {
         "review_found": True,

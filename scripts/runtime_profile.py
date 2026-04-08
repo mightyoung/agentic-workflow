@@ -48,20 +48,29 @@ PHASE_PROMPTS = {
 
 **铁律**: 不定位根因不修复
 
+**默认形态**: 轻量排障,先把问题缩小到单点根因
+
 步骤:
 1. 收集症状(错误信息/堆栈)
 2. 追踪代码找可能原因
 3. 验证假设,不对就回退
-4. 3次失败→考虑架构问题
+4. 仅在重复失败时升级到深度调试
 
-输出: 根因/修复/回归测试""",
+输出: 根因/最小修复/回归测试""",
     "REVIEWING": """## REVIEWING 代码审查
 
 **优先级**: P0安全 > P1逻辑/性能 > P2风格
 
+**默认形态**: 先看 contract / owned_files / files_reviewed,再看代码细节
+
 直接输出问题:
 - [文件:行号] 问题 (P0/P1/P2)
-- 修复: [简洁建议]""",
+- 修复: [简洁建议]
+
+**必须项**:
+- 先确认审查范围
+- 明确列出已审文件
+- 区分契约偏差和实现缺陷""",
     "THINKING": """## THINKING 专家推理
 
 **核心**: 谁最懂这个?TA会怎么说?
@@ -95,18 +104,21 @@ PHASE_PROMPTS = {
     "PLANNING": """## PLANNING 任务规划
 
 **复杂度路由**:
-- XS/S: TodoWrite拆分,不用spec文件
-- M: spec.md + tasks.md
+- XS/S: TodoWrite + progress.md,不展开完整 spec
+- M: spec.md + tasks.md,优先文件化
 - L/XL: spec.md + plan.md + tasks.md + .contract.json
 
-**核心**: 不只拆分,要生成多种方案
+**核心**: 先把目标写成文件,再展开方案
 
 步骤:
 1. 明确目标(一话说清)
-2. 生成2-3方案(最小/折中/理想)
-3. 推荐明确方案和理由
+2. 给出 2-3 个方案但保持精简
+3. 写出依赖、风险和验收
 
-**反模式**: XS/S禁止完整spec-kit""",
+**默认要求**:
+- 先写文件,后写解释
+- 优先 plan digest 而不是长 prompt
+- XS/S 避免厚重 spec-kit""",
     "REFINING": """## 迭代优化框架
 
 **优化优先级**:
@@ -141,7 +153,70 @@ COMPLEXITY_TOKENS = {
 
 def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
     """Build skill context and expected tokens from phase and complexity."""
+    phase = (phase or "").upper()
+    complexity = (complexity or "").upper()
+
     phase_prompt = PHASE_PROMPTS.get(phase, "")
+
+    if phase == "PLANNING" and complexity in {"XS", "S"}:
+        phase_prompt = """## PLANNING 任务规划 (轻量)
+
+**目标**: 先把需求写成文件,再决定是否展开完整 spec
+
+**输出最少包含**:
+- 一句话目标
+- 1-3 个拆分步骤
+- 风险/依赖
+- 验收标准
+
+**原则**:
+- XS/S 只保留轻量计划和 progress
+- 不写厚重说明,不展开完整 spec-kit"""
+    elif phase == "DEBUGGING":
+        if complexity in {"XS", "S"}:
+            phase_prompt = """## DEBUGGING 调试 (轻量)
+
+**目标**: 先缩小到单点根因,再决定是否修复
+
+步骤:
+1. 复现问题
+2. 定位最可能根因
+3. 只做最小修复
+4. 补一条回归验证
+
+**原则**:
+- 轻量任务不展开深度排障
+- 发现多轮失败再升级"""
+        else:
+            phase_prompt = """## DEBUGGING 调试 (深度)
+
+**目标**: 先定位根因,再修复,最后验证回归
+
+步骤:
+1. 收集症状(错误信息/堆栈)
+2. 追踪代码找可能原因
+3. 构造假设并验证
+4. 缩小到单点根因
+5. 最小修复 + 回归测试
+6. 重复失败时再考虑架构问题
+
+**输出**: 根因 / 最小修复 / 回归测试 / 是否需要升级"""
+    elif phase == "REVIEWING":
+        phase_prompt = """## REVIEWING 代码审查
+
+**默认形态**: 先审文件,再审实现;先对 contract/owned_files,再对代码细节
+
+**必须项**:
+- 先确认审查范围
+- 按文件逐项检查
+- 区分契约偏差和实现缺陷
+- 输出 file:line 级别意见
+
+**输出**:
+- Stage 1: Spec Compliance
+- Stage 2: Code Quality
+- Verdict"""
+
     prompt = (MINIMAL_CORE + "\n\n" + phase_prompt).strip()
     tokens = COMPLEXITY_TOKENS.get(complexity, 1500)
     return prompt, tokens

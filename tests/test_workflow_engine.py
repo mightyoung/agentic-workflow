@@ -135,6 +135,21 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(runtime_profile.skill_activation_level_for_phase("EXECUTING", "M"), 75)
         self.assertEqual(runtime_profile.skill_activation_level_for_phase("DEBUGGING", "M"), 25)
 
+    def test_runtime_profile_shrinks_planning_and_debugging_prompts(self):
+        planning_prompt, planning_tokens = runtime_profile.build_skill_context("PLANNING", "XS")
+        debugging_light_prompt, debugging_light_tokens = runtime_profile.build_skill_context("DEBUGGING", "XS")
+        debugging_deep_prompt, debugging_deep_tokens = runtime_profile.build_skill_context("DEBUGGING", "M")
+
+        self.assertIn("轻量", planning_prompt)
+        self.assertIn("progress", planning_prompt)
+        self.assertEqual(planning_tokens, 500)
+        self.assertIn("轻量", debugging_light_prompt)
+        self.assertIn("最小修复", debugging_light_prompt)
+        self.assertIn("深度", debugging_deep_prompt)
+        self.assertIn("回归测试", debugging_deep_prompt)
+        self.assertEqual(debugging_light_tokens, 500)
+        self.assertEqual(debugging_deep_tokens, 1000)
+
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
         self.assertEqual(init_result["phase"], "DEBUGGING")
@@ -402,7 +417,7 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _setup_code_task_with_gate(self, gate_value, with_review: bool = False):
+    def _setup_code_task_with_gate(self, gate_value, with_review: bool = False, review_files_reviewed: int = 1):
         """Set up a workflow with a code task that has explicit gate value."""
         # Init with EXECUTING (code task)
         workflow_engine.initialize_workflow("帮我实现这个功能", workdir=self.temp_dir)
@@ -437,6 +452,9 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
 - Acceptance coverage: checked via task contract and target files
 - Scope completeness: target files count = 1
 
+## Files Reviewed
+**Files Reviewed**: {files_reviewed} code files
+
 ## Stage 2: Code Quality
 - Correctness: reviewed
 - Security: reviewed
@@ -445,7 +463,7 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
 
 ## Verdict
 - Status: REVIEWED
-"""
+""".format(files_reviewed=review_files_reviewed)
             (review_dir / "review_latest.md").write_text(review_content, encoding="utf-8")
             (review_dir / "review_test.md").write_text(review_content, encoding="utf-8")
 
@@ -465,9 +483,16 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
 
     def test_complete_allows_when_quality_gate_true(self):
         """complete_workflow must allow when quality_gates_passed=True for code tasks."""
-        self._setup_code_task_with_gate(True, with_review=True)
+        self._setup_code_task_with_gate(True, with_review=True, review_files_reviewed=1)
         result = workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
         self.assertEqual(result["final_state"], "completed")
+
+    def test_complete_blocks_when_review_is_template_or_empty(self):
+        """complete_workflow must block when review exists but no files were analyzed."""
+        self._setup_code_task_with_gate(True, with_review=True, review_files_reviewed=0)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertIn("review did not analyze any files", str(ctx.exception))
 
     def test_complete_blocks_when_review_missing(self):
         """complete_workflow must block when the review artifact is missing."""

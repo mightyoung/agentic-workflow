@@ -432,6 +432,8 @@ class WorkerAgent:
                 f"## Status: SKIPPED\n\n"
                 f"Real agent execution is disabled (`use_real_agent=False`).\n"
                 f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
+                f"\n## Files Reviewed\n"
+                f"**Files Reviewed**: 0 code files\n"
                 f"\n## Stage 1: Spec Compliance\n"
                 f"- Contract/owned_files alignment: UNKNOWN\n"
                 f"- Acceptance coverage: UNKNOWN\n"
@@ -468,6 +470,8 @@ class WorkerAgent:
             output += "\n## Files to Review\n"
             for f in context["owned_files"]:
                 output += f"- {f}\n"
+        reviewed_files = len(context.get("owned_files", [])) if context else 0
+        output += f"\n## Files Reviewed\n**Files Reviewed**: {reviewed_files} code files\n"
 
         if context and context.get("planning_summary"):
             planning_summary = context["planning_summary"]
