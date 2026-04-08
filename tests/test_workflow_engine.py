@@ -598,7 +598,7 @@ class TestNewPhases(unittest.TestCase):
 
         result = workflow_engine.handle_workflow_failure(
             self.temp_dir,
-            error="AssertionError: stack push failed",
+            error="quality gate failed: pytest tests/test_stack.py",
             strategy="retry",
             max_retries=3,
         )
@@ -612,6 +612,30 @@ class TestNewPhases(unittest.TestCase):
             any(
                 decision.decision == "Escalate skill activation"
                 and decision.metadata.get("escalated_activation_level") == 75
+                and decision.metadata.get("escalation_reason") == "high_signal_failure:quality_gate_failed"
+                for decision in state.decisions
+            )
+        )
+
+    def test_handle_workflow_failure_does_not_escalate_on_generic_unknown_error(self):
+        """Generic recoverable failures should not automatically increase activation."""
+        workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
+
+        result = workflow_engine.handle_workflow_failure(
+            self.temp_dir,
+            error="transient network timeout",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        self.assertTrue(result["success"])
+
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 50)
+        self.assertFalse(
+            any(
+                decision.decision == "Escalate skill activation"
                 for decision in state.decisions
             )
         )

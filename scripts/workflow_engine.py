@@ -2580,6 +2580,37 @@ def _get_error_history(state) -> list[dict[str, Any]]:
     return history
 
 
+def _should_escalate_skill_activation(
+    error: str,
+    error_type: str,
+    strategy: str,
+    retry_count: int,
+    error_history: list[dict[str, Any]],
+) -> tuple[bool, str]:
+    """
+    Decide whether to escalate skill activation based on explicit failure events.
+
+    Escalation is reserved for high-signal failures and repeated test failures.
+    Generic recoverable failures should not automatically increase activation.
+    """
+    if strategy == "abort":
+        return False, "abort strategy does not escalate skill activation"
+
+    if error_type in {"syntax_error", "type_error", "quality_gate_failed"}:
+        return True, f"high_signal_failure:{error_type}"
+
+    if error_type == "test_failure":
+        normalized_error = error[:120].lower()
+        repeated_test_failure = any(
+            item.get("type") == "test_failure" and item.get("error", "")[:120].lower() == normalized_error
+            for item in error_history[-5:]
+        )
+        if repeated_test_failure or retry_count >= 1:
+            return True, "repeated_test_failure"
+
+    return False, "no escalation event"
+
+
 def handle_workflow_failure(
     workdir: str,
     error: str,
@@ -2624,11 +2655,28 @@ def handle_workflow_failure(
     if error_type == "quality_gate_failed":
         quality_gate_details = _extract_quality_gate_details(workdir)
 
-    # Escalate activation level after failure so the next retry carries more guidance.
+    # Determine retry count early so we can make a stricter escalation decision.
     runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
+    retry_count = 0
+    if state.decisions:
+        last_decision = state.decisions[-1]
+        retry_count = int(last_decision.metadata.get("retry_count", 0))
+
+    error_history = _get_error_history(state)
+
+    # Escalate activation level only for explicit failure events.
     if runtime_profile:
         current_activation_level = int(runtime_profile.get("skill_activation_level", 0))
-        escalated_activation_level = escalate_skill_activation_level(current_activation_level)
+        should_escalate, escalation_reason = _should_escalate_skill_activation(
+            error=error,
+            error_type=error_type,
+            strategy=strategy,
+            retry_count=retry_count,
+            error_history=error_history,
+        )
+        escalated_activation_level = (
+            escalate_skill_activation_level(current_activation_level) if should_escalate else current_activation_level
+        )
         if escalated_activation_level != current_activation_level:
             runtime_profile["skill_activation_level"] = escalated_activation_level
             if state.metadata is None:
@@ -2637,11 +2685,13 @@ def handle_workflow_failure(
             state.decisions.append(Decision(
                 timestamp=datetime.now().isoformat(),
                 decision="Escalate skill activation",
-                reason=f"Failure {error_type} escalated activation to {escalated_activation_level}",
+                reason=f"{escalation_reason} escalated activation to {escalated_activation_level}",
                 metadata={
                     "error_type": error_type,
                     "current_activation_level": current_activation_level,
                     "escalated_activation_level": escalated_activation_level,
+                    "escalation_reason": escalation_reason,
+                    "retry_count": retry_count,
                     "profile_source": runtime_profile.get("profile_source", "router"),
                 },
             ))
@@ -2658,9 +2708,10 @@ def handle_workflow_failure(
                 logger = _active_loggers[state.session_id]
                 logger.log_decision(
                     "Escalate skill activation",
-                    f"Failure {error_type} escalated activation to {escalated_activation_level}",
+                    f"{escalation_reason} escalated activation to {escalated_activation_level}",
                     activation_level=escalated_activation_level,
                     error_type=error_type,
+                    escalation_reason=escalation_reason,
                 )
             save_state(workdir, state)
 
