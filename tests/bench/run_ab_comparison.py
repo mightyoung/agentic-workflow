@@ -2,7 +2,9 @@
 """
 Agentic Workflow Skill 对照实验框架
 
-这是一个手动 benchmark helper，不是 pytest 测试。
+这是一个探索性 A/B benchmark helper，不是 pytest 测试，也不是生产级 runtime 评估器。
+它用于比较 skill 注入前后的相对行为，只适合人工分析、策略对照和回归观察，
+不应直接外推为真实生产负载下的最终结论。
 
 评估使用 agentic-workflow skill 与不使用的情况下的多维度表现:
 1. 执行效率 (Execution Efficiency)
@@ -1276,7 +1278,14 @@ All criteria met.
                 "date": datetime.now().isoformat(),
                 "total_tasks": total,
                 "skill_version": "6.3",
-                "evaluation_dims": ["efficiency", "quality", "tokens", "completion"]
+                "evaluation_dims": ["efficiency", "quality", "tokens", "completion"],
+                "scope": "exploratory_ab_benchmark",
+                "limitations": [
+                    "manual benchmark helper only",
+                    "relative comparison, not production runtime profiling",
+                    "small curated task set",
+                    "requires human interpretation"
+                ],
             },
             "overall_summary": {
                 "avg_time_improvement_pct": round(avg_time_imp, 1),
@@ -1328,13 +1337,19 @@ All criteria met.
     def _generate_markdown_report(self, report: dict) -> str:
         """生成 Markdown 格式报告"""
         summary = report["overall_summary"]
+        experiment_info = report["experiment_info"]
 
         md = f"""# Agentic Workflow Skill 对照实验报告
 
-**实验日期**: {report['experiment_info']['date']}
-**Skill 版本**: {report['experiment_info']['skill_version']}
-**任务总数**: {report['experiment_info']['total_tasks']}
-**评估维度**: {', '.join(report['experiment_info']['evaluation_dims'])}
+> **实验声明**: 这是一个探索性 A/B benchmark helper，仅用于 skill 注入前后的相对行为比较。
+> 它不是 pytest 测试，也不是生产级 runtime 评估器；结果应作为人工分析和策略对照的参考，
+> 不应直接外推为真实生产负载下的最终结论。
+
+**实验日期**: {experiment_info['date']}
+**Skill 版本**: {experiment_info['skill_version']}
+**任务总数**: {experiment_info['total_tasks']}
+**评估维度**: {', '.join(experiment_info['evaluation_dims'])}
+**实验范围**: {experiment_info['scope']}
 
 ---
 
@@ -1399,6 +1414,14 @@ All criteria met.
 - **有 Skill 平均分**: {summary['avg_final_score_with_skill']:.1f}/100
 - **无 Skill 平均分**: {summary['avg_final_score_without_skill']:.1f}/100
 - **总体改进**: {summary['overall_improvement_pct']:+.1f}%
+
+### 局限说明
+
+"""
+        for limitation in experiment_info.get("limitations", []):
+            md += f"- {limitation}\n"
+
+        md += """
 
 ---
 

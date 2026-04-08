@@ -58,13 +58,13 @@ python3 scripts/trajectory_logger.py --op list --workdir .
 ## 测试命令
 
 ```bash
-# 核心测试 (312 tests,不含 benchmark)
+# 核心测试（不含 benchmark helper）
 python3 -m pytest tests/ --ignore=tests/bench/ -q
 
-# Benchmark 测试 (84 tests, TDD 学习/性能基准)
+# Benchmark helper（探索性 A/B 对照，不计入正式回归）
 python3 -m pytest tests/bench/ -q
 
-# 完整测试套件 (396 tests = 312 core + 84 benchmark)
+# 完整测试套件（核心回归 + benchmark helper）
 python3 -m pytest tests/ -q
 
 # 任务分解测试
