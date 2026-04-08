@@ -31,7 +31,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -460,9 +459,6 @@ def _deliberate_high_complexity(workdir: str, context: dict[str, Any]) -> list[B
 
 def _deliberate_generic(context: dict[str, Any]) -> list[Branch]:
     """Generic deliberation when no specific trigger matches."""
-    task_desc = context.get("task_description", "")
-    keywords = task_desc.split()[:10]
-
     return [
         Branch(
             branch_id="generic_option_a",

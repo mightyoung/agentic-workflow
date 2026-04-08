@@ -190,7 +190,6 @@ def conditional_checkpoint(
     # Raw worker outputs must NEVER appear in checkpoint/handoff - only summaries
     team_state_for_handoff: dict[str, Any] | None = None
     try:
-        from team_agent import TeamAgent
         registry_path = Path(workdir) / ".team_registry.json"
         if registry_path.exists():
             import json as json_lib

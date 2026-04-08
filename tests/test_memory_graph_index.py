@@ -12,7 +12,6 @@ Covers:
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -32,7 +31,6 @@ from memory_graph_index import (
     search_causal,
     search_entity,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

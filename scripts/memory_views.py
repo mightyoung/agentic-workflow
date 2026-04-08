@@ -26,7 +26,6 @@ import os
 import re
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -135,7 +134,7 @@ def search_semantic(
     for kw in query_keywords:
         if kw in index.get("keywords", {}):
             for entry_ref in index["keywords"][kw]:
-                results.append((len(query_keywords & set([kw])), entry_ref))
+                results.append((len(query_keywords & {kw}), entry_ref))
 
     results.sort(key=lambda x: x[0], reverse=True)
     seen = set()

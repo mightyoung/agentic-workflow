@@ -114,9 +114,13 @@ python3 scripts/workflow_engine.py --op status --workdir .
 
 ## 禁止引用的过时文件
 
-- `SESSION-STATE.md` — 已移除
 - `~/.gstack` — 历史设计
 - 假设 telemetry daemon、preload 或 session 守护进程存在
+
+## 兼容侧边车
+
+- `SESSION-STATE.md` — 仍由 `memory_ops.py` 维护，作为兼容 sidecar，不是权威状态源
+- `progress.md` — 兼容进度侧边车，由 workflow runtime 同步
 
 ## Iron Law
 
