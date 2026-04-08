@@ -34,6 +34,7 @@ from unified_state import (
     get_planning_summary,
     get_review_summary,
     get_runtime_profile_summary,
+    get_thinking_summary as get_state_thinking_summary,
     load_state,
 )
 
@@ -233,6 +234,8 @@ def conditional_checkpoint(
     # Create checkpoint JSON (AgentSys P0: no raw outputs, only summaries)
     session_state_path = Path(workdir) / "SESSION-STATE.md"
     thinking_summary = get_session_thinking_summary(str(session_state_path))
+    if not thinking_summary:
+        thinking_summary = get_state_thinking_summary(workdir, state)
     checkpoint_data = {
         "checkpoint_id": checkpoint_id,
         "session_id": session_id,
@@ -337,6 +340,7 @@ def conditional_checkpoint(
 ## THINKING Summary
 - Workflow label: {thinking_summary.get('workflow_label') or 'unset'}
 - Workflow: {thinking_summary.get('workflow') or 'unset'}
+- Thinking mode: {thinking_summary.get('thinking_mode') or 'unset'}
 - Major contradiction: {thinking_summary.get('major_contradiction') or 'unset'}
 - Stage judgment: {thinking_summary.get('stage_judgment') or 'unset'}
 - Local attack point: {thinking_summary.get('local_attack_point') or 'unset'}

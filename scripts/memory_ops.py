@@ -91,6 +91,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 ## THINKING摘要
 - **workflow_label**: (未设置)
 - **workflow**: (未设置)
+- **thinking_mode**: (未设置)
 - **major_contradiction**: (未设置)
 - **stage_judgment**: (未设置)
 - **local_attack_point**: (未设置)
@@ -121,6 +122,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **degraded_mode**: (未设置)
 - **files_reviewed**: 0
 - **thinking_workflow_label**: (未设置)
+- **thinking_thinking_mode**: (未设置)
 - **thinking_major_contradiction**: (未设置)
 - **thinking_stage_judgment**: (未设置)
 - **thinking_local_attack_point**: (未设置)
@@ -485,10 +487,23 @@ def update_thinking_summary(
         content = f.read()
 
     thinking_summary = thinking_summary or {}
+    thinking_mode = str(thinking_summary.get("thinking_mode", "")).strip()
+    if not thinking_mode or thinking_mode in {"(未设置)", "unset"}:
+        workflow = str(thinking_summary.get("workflow", "")).strip()
+        workflow_label = str(thinking_summary.get("workflow_label", "")).strip()
+        if workflow == "workflow_1_new_project" or "新项目" in workflow_label:
+            thinking_mode = "investigation_first"
+        elif workflow == "workflow_3_iteration" or "迭代" in workflow_label:
+            thinking_mode = "mass_line_iteration"
+        elif workflow == "workflow_2_complex_problem" or "复杂" in workflow_label:
+            thinking_mode = "contradiction_analysis"
+        else:
+            thinking_mode = "(未设置)"
     section = (
         "## THINKING摘要\n"
         f"- **workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
         f"- **workflow**: {thinking_summary.get('workflow', '(未设置)')}\n"
+        f"- **thinking_mode**: {thinking_mode}\n"
         f"- **major_contradiction**: {thinking_summary.get('major_contradiction', '(未设置)')}\n"
         f"- **stage_judgment**: {thinking_summary.get('stage_judgment', '(未设置)')}\n"
         f"- **local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
@@ -496,7 +511,7 @@ def update_thinking_summary(
         f"- **memory_hints_count**: {thinking_summary.get('memory_hints_count', 0)}\n"
     )
 
-    pattern = r"## THINKING摘要\n(?:- \*\*workflow_label\*\*: .*\n- \*\*workflow\*\*: .*\n- \*\*major_contradiction\*\*: .*\n- \*\*stage_judgment\*\*: .*\n- \*\*local_attack_point\*\*: .*\n- \*\*recommendation\*\*: .*\n- \*\*memory_hints_count\*\*: .*\n)?"
+    pattern = r"## THINKING摘要\n(?:- \*\*workflow_label\*\*: .*\n- \*\*workflow\*\*: .*\n- \*\*thinking_mode\*\*: .*\n- \*\*major_contradiction\*\*: .*\n- \*\*stage_judgment\*\*: .*\n- \*\*local_attack_point\*\*: .*\n- \*\*recommendation\*\*: .*\n- \*\*memory_hints_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -522,6 +537,7 @@ def get_thinking_summary(path: str) -> dict[str, Any]:
         r"## THINKING摘要\n"
         r"(?:- \*\*workflow_label\*\*: (.*)\n"
         r"- \*\*workflow\*\*: (.*)\n"
+        r"- \*\*thinking_mode\*\*: (.*)\n"
         r"- \*\*major_contradiction\*\*: (.*)\n"
         r"- \*\*stage_judgment\*\*: (.*)\n"
         r"- \*\*local_attack_point\*\*: (.*)\n"
@@ -533,17 +549,18 @@ def get_thinking_summary(path: str) -> dict[str, Any]:
         return {}
 
     groups = match.groups()
-    if not groups or len(groups) < 7 or groups[0] is None:
+    if not groups or len(groups) < 8 or groups[0] is None:
         return {}
 
     return {
         "workflow_label": groups[0].strip(),
         "workflow": groups[1].strip(),
-        "major_contradiction": groups[2].strip(),
-        "stage_judgment": groups[3].strip(),
-        "local_attack_point": groups[4].strip(),
-        "recommendation": groups[5].strip(),
-        "memory_hints_count": int(groups[6]),
+        "thinking_mode": groups[2].strip(),
+        "major_contradiction": groups[3].strip(),
+        "stage_judgment": groups[4].strip(),
+        "local_attack_point": groups[5].strip(),
+        "recommendation": groups[6].strip(),
+        "memory_hints_count": int(groups[7]),
     }
 
 
@@ -640,6 +657,7 @@ def update_resume_summary(
         f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
         f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
         f"- **thinking_workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
+        f"- **thinking_thinking_mode**: {thinking_summary.get('thinking_mode', '(未设置)')}\n"
         f"- **thinking_major_contradiction**: {thinking_summary.get('major_contradiction', '(未设置)')}\n"
         f"- **thinking_stage_judgment**: {thinking_summary.get('stage_judgment', '(未设置)')}\n"
         f"- **thinking_local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
@@ -649,7 +667,7 @@ def update_resume_summary(
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:

@@ -358,6 +358,7 @@ class TestConditionalCheckpoint(unittest.TestCase):
             checkpoint_file = Path(tmpdir) / ".checkpoints" / f"{result['checkpoint_id']}.json"
             checkpoint_json = json.loads(checkpoint_file.read_text(encoding="utf-8"))
             self.assertEqual(checkpoint_json["thinking_summary"]["workflow_label"], "新项目启动")
+            self.assertEqual(checkpoint_json["thinking_summary"]["thinking_mode"], "investigation_first")
             self.assertIn("目标完整性", checkpoint_json["thinking_summary"]["major_contradiction"])
             self.assertEqual(checkpoint_json["thinking_summary"]["memory_hints_count"], 2)
 
@@ -365,6 +366,7 @@ class TestConditionalCheckpoint(unittest.TestCase):
             handoff_content = handoff_file.read_text(encoding="utf-8")
             self.assertIn("## THINKING Summary", handoff_content)
             self.assertIn("Workflow label: 新项目启动", handoff_content)
+            self.assertIn("Thinking mode: investigation_first", handoff_content)
             self.assertIn("Major contradiction: 目标完整性 vs 交付节奏", handoff_content)
             self.assertIn("Memory hints count: 2", handoff_content)
 

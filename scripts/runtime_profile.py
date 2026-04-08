@@ -341,11 +341,21 @@ def build_thinking_summary(
     if experience_check.get("has_relevant_experience"):
         investigation_focus.append("历史经验回流")
 
+    if workflow == "workflow_1_new_project":
+        thinking_mode = "investigation_first"
+    elif workflow == "workflow_3_iteration":
+        thinking_mode = "mass_line_iteration"
+    elif workflow == "workflow_2_complex_problem":
+        thinking_mode = "contradiction_analysis"
+    else:
+        thinking_mode = "lightweight"
+
     return {
         "workflow": workflow,
         "workflow_label": workflow_label,
         "workflow_steps": workflow_steps,
         "investigation_focus": investigation_focus,
+        "thinking_mode": thinking_mode,
         "major_contradiction": major_contradiction,
         "stage_judgment": stage_judgment,
         "local_attack_point": local_attack_point,

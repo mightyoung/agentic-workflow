@@ -261,6 +261,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(result["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
+        self.assertEqual(result["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
 
         resumed_trajectory = result["resumed_trajectory"]
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
@@ -269,6 +270,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
+        self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
         self.assertEqual(resumed_trajectory["phases"][0]["notes"][0], f"Resumed from {original_session_id} at EXECUTING")
 
     def test_resume_from_init_no_advance(self):

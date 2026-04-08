@@ -422,6 +422,16 @@ def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> di
     session_state_path = Path(workdir) / "SESSION-STATE.md"
     summary = get_session_thinking_summary(str(session_state_path))
     if _is_meaningful_thinking_summary(summary):
+        summary = dict(summary)
+        if not str(summary.get("thinking_mode", "")).strip() or str(summary.get("thinking_mode", "")).strip() in {"(未设置)", "unset"}:
+            workflow = str(summary.get("workflow", "")).strip()
+            workflow_label = str(summary.get("workflow_label", "")).strip()
+            if workflow == "workflow_1_new_project" or "新项目" in workflow_label:
+                summary["thinking_mode"] = "investigation_first"
+            elif workflow == "workflow_3_iteration" or "迭代" in workflow_label:
+                summary["thinking_mode"] = "mass_line_iteration"
+            elif workflow == "workflow_2_complex_problem" or "复杂" in workflow_label:
+                summary["thinking_mode"] = "contradiction_analysis"
         return summary
 
     if state is None:
