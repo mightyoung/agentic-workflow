@@ -27,6 +27,7 @@ from workflow_engine import (
     initialize_workflow,
     load_state,
 )
+import json
 
 
 class TestFailureHandling(unittest.TestCase):
@@ -154,6 +155,26 @@ class TestFailureHandling(unittest.TestCase):
         history = state.phase.get("history", [])
         phase_names = [h.get("phase") for h in history]
         self.assertIn("DEBUGGING", phase_names)
+
+    def test_debugging_activation_respects_local_context(self):
+        """测试DEBUGGING激活级别会根据 owned_files / file_changes / failure history 收缩。"""
+        _ = initialize_workflow("实现一个简单功能", self.workdir)
+
+        state_path = Path(self.workdir) / ".workflow_state.json"
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        state_data["task"]["owned_files"] = ["src/main.py"]
+        state_data["file_changes"] = [{"path": "src/main.py", "action": "modify", "timestamp": "2026-04-08T00:00:00"}]
+        state_data["task"]["description"] = "修复这个单文件 bug"
+        state_path.write_text(json.dumps(state_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        result = handle_workflow_failure(self.workdir, "需要调试这个单文件 bug", strategy="debugging")
+
+        self.assertTrue(result["success"])
+        state = load_state(self.workdir)
+        runtime_profile = state.metadata.get("runtime_profile", {})
+        self.assertEqual(state.phase.get("current"), "DEBUGGING")
+        self.assertEqual(runtime_profile.get("skill_activation_level"), 0)
+        self.assertFalse(runtime_profile.get("use_skill"))
 
 
 class TestStateSchemaDecision(unittest.TestCase):

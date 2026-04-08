@@ -43,6 +43,7 @@ from review_paths import (
 )
 from runtime_profile import (
     build_skill_context,
+    debugging_activation_level_for_context,
     escalate_skill_activation_level,
     should_use_skill_for_phase,
     skill_activation_level_for_phase,
@@ -2962,6 +2963,49 @@ def handle_workflow_failure(
             quality_gate_details=quality_gate_details,
         )
         if can_transition(current_phase, "DEBUGGING"):
+            owned_files_count = len(state.task.owned_files) if state.task else 0
+            diff_size = len(state.file_changes) if state.file_changes else 0
+            failure_count = len(error_history)
+            task_text = state.task.description if state.task else error
+            debug_activation_level = debugging_activation_level_for_context(
+                str(runtime_profile.get("complexity", state.metadata.get("complexity", "M")) if state.metadata else "M"),
+                task_text=task_text,
+                owned_files_count=owned_files_count,
+                diff_size=diff_size,
+                failure_count=failure_count,
+            )
+
+            if runtime_profile:
+                runtime_profile["skill_activation_level"] = debug_activation_level
+                runtime_profile["skill_policy"] = (
+                    "conditional_enable_after_optimization" if debug_activation_level > 0 else "disable"
+                )
+                runtime_profile["use_skill"] = debug_activation_level > 0
+                if state.metadata is None:
+                    state.metadata = {}
+                state.metadata["runtime_profile"] = runtime_profile
+                state.decisions.append(Decision(
+                    timestamp=datetime.now().isoformat(),
+                    decision="Tune debugging activation",
+                    reason=f"context-based debug activation set to {debug_activation_level}",
+                    metadata={
+                        "owned_files_count": owned_files_count,
+                        "diff_size": diff_size,
+                        "failure_count": failure_count,
+                        "debug_activation_level": debug_activation_level,
+                        "profile_source": runtime_profile.get("profile_source", "router"),
+                    },
+                ))
+                session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+                memory_ops.update_runtime_profile(
+                    str(session_path),
+                    skill_policy=str(runtime_profile.get("skill_policy", "")),
+                    use_skill=bool(runtime_profile.get("use_skill", False)),
+                    skill_activation_level=debug_activation_level,
+                    tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
+                    profile_source=str(runtime_profile.get("profile_source", "router")),
+                )
+
             state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")
             save_state(workdir, state)
 

@@ -192,6 +192,40 @@ def _is_local_debugging_task(task_text: str | None) -> bool:
     return any(hint in text for hint in DEBUGGING_LOCAL_HINTS)
 
 
+def debugging_activation_level_for_context(
+    complexity: str,
+    task_text: str | None = None,
+    owned_files_count: int = 0,
+    diff_size: int = 0,
+    failure_count: int = 0,
+) -> int:
+    """Return a context-sensitive debugging activation level.
+
+    The goal is to keep obvious local fixes light, while escalating only when
+    the task spans multiple files, has a larger diff surface, or has repeated
+    failure history.
+    """
+    complexity = (complexity or "").upper()
+    if complexity in {"XS", "S"}:
+        return 0
+
+    owned_files_count = max(0, int(owned_files_count or 0))
+    diff_size = max(0, int(diff_size or 0))
+    failure_count = max(0, int(failure_count or 0))
+    is_local = _is_local_debugging_task(task_text)
+
+    if is_local and owned_files_count <= 1 and diff_size <= 2 and failure_count == 0:
+        return 0
+
+    if owned_files_count <= 1 and diff_size <= 3 and failure_count <= 1:
+        return 25
+
+    if owned_files_count == 0 and diff_size == 0 and failure_count == 0:
+        return 25
+
+    return 50
+
+
 def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
     """Build skill context and expected tokens from phase and complexity."""
     phase = (phase or "").upper()
@@ -292,20 +326,37 @@ def skill_activation_level_for_phase(
     complexity: str,
     intent: str | None = None,
     task_text: str | None = None,
+    owned_files_count: int | None = None,
+    diff_size: int | None = None,
+    failure_count: int = 0,
 ) -> int:
     """Return the default skill activation level for a phase/complexity pair."""
     phase = (phase or "").upper()
     complexity = (complexity or "").upper()
     intent = (intent or "").upper()
 
-    if not should_use_skill_for_phase(phase, complexity, intent, task_text):
+    if not should_use_skill_for_phase(
+        phase,
+        complexity,
+        intent,
+        task_text,
+        owned_files_count=owned_files_count,
+        diff_size=diff_size,
+        failure_count=failure_count,
+    ):
         return 0
     if phase == "EXECUTING":
         return 75 if complexity not in {"XS", "S"} else 50
     if phase == "REVIEWING":
         return 50
     if phase == "DEBUGGING":
-        return 25 if complexity not in {"XS", "S"} else 0
+        return debugging_activation_level_for_context(
+            complexity,
+            task_text=task_text,
+            owned_files_count=owned_files_count or 0,
+            diff_size=diff_size or 0,
+            failure_count=failure_count,
+        )
     return 50
 
 
@@ -325,6 +376,9 @@ def should_use_skill_for_phase(
     complexity: str,
     intent: str | None = None,
     task_text: str | None = None,
+    owned_files_count: int | None = None,
+    diff_size: int | None = None,
+    failure_count: int = 0,
 ) -> bool:
     """Return the default skill on/off decision for a phase/complexity pair."""
     phase = (phase or "").upper()
@@ -334,11 +388,13 @@ def should_use_skill_for_phase(
     if phase in {"CHAT", "THINKING", "RESEARCH", "PLANNING"} or intent == "FULL_WORKFLOW":
         return False
     if phase == "DEBUGGING":
-        if complexity in {"XS", "S"}:
-            return False
-        if _is_local_debugging_task(task_text):
-            return False
-        return True
+        return debugging_activation_level_for_context(
+            complexity,
+            task_text=task_text,
+            owned_files_count=owned_files_count or 0,
+            diff_size=diff_size or 0,
+            failure_count=failure_count,
+        ) > 0
     if phase == "REVIEWING":
         return complexity not in {"XS", "S"}
     return True

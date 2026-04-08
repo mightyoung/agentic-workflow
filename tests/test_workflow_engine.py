@@ -145,6 +145,28 @@ class TestWorkflowEngine(unittest.TestCase):
             0,
         )
 
+    def test_runtime_profile_debugging_activation_scales_with_context(self):
+        self.assertEqual(
+            runtime_profile.debugging_activation_level_for_context(
+                "M",
+                task_text="修复局部问题",
+                owned_files_count=1,
+                diff_size=3,
+                failure_count=0,
+            ),
+            25,
+        )
+        self.assertEqual(
+            runtime_profile.debugging_activation_level_for_context(
+                "M",
+                task_text="多文件重构后的连锁问题",
+                owned_files_count=4,
+                diff_size=9,
+                failure_count=2,
+            ),
+            50,
+        )
+
     def test_runtime_profile_shrinks_planning_and_debugging_prompts(self):
         planning_prompt, planning_tokens = runtime_profile.build_skill_context("PLANNING", "XS")
         debugging_light_prompt, debugging_light_tokens = runtime_profile.build_skill_context("DEBUGGING", "XS")
