@@ -63,6 +63,144 @@ _active_loggers: dict[str, TrajectoryLogger] = {}
 
 DEFAULT_CATEGORY = "WORKFLOW"
 
+# =============================================================================
+# Skill prompt constants (sunk from middleware.SkillMiddleware)
+# =============================================================================
+
+MINIMAL_CORE = """## 原则
+- 回答简洁,不废话
+- 有证据再声称完成
+- 先验证再结论"""
+
+PHASE_PROMPTS = {
+    "EXECUTING": """## EXECUTING 执行
+
+**铁律**: 先写测试再实现,先验证再声称完成
+
+**Boil the Lake原则**: 完整性与AI能力成正比,不要省步骤
+
+**Fix-First决策**:
+- AUTO-FIX: 机械性问题(typo, import, 格式化)→直接修复
+- ASK: 判断性问题(架构, 设计)→先问用户
+
+**Voice规则**:
+- 禁止: em dashes, "delve/crucial/robust"等AI词汇
+- 使用: 具体file:line引用,简洁动词
+
+步骤:
+1. 写失败的测试
+2. 写最小代码通过
+3. 重构优化
+
+**验证**: 运行测试确认,不要只说"完成了".""",
+
+    "DEBUGGING": """## DEBUGGING 调试
+
+**铁律**: 不定位根因不修复
+
+步骤:
+1. 收集症状(错误信息/堆栈)
+2. 追踪代码找可能原因
+3. 验证假设,不对就回退
+4. 3次失败→考虑架构问题
+
+输出: 根因/修复/回归测试""",
+
+    "REVIEWING": """## REVIEWING 代码审查
+
+**优先级**: P0安全 > P1逻辑/性能 > P2风格
+
+直接输出问题:
+- [文件:行号] 问题 (P0/P1/P2)
+- 修复: [简洁建议]""",
+
+    "THINKING": """## THINKING 专家推理
+
+**核心**: 谁最懂这个?TA会怎么说?
+
+**Mandatory Think**: 重大决策(git操作,阶段转换)前必须思考
+
+回答:
+- 本质: [一句话]
+- 权衡: [最多3观点,各20字]
+- 建议: [1个明确建议]""",
+
+    "RESEARCH": """## RESEARCH 搜索研究
+
+**阶段方法论**:
+1. 广泛探索 - 快速扫描多个来源
+2. 深度挖掘 - 聚焦权威来源
+3. 综合验证 - 检查一致性
+
+**Quality Gate**: 自问"能自信回答吗?"
+- 如果NO→继续研究
+- 如果YES→输出结论
+
+**执行**:
+1. 搜索: 具体技术名词+"best practices"
+2. 深度获取: 不只看摘要,要fetch完整内容
+3. 来源优先级: 官方文档>开源>博客>AI生成
+4. 输出: 关键发现+3条内可操作建议+来源
+
+**铁律**: 搜索不可用时直接说明,禁止静默降级
+
+**时间感知**: 检查当前日期,趋势用年月""",
+
+    "PLANNING": """## PLANNING 任务规划
+
+**复杂度路由**:
+- XS/S: TodoWrite拆分,不用spec文件
+- M: spec.md + tasks.md
+- L/XL: spec.md + plan.md + tasks.md + .contract.json
+
+**核心**: 不只拆分,要生成多种方案
+
+步骤:
+1. 明确目标(一话说清)
+2. 生成2-3方案(最小/折中/理想)
+3. 推荐明确方案和理由
+
+**反模式**: XS/S禁止完整spec-kit""",
+
+    "REFINING": """## 迭代优化框架
+
+**优化优先级**:
+1. 正确性 - 修复bug/边缘case
+2. 性能 - 降低复杂度/减少资源
+3. 可维护性 - 清理代码/添加文档
+
+**迭代原则**:
+- 每次只做一件事
+- 小步提交,随时可回退
+- 重构不改变外部行为
+
+**输出格式**:
+## 当前问题
+[具体问题描述]
+
+## 优化方案
+[具体改进措施]
+
+## 验证
+[如何验证优化效果]""",
+}
+
+_COMPLEXITY_TOKENS = {
+    "XS": 500,
+    "S": 500,
+    "M": 1000,
+    "L": 1500,
+    "XL": 2500,
+}
+
+
+def _build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
+    """Build skill context and expected tokens from phase and complexity."""
+    phase_prompt = PHASE_PROMPTS.get(phase, "")
+    prompt = (MINIMAL_CORE + "\n\n" + phase_prompt).strip()
+    tokens = _COMPLEXITY_TOKENS.get(complexity, 1500)
+    return prompt, tokens
+
 
 def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: str, is_code_task: bool = True) -> bool:
     """
@@ -1209,14 +1347,25 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
     """
     Build the initial runtime profile for a prompt.
 
-    The authoritative workflow runtime still owns state and gates, but it now
-    reuses the middleware chain to normalize intent, complexity, phase sequence,
-    and skill context. Router remains the fallback when middleware is unavailable.
+    The authoritative runtime owns state and gates. Skill context and workspace
+    injection are now inlined here, reducing experimental-layer residue.
+    Middleware remains available for experimental signal extraction but is no
+    longer required for profile construction.
     """
     trigger_type, routed_phase, _confidence = router.route(prompt)
     complexity, complexity_conf = router.estimate_complexity(prompt)
     phase_sequence = router.get_phase_sequence(complexity)
     current_phase = _phase_display_name(trigger_type, routed_phase)
+
+    # CHAT intent: direct answer, no skill needed
+    if trigger_type == "DIRECT_ANSWER":
+        skill_context = ""
+        tokens_expected = 500
+        use_skill = False
+    else:
+        # Build skill context inline using sunk PHASE_PROMPTS
+        skill_context, tokens_expected = _build_skill_context(current_phase, complexity)
+        use_skill = True
 
     profile: dict[str, Any] = {
         "trigger_type": trigger_type,
@@ -1224,13 +1373,16 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         "complexity": complexity,
         "complexity_confidence": complexity_conf,
         "phase_sequence": phase_sequence,
-        "skill_context": "",
-        "tokens_expected": 0,
-        "use_skill": True,
+        "skill_context": skill_context,
+        "tokens_expected": tokens_expected,
+        "use_skill": use_skill,
         "intent": None,
         "profile_source": "router",
     }
 
+    # Middleware signal overlay: FULL_WORKFLOW and CHAT override router defaults.
+    # This is kept for backward compatibility with the experimental middleware layer.
+    # ContextMiddleware / SkillMiddleware signals are now sunk into this function.
     try:
         request = MiddlewareRequest(text=prompt, metadata={"cwd": workdir})
         create_middleware_chain().execute(request)
@@ -1242,21 +1394,23 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
             profile["trigger_type"] = "DIRECT_ANSWER"
             profile["phase"] = "DIRECT_ANSWER"
             profile["use_skill"] = False
+            profile["skill_context"] = ""
+            profile["tokens_expected"] = 500
+            profile["profile_source"] = "middleware+router"
         elif request.intent == "FULL_WORKFLOW":
             profile["trigger_type"] = "FULL_WORKFLOW"
             profile["phase"] = request.phase.value
-
             profile["complexity"] = request.complexity.value
             if request.metadata.get("phase_sequence"):
                 profile["phase_sequence"] = [
                     phase.value if hasattr(phase, "value") else str(phase)
                     for phase in request.metadata["phase_sequence"]
                 ]
-
-        profile["skill_context"] = request.skill_context
-        profile["tokens_expected"] = request.tokens_expected
-        profile["use_skill"] = request.use_skill
-        profile["profile_source"] = "middleware+router"
+            # Override with middleware-built skill context for FULL_WORKFLOW
+            profile["skill_context"] = request.skill_context
+            profile["tokens_expected"] = request.tokens_expected
+            profile["use_skill"] = request.use_skill
+            profile["profile_source"] = "middleware+router"
     except Exception:
         # Keep router-derived defaults when middleware is unavailable.
         pass
