@@ -14,8 +14,8 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import memory_longterm  # noqa: E402
-import search_adapter  # noqa: E402
 import runtime_profile  # noqa: E402
+import search_adapter  # noqa: E402
 import unified_state  # noqa: E402
 import workflow_engine  # noqa: E402
 from trajectory_logger import load_trajectory  # noqa: E402
@@ -57,6 +57,12 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("skill_policy", session_state)
         self.assertIn("use_skill", session_state)
         self.assertIn("skill_activation_level", session_state)
+        self.assertIn("## 计划摘要", session_state)
+        self.assertIn("plan_digest", session_state)
+
+        progress_content = (Path(self.temp_dir) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("## Planning Summary", progress_content)
+        self.assertIn("plan_digest", progress_content)
 
         specs_root = Path(self.temp_dir) / ".specs"
         feature_dirs = list(specs_root.glob("*/"))
@@ -70,6 +76,12 @@ class TestWorkflowEngine(unittest.TestCase):
         # Use unified state
         state = unified_state.load_state(self.temp_dir)
         self.assertEqual(state.phase.get("current"), "PLANNING")
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["planning_summary"]["plan_source"], "tasks.md")
+        self.assertGreaterEqual(snapshot["planning_summary"]["plan_task_count"], 1)
+        self.assertIn("plan_digest", snapshot["planning_summary"])
+        self.assertIsInstance(snapshot["planning_summary"]["worktree_recommended"], bool)
 
     def test_initialize_direct_answer_does_not_create_task_tracker_entry(self):
         result = workflow_engine.initialize_workflow("hello", workdir=self.temp_dir)

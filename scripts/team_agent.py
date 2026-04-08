@@ -37,7 +37,7 @@ import search_adapter
 from findings_paths import ensure_findings_dir, findings_latest_path
 from review_paths import ensure_review_dir, review_latest_path
 from safe_io import safe_write_text_locked
-from unified_state import ArtifactType, register_artifact
+from unified_state import ArtifactType, get_planning_summary, register_artifact
 
 # Optional real agent runner (lazy import to avoid hard dependency)
 _subagent_runner = None
@@ -238,7 +238,7 @@ class WorkerAgent:
 
         AgentSys P0: The summary is the ONLY thing that crosses to lead context.
         Raw tool output stays in artifacts. This method enforces the boundary.
-        Default limit is MAX_SUMMARY_LENGTH (500 chars) to keep lead payload small.
+        Default limit is MAX_SUMMARY_LENGTH (260 chars) to keep lead payload small.
         """
         if not output:
             return ""
@@ -249,7 +249,7 @@ class WorkerAgent:
         return normalized[: effective_limit - 1].rstrip() + "…"
 
     # AgentSys P0: Hard limits to prevent raw output leaking into lead context
-    MAX_SUMMARY_LENGTH: int = 500  # Lead-safe summary max chars
+    MAX_SUMMARY_LENGTH: int = 260  # Lead-safe summary max chars
     MAX_WARNING_LENGTH: int = 200   # Warning field max chars
 
     @staticmethod
@@ -406,6 +406,14 @@ class WorkerAgent:
                 output += f"- {f}\n"
         if context and context.get("verification"):
             output += f"\n## Verification\n{context['verification']}\n"
+        if context and context.get("planning_summary"):
+            planning_summary = context["planning_summary"]
+            output += "\n## Planning Context\n"
+            output += f"- Plan digest: {planning_summary.get('plan_digest')}\n"
+            output += f"- Worktree recommended: {planning_summary.get('worktree_recommended')}\n"
+            next_task_ids = planning_summary.get("next_task_ids", [])
+            if next_task_ids:
+                output += f"- Next tasks: {', '.join(next_task_ids)}\n"
         output += "\n## Implementation Notes\n"
         output += "TDD approach recommended:\n1. Write failing test\n2. Implement minimal code\n3. Refactor\n"
 
@@ -424,6 +432,17 @@ class WorkerAgent:
                 f"## Status: SKIPPED\n\n"
                 f"Real agent execution is disabled (`use_real_agent=False`).\n"
                 f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
+                f"\n## Stage 1: Spec Compliance\n"
+                f"- Contract/owned_files alignment: UNKNOWN\n"
+                f"- Acceptance coverage: UNKNOWN\n"
+                f"- Scope completeness: UNKNOWN\n"
+                f"\n## Stage 2: Code Quality\n"
+                f"- Correctness: UNKNOWN\n"
+                f"- Security: UNKNOWN\n"
+                f"- Performance: UNKNOWN\n"
+                f"- Maintainability: UNKNOWN\n"
+                f"\n## Verdict\n"
+                f"- Status: SKIPPED\n"
             )
             review_dir = ensure_review_dir(self.workdir)
             review_path = review_dir / f"review_{self.session_id}.md"
@@ -435,7 +454,11 @@ class WorkerAgent:
             return skipped_msg, [str(review_path)]
 
         output = f"# Code Review\n\nTask: {task}\n\n"
-        output += "## Review Focus\n"
+        output += "## Stage 1: Spec Compliance\n"
+        output += "- Contract/owned_files alignment\n"
+        output += "- Acceptance coverage\n"
+        output += "- Scope completeness\n"
+        output += "\n## Stage 2: Code Quality\n"
         output += "- Correctness\n"
         output += "- Security\n"
         output += "- Performance\n"
@@ -445,6 +468,18 @@ class WorkerAgent:
             output += "\n## Files to Review\n"
             for f in context["owned_files"]:
                 output += f"- {f}\n"
+
+        if context and context.get("planning_summary"):
+            planning_summary = context["planning_summary"]
+            output += "\n## Planning Context\n"
+            output += f"- Plan digest: {planning_summary.get('plan_digest')}\n"
+            output += f"- Worktree recommended: {planning_summary.get('worktree_recommended')}\n"
+            next_task_ids = planning_summary.get("next_task_ids", [])
+            if next_task_ids:
+                output += f"- Next tasks: {', '.join(next_task_ids)}\n"
+
+        output += "\n## Verdict\n"
+        output += "- Status: REVIEWED\n"
 
         review_dir = ensure_review_dir(self.workdir)
         review_path = review_dir / f"review_{self.session_id}.md"
@@ -535,6 +570,7 @@ class TeamAgent:
         self.tasks: dict[str, TeamTask] = {}
         self.messages: list[TeamMessage] = []
         self.use_real_agent = use_real_agent
+        self.execution_context: dict[str, Any] = {}
 
     def add_task(self, description: str, worker_type: WorkerType | None = None) -> str:
         """添加任务"""
@@ -567,7 +603,8 @@ class TeamAgent:
             raise ValueError(f"Task {task_id} has no assigned worker")
 
         worker = WorkerAgent(task.assigned_worker, str(self.workdir), use_real_agent=self.use_real_agent)
-        result = worker.execute(task.description, context=self.contract)
+        execution_context = self.execution_context or {"contract": self.contract}
+        result = worker.execute(task.description, context=execution_context)
         envelope = worker.build_envelope(task.description, result)
         WorkerAgent._validate_envelope(envelope)
 
@@ -617,6 +654,13 @@ class TeamAgent:
             "tasks_failed": 0,
             "outputs": [],
             "artifacts": [],
+        }
+
+        planning_summary = get_planning_summary(str(self.workdir))
+        self.execution_context = {
+            "contract": self.contract,
+            "frontier": self.frontier,
+            "planning_summary": planning_summary,
         }
 
         executed_ids: set = set()

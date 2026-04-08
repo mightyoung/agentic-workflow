@@ -28,7 +28,12 @@ from pathlib import Path
 from typing import Any
 
 from safe_io import safe_write_text_locked
-from unified_state import get_failure_event_summary, get_runtime_profile_summary, load_state
+from unified_state import (
+    get_failure_event_summary,
+    get_planning_summary,
+    get_runtime_profile_summary,
+    load_state,
+)
 
 # Import from workflow_engine (local imports to avoid circular dependency at runtime)
 _imported_fns: dict[str, Any] = {}
@@ -231,6 +236,7 @@ def conditional_checkpoint(
         "reason": reason,
         "phase": current_phase,
         "runtime_profile_summary": get_runtime_profile_summary(state),
+        "planning_summary": get_planning_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
@@ -294,8 +300,20 @@ def conditional_checkpoint(
 - Profile source: {runtime_profile_summary.get('profile_source') or 'unset'}
 - Complexity: {runtime_profile_summary.get('complexity') or 'unset'}
 - Complexity confidence: {runtime_profile_summary.get('complexity_confidence') if runtime_profile_summary.get('complexity_confidence') is not None else 'unset'}
-- Complexity: {runtime_profile_summary.get('complexity') or 'unset'}
-- Complexity confidence: {runtime_profile_summary.get('complexity_confidence') if runtime_profile_summary.get('complexity_confidence') is not None else 'unset'}
+
+## Planning Summary
+- Plan source: {checkpoint_data['planning_summary'].get('plan_source') or 'unset'}
+- Task count: {checkpoint_data['planning_summary'].get('plan_task_count', 0)}
+- Completed tasks: {checkpoint_data['planning_summary'].get('completed_task_count', 0)}
+- In progress: {checkpoint_data['planning_summary'].get('in_progress_task_count', 0)}
+- Blocked tasks: {checkpoint_data['planning_summary'].get('blocked_task_count', 0)}
+- Ready tasks: {checkpoint_data['planning_summary'].get('ready_task_count', 0)}
+- Parallel groups: {checkpoint_data['planning_summary'].get('parallel_candidate_group_count', 0)}
+- Parallel-ready tasks: {checkpoint_data['planning_summary'].get('parallel_ready_task_count', 0)}
+- Conflict groups: {checkpoint_data['planning_summary'].get('conflict_group_count', 0)}
+- Worktree recommended: {checkpoint_data['planning_summary'].get('worktree_recommended', False)}
+- Worktree reason: {checkpoint_data['planning_summary'].get('worktree_reason') or 'unset'}
+- Plan digest: {checkpoint_data['planning_summary'].get('plan_digest') or 'unset'}
 
 ## Failure Events
 - Failure events: {failure_event_summary.get('failure_event_count', 0)}

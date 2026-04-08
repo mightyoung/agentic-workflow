@@ -223,10 +223,13 @@ class TestConditionalCheckpoint(unittest.TestCase):
             self.assertEqual(checkpoint_json["runtime_profile_summary"]["skill_activation_level"], 50)
             self.assertEqual(checkpoint_json["runtime_profile_summary"]["skill_policy"], "default_enable")
             self.assertEqual(checkpoint_json["runtime_profile_summary"]["complexity"], None)
+            self.assertEqual(checkpoint_json["planning_summary"]["plan_source"], "none")
+            self.assertFalse(checkpoint_json["planning_summary"]["worktree_recommended"])
 
             handoff_file = Path(tmpdir) / f"handoff_{result['checkpoint_id']}.md"
             handoff_content = handoff_file.read_text(encoding="utf-8")
             self.assertIn("## Runtime Profile", handoff_content)
+            self.assertIn("## Planning Summary", handoff_content)
             self.assertIn("Skill activation level: 50", handoff_content)
             self.assertIn("Profile source: middleware+router", handoff_content)
 
@@ -290,10 +293,12 @@ class TestConditionalCheckpoint(unittest.TestCase):
             self.assertEqual(checkpoint_json["failure_event_summary"]["escalation_event_count"], 1)
             self.assertEqual(checkpoint_json["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 75)
             self.assertEqual(checkpoint_json["runtime_profile_summary"]["complexity"], None)
+            self.assertEqual(checkpoint_json["planning_summary"]["plan_source"], "none")
 
             handoff_file = Path(tmpdir) / f"handoff_{result['checkpoint_id']}.md"
             handoff_content = handoff_file.read_text(encoding="utf-8")
             self.assertIn("## Failure Events", handoff_content)
+            self.assertIn("## Planning Summary", handoff_content)
             self.assertIn("Failure events: 1", handoff_content)
             self.assertIn("Escalation events: 1", handoff_content)
 

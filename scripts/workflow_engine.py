@@ -44,9 +44,9 @@ from review_paths import (
 from runtime_profile import (
     build_skill_context,
     escalate_skill_activation_level,
+    should_use_skill_for_phase,
     skill_activation_level_for_phase,
     skill_policy_for_phase,
-    should_use_skill_for_phase,
 )
 from safe_io import safe_write_json, safe_write_text_locked
 from skill_loader import SkillPromptFormatter, load_skill
@@ -58,6 +58,7 @@ from unified_state import (
     create_initial_state,
     get_allowed_transitions,
     get_failure_event_summary,
+    get_planning_summary,
     get_runtime_profile_summary,
     load_state,
     register_artifact,
@@ -1386,6 +1387,11 @@ def initialize_workflow(
         tokens_expected=runtime_profile["tokens_expected"],
         profile_source=runtime_profile["profile_source"],
     )
+    planning_summary = get_planning_summary(str(workdir), state)
+    memory_ops.update_planning_summary(
+        str(session_path),
+        planning_summary,
+    )
 
     # Create progress.md
     progress_file = workdir_path / "progress.md"
@@ -1401,6 +1407,11 @@ def initialize_workflow(
 - use_skill: {runtime_profile["use_skill"]}
 - activation_level: {runtime_profile["skill_activation_level"]}
 - profile_source: {runtime_profile["profile_source"]}
+
+## Planning Summary
+- plan_source: {planning_summary.get("plan_source", "none")}
+- plan_digest: {planning_summary.get("plan_digest", "unset")}
+- worktree_recommended: {planning_summary.get("worktree_recommended", False)}
 
 ## Session
 - session_id: {state.session_id}
@@ -1608,6 +1619,7 @@ def advance_workflow(
     progress_file = Path(workdir) / "progress.md"
     if progress_file.exists():
         content = progress_file.read_text(encoding="utf-8")
+        content = re.sub(r"\n?## Planning Summary\n(?:.*\n?)*\Z", "", content, flags=re.S)
         # Simple update of phase and status
         lines = content.split("\n")
         new_lines = []
@@ -1624,6 +1636,12 @@ def advance_workflow(
                 in_phase_section = False
                 continue
             new_lines.append(line)
+        planning_summary = get_planning_summary(workdir, state)
+        new_lines.append("")
+        new_lines.append("## Planning Summary")
+        new_lines.append(f"- plan_source: {planning_summary.get('plan_source', 'none')}")
+        new_lines.append(f"- plan_digest: {planning_summary.get('plan_digest', 'unset')}")
+        new_lines.append(f"- worktree_recommended: {planning_summary.get('worktree_recommended', False)}")
         safe_write_text_locked(progress_file, "\n".join(new_lines))
 
     # Save updated state
@@ -1641,6 +1659,10 @@ def advance_workflow(
             tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
             profile_source=str(runtime_profile.get("profile_source", "router")),
         )
+    memory_ops.update_planning_summary(
+        str(session_path),
+        get_planning_summary(workdir, state),
+    )
 
     if task_status:
         task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))
@@ -2482,6 +2504,7 @@ def resume_workflow(
     if state is not None:
         runtime_profile_summary = get_runtime_profile_summary(state)
         failure_event_summary = get_failure_event_summary(state)
+        planning_summary = get_planning_summary(workdir, state)
         # 记录恢复决策
         from datetime import datetime
 
@@ -2498,6 +2521,7 @@ def resume_workflow(
                 "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
                 "failure_event_summary": failure_event_summary,
+                "planning_summary": planning_summary,
             },
         ))
 
@@ -2511,8 +2535,10 @@ def resume_workflow(
     else:
         runtime_profile_summary = {}
         failure_event_summary = {}
+        planning_summary = get_planning_summary(workdir, None)
 
     session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+    planning_summary = get_planning_summary(workdir, state)
     memory_ops.update_resume_summary(
         str(session_path),
         resume_from=result["resume_from"],
@@ -2520,6 +2546,10 @@ def resume_workflow(
         original_session_id=session_id,
         runtime_profile=runtime_profile_summary,
         failure_event_summary=failure_event_summary,
+    )
+    memory_ops.update_planning_summary(
+        str(session_path),
+        planning_summary,
     )
 
     # 重新初始化 trajectory logger
@@ -2542,6 +2572,7 @@ def resume_workflow(
         "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
         "failure_event_summary": failure_event_summary,
+        "planning_summary": planning_summary,
         "state_synced": True,
     }
 
@@ -3049,6 +3080,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "plan_tasks": plan_tasks,
             "plan_source": plan_source,
             "next_plan_tasks": next_tasks,
+            "planning_summary": get_planning_summary(workdir, None),
             "context_for_next_phase": {
                 "files_to_read": [],
                 "summary": "",
@@ -3072,6 +3104,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     from unified_state import validate_workflow_state
     is_valid, errors = validate_workflow_state(workdir)
     runtime_profile_summary = get_runtime_profile_summary(state)
+    planning_summary = get_planning_summary(workdir, state)
 
     return {
         "exists": True,
@@ -3083,6 +3116,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "trigger_type": state.trigger_type,
         "task": task,
         "runtime_profile_summary": runtime_profile_summary,
+        "planning_summary": planning_summary,
         "failure_event_summary": get_failure_event_summary(state),
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,

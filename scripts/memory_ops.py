@@ -73,6 +73,20 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **tokens_expected**: (未设置)
 - **profile_source**: (未设置)
 
+## 计划摘要
+- **plan_source**: (未设置)
+- **plan_task_count**: 0
+- **completed_task_count**: 0
+- **in_progress_task_count**: 0
+- **blocked_task_count**: 0
+- **ready_task_count**: 0
+- **parallel_candidate_group_count**: 0
+- **parallel_ready_task_count**: 0
+- **conflict_group_count**: 0
+- **worktree_recommended**: (未设置)
+- **worktree_reason**: (未设置)
+- **plan_digest**: (未设置)
+
 ## 恢复摘要
 - **original_session_id**: (未设置)
 - **resume_from**: (未设置)
@@ -307,6 +321,48 @@ def update_runtime_profile(
         content = re.sub(pattern, section, content, count=1)
     else:
         insert_after = r"(\- \*\*优先级\*\*: .*\n)"
+        if re.search(insert_after, content):
+            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
+        else:
+            content += "\n" + section + "\n"
+
+    safe_write_text_locked(path, content)
+    return True
+
+
+def update_planning_summary(
+    path: str,
+    planning_summary: dict[str, Any] | None,
+) -> bool:
+    """更新计划摘要到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    planning_summary = planning_summary or {}
+    section = (
+        "## 计划摘要\n"
+        f"- **plan_source**: {planning_summary.get('plan_source', '(未设置)')}\n"
+        f"- **plan_task_count**: {planning_summary.get('plan_task_count', 0)}\n"
+        f"- **completed_task_count**: {planning_summary.get('completed_task_count', 0)}\n"
+        f"- **in_progress_task_count**: {planning_summary.get('in_progress_task_count', 0)}\n"
+        f"- **blocked_task_count**: {planning_summary.get('blocked_task_count', 0)}\n"
+        f"- **ready_task_count**: {planning_summary.get('ready_task_count', 0)}\n"
+        f"- **parallel_candidate_group_count**: {planning_summary.get('parallel_candidate_group_count', 0)}\n"
+        f"- **parallel_ready_task_count**: {planning_summary.get('parallel_ready_task_count', 0)}\n"
+        f"- **conflict_group_count**: {planning_summary.get('conflict_group_count', 0)}\n"
+        f"- **worktree_recommended**: {planning_summary.get('worktree_recommended', '(未设置)')}\n"
+        f"- **worktree_reason**: {planning_summary.get('worktree_reason', '(未设置)')}\n"
+        f"- **plan_digest**: {planning_summary.get('plan_digest', '(未设置)')}\n"
+    )
+
+    pattern = r"## 计划摘要\n(?:- \*\*plan_source\*\*: .*\n- \*\*plan_task_count\*\*: .*\n- \*\*completed_task_count\*\*: .*\n- \*\*in_progress_task_count\*\*: .*\n- \*\*blocked_task_count\*\*: .*\n- \*\*ready_task_count\*\*: .*\n- \*\*parallel_candidate_group_count\*\*: .*\n- \*\*parallel_ready_task_count\*\*: .*\n- \*\*conflict_group_count\*\*: .*\n- \*\*worktree_recommended\*\*: .*\n- \*\*worktree_reason\*\*: .*\n- \*\*plan_digest\*\*: .*\n)?"
+    if re.search(pattern, content):
+        content = re.sub(pattern, section, content, count=1)
+    else:
+        insert_after = r"(\## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?)"
         if re.search(insert_after, content):
             content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
         else:

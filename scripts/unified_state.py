@@ -307,6 +307,102 @@ def get_runtime_profile_summary(state: WorkflowState | None) -> dict[str, Any]:
     }
 
 
+def get_planning_summary(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Extract a compact summary of the canonical planning chain.
+
+    This mirrors the persistent-markdown planning pattern:
+    keep the plan visible, expose progress, and warn when a worktree is
+    appropriate for multi-step or multi-file work.
+    """
+    if state is None:
+        state = load_state(workdir)
+
+    phase = state.phase.get("current", "IDLE") if state and state.phase else "IDLE"
+    runtime_profile = get_runtime_profile_summary(state)
+
+    try:
+        import workflow_engine
+
+        plan_tasks, plan_source = workflow_engine.load_planning_tasks(workdir)
+        next_tasks = workflow_engine.next_plan_tasks(workdir)
+        frontier = workflow_engine.compute_frontier(workdir)
+    except Exception:
+        plan_tasks = []
+        plan_source = "none"
+        next_tasks = []
+        frontier = {
+            "executable_frontier": [],
+            "parallel_candidates": [],
+            "conflict_groups": [],
+        }
+
+    status_counts = {"backlog": 0, "in_progress": 0, "blocked": 0, "completed": 0}
+    for task in plan_tasks:
+        status = str(task.get("status", "backlog"))
+        if status in status_counts:
+            status_counts[status] += 1
+        else:
+            status_counts["backlog"] += 1
+
+    ready_tasks = frontier.get("executable_frontier", [])
+    parallel_groups = frontier.get("parallel_candidates", [])
+    conflict_groups = frontier.get("conflict_groups", [])
+    complexity = str(runtime_profile.get("complexity") or "UNKNOWN")
+    total_tasks = len(plan_tasks)
+    ready_count = len(ready_tasks)
+    parallel_group_count = len(parallel_groups)
+    parallel_ready_task_count = sum(len(group) for group in parallel_groups)
+    conflict_group_count = len(conflict_groups)
+    next_task_ids = [str(task.get("id", "")) for task in next_tasks[:3] if task.get("id")]
+
+    worktree_recommended = False
+    worktree_reason = "single-stream or no canonical planning chain"
+    if plan_source != "none":
+        multi_step = total_tasks >= 4 or ready_count > 1 or parallel_group_count > 0 or conflict_group_count > 0
+        complex_enough = complexity in {"M", "L", "XL"}
+        branch_point = phase in {"PLANNING", "EXECUTING", "DEBUGGING", "REVIEWING"}
+        if multi_step and complex_enough and branch_point:
+            worktree_recommended = True
+            worktree_reason = (
+                f"{complexity} task with {total_tasks} planned item(s) and "
+                f"{ready_count} ready task(s); use a git worktree for isolation"
+            )
+        elif multi_step:
+            worktree_reason = (
+                f"multi-step plan detected ({total_tasks} tasks, {parallel_group_count} parallel group(s)); "
+                f"consider a worktree when edits fan out"
+            )
+        else:
+            worktree_reason = f"single-stream plan via {plan_source}"
+
+    plan_digest = (
+        f"{plan_source}: {total_tasks} task(s), "
+        f"{status_counts['completed']} done, {status_counts['in_progress']} in progress, "
+        f"{status_counts['blocked']} blocked, {ready_count} ready"
+    )
+    if next_task_ids:
+        plan_digest += f"; next={', '.join(next_task_ids)}"
+    if plan_source != "none":
+        plan_digest += f"; worktree={'yes' if worktree_recommended else 'no'}"
+
+    return {
+        "plan_source": plan_source,
+        "plan_task_count": total_tasks,
+        "completed_task_count": status_counts["completed"],
+        "in_progress_task_count": status_counts["in_progress"],
+        "blocked_task_count": status_counts["blocked"],
+        "backlog_task_count": status_counts["backlog"],
+        "ready_task_count": ready_count,
+        "parallel_candidate_group_count": parallel_group_count,
+        "parallel_ready_task_count": parallel_ready_task_count,
+        "conflict_group_count": conflict_group_count,
+        "next_task_ids": next_task_ids,
+        "worktree_recommended": worktree_recommended,
+        "worktree_reason": worktree_reason,
+        "plan_digest": plan_digest,
+    }
+
+
 def get_failure_event_summary(state: WorkflowState | None) -> dict[str, Any]:
     """Summarize failure-related decisions for snapshot/debugging views."""
     if state is None:
@@ -623,6 +719,9 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
             "exists": False,
             "valid": False,
             "errors": ["state file does not exist"],
+            "runtime_profile_summary": get_runtime_profile_summary(None),
+            "planning_summary": get_planning_summary(workdir, None),
+            "failure_event_summary": get_failure_event_summary(None),
         }
 
     is_valid, errors = validate_workflow_state(workdir)
@@ -637,6 +736,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "task_id": state.task.task_id if state.task else None,
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
         "runtime_profile_summary": get_runtime_profile_summary(state),
+        "planning_summary": get_planning_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
     }
 
