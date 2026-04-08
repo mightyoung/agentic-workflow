@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import sys
 import time
 from dataclasses import dataclass, field
@@ -152,6 +153,17 @@ class ActivationRecommendation:
     best_quality_improvement_pct: float
     best_token_improvement_pct: float
     best_completion_rate: float
+
+
+@dataclass
+class ConfidenceInterval:
+    """Bootstrap 置信区间摘要"""
+    metric: str
+    mean: float
+    lower: float
+    upper: float
+    sample_size: int
+    confidence_level: float
 
 
 # =============================================================================
@@ -2072,6 +2084,33 @@ All criteria met.
                 "avg_quality_imp": sum(r.quality_improvement_pct for r in diff_results) / len(diff_results),
             }
 
+        confidence_intervals = {
+            "overall": {
+                "time_improvement_pct": self._bootstrap_ci([r.time_improvement_pct for r in self.results]),
+                "token_improvement_pct": self._bootstrap_ci([r.token_improvement_pct for r in self.results]),
+                "quality_improvement_pct": self._bootstrap_ci([r.quality_improvement_pct for r in self.results]),
+                "overall_improvement_pct": self._bootstrap_ci([r.overall_improvement_pct for r in self.results]),
+                "completion_gap_pp": self._bootstrap_ci(
+                    [
+                        (100.0 if r.with_skill_completed else 0.0) - (100.0 if r.without_skill_completed else 0.0)
+                        for r in self.results
+                    ]
+                ),
+            },
+            "by_module": {
+                module: {
+                    "time_improvement_pct": self._bootstrap_ci([r.time_improvement_pct for r in module_results]),
+                    "token_improvement_pct": self._bootstrap_ci([r.token_improvement_pct for r in module_results]),
+                    "quality_improvement_pct": self._bootstrap_ci([r.quality_improvement_pct for r in module_results]),
+                    "overall_improvement_pct": self._bootstrap_ci([r.overall_improvement_pct for r in module_results]),
+                }
+                for module, module_results in (
+                    (module, [r for r in self.results if r.module == module])
+                    for module in modules
+                )
+            },
+        }
+
         # 构建报告
         report = {
             "experiment_info": {
@@ -2106,6 +2145,7 @@ All criteria met.
             "by_module": by_module,
             "module_policies": [policy.__dict__ for policy in policies],
             "by_difficulty": by_difficulty,
+            "confidence_intervals": confidence_intervals,
             "activation_levels": self.activation_levels,
             "activation_summaries": [summary.__dict__ for summary in activation_summaries],
             "activation_recommendations": [rec.__dict__ for rec in activation_recommendations],
@@ -2148,6 +2188,7 @@ All criteria met.
         """生成 Markdown 格式报告"""
         summary = report["overall_summary"]
         experiment_info = report["experiment_info"]
+        confidence_intervals = report.get("confidence_intervals", {})
         interpretation_notes = report.get("interpretation_notes", [])
         module_policies = report.get("module_policies", [])
         activation_recommendations = report.get("activation_recommendations", [])
@@ -2237,6 +2278,36 @@ All criteria met.
                     f"{activation_recommendation['best_completion_rate']:.1f}% | "
                     f"{activation_recommendation['rationale']} |\n"
                 )
+
+        if confidence_intervals:
+            md += """
+
+## 📐 置信区间
+
+### 总体指标
+
+| 指标 | 均值 | 95% CI 下界 | 95% CI 上界 | 样本数 |
+|------|------|------------|------------|--------|
+"""
+            overall_ci = confidence_intervals.get("overall", {})
+            for metric_name, ci in overall_ci.items():
+                md += (
+                    f"| {metric_name} | {ci['mean']:+.1f}% | {ci['lower']:+.1f}% | {ci['upper']:+.1f}% | {ci['sample_size']} |\n"
+                )
+
+            md += """
+
+### 按模块指标
+
+| 模块 | 指标 | 均值 | 95% CI 下界 | 95% CI 上界 |
+|------|------|------|------------|------------|
+"""
+            by_module_ci = confidence_intervals.get("by_module", {})
+            for module, metrics in by_module_ci.items():
+                for metric_name, ci in metrics.items():
+                    md += (
+                        f"| {module} | {metric_name} | {ci['mean']:+.1f}% | {ci['lower']:+.1f}% | {ci['upper']:+.1f}% |\n"
+                    )
 
         if interpretation_notes:
             md += """
@@ -2490,6 +2561,35 @@ All criteria met.
 
         priority = {"EXECUTING": 0, "REVIEWING": 1, "DEBUGGING": 2, "RESEARCH": 3, "PLANNING": 4, "THINKING": 5, "FULL_WORKFLOW": 6}
         return sorted(recommendations, key=lambda rec: priority.get(rec.module, 99))
+
+    @staticmethod
+    def _bootstrap_ci(values: list[float], *, iterations: int = 2000, confidence: float = 0.95, seed: int = 42) -> dict[str, float]:
+        """计算均值的 bootstrap 置信区间。"""
+        if not values:
+            return {"mean": 0.0, "lower": 0.0, "upper": 0.0, "sample_size": 0, "confidence_level": confidence}
+
+        mean = sum(values) / len(values)
+        if len(values) == 1:
+            return {"mean": mean, "lower": mean, "upper": mean, "sample_size": 1, "confidence_level": confidence}
+
+        rng = random.Random(seed)
+        estimates: list[float] = []
+        n = len(values)
+        for _ in range(iterations):
+            sample = [values[rng.randrange(n)] for _ in range(n)]
+            estimates.append(sum(sample) / n)
+
+        estimates.sort()
+        lower_idx = max(0, int((1.0 - confidence) / 2.0 * len(estimates)))
+        upper_idx = min(len(estimates) - 1, int((1.0 + confidence) / 2.0 * len(estimates)) - 1)
+
+        return {
+            "mean": mean,
+            "lower": estimates[lower_idx],
+            "upper": estimates[upper_idx],
+            "sample_size": len(values),
+            "confidence_level": confidence,
+        }
 
 
 # =============================================================================
