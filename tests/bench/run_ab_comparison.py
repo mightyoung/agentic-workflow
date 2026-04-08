@@ -142,6 +142,30 @@ class ActivationSummary:
     avg_time_improvement_pct: float
 
 
+@dataclass
+class ActivationRecommendation:
+    """模块激活推荐"""
+    module: str
+    recommended_activation_level: int
+    rationale: str
+    best_final_score: float
+    best_quality_improvement_pct: float
+    best_token_improvement_pct: float
+    best_completion_rate: float
+
+
+@dataclass
+class ActivationRecommendation:
+    """模块激活推荐"""
+    module: str
+    recommended_activation_level: int
+    rationale: str
+    best_final_score: float
+    best_quality_improvement_pct: float
+    best_token_improvement_pct: float
+    best_completion_rate: float
+
+
 # =============================================================================
 # 测试任务集
 # =============================================================================
@@ -2022,6 +2046,7 @@ All criteria met.
         skill_completion_rate = sum(1 for r in self.results if r.with_skill_completed) / total * 100
         no_skill_completion_rate = sum(1 for r in self.results if r.without_skill_completed) / total * 100
         activation_summaries = self._build_activation_summaries()
+        activation_recommendations = self._build_activation_recommendations()
 
         # 按模块统计
         modules = {r.module for r in self.results}
@@ -2090,6 +2115,7 @@ All criteria met.
             "by_difficulty": by_difficulty,
             "activation_levels": self.activation_levels,
             "activation_summaries": [summary.__dict__ for summary in activation_summaries],
+            "activation_recommendations": [rec.__dict__ for rec in activation_recommendations],
             "detailed_results": [
                 {
                     "task_id": r.task_id,
@@ -2130,6 +2156,7 @@ All criteria met.
         summary = report["overall_summary"]
         experiment_info = report["experiment_info"]
         module_policies = report.get("module_policies", [])
+        activation_recommendations = report.get("activation_recommendations", [])
 
         md = f"""# Agentic Workflow Skill 对照实验报告
 
@@ -2197,6 +2224,24 @@ All criteria met.
                     f"{activation_summary['avg_quality_improvement_pct']:+.1f}% | "
                     f"{activation_summary['avg_token_improvement_pct']:+.1f}% | "
                     f"{activation_summary['avg_time_improvement_pct']:+.1f}% |\n"
+                )
+
+        if activation_recommendations:
+            md += """
+
+## 🎯 推荐激活级别
+
+| 模块 | 推荐激活级别 | 最佳综合分 | 最佳质量改进 | 最佳Token改进 | 最佳完成率 | 理由 |
+|------|--------------|----------|------------|------------|----------|------|
+"""
+            for activation_recommendation in activation_recommendations:
+                md += (
+                    f"| {activation_recommendation['module']} | {activation_recommendation['recommended_activation_level']} | "
+                    f"{activation_recommendation['best_final_score']:.1f} | "
+                    f"{activation_recommendation['best_quality_improvement_pct']:+.1f}% | "
+                    f"{activation_recommendation['best_token_improvement_pct']:+.1f}% | "
+                    f"{activation_recommendation['best_completion_rate']:.1f}% | "
+                    f"{activation_recommendation['rationale']} |\n"
                 )
 
         md += """
@@ -2374,6 +2419,65 @@ All criteria met.
                 )
             )
         return summaries
+
+    def _build_activation_recommendations(self) -> list[ActivationRecommendation]:
+        """基于分级激活结果，为每个模块推荐最小可接受激活级别。"""
+        recommendations: list[ActivationRecommendation] = []
+        module_activation_map: dict[str, list[tuple[int, list[ComparisonResult]]]] = {}
+
+        for activation_level in sorted(self.activation_results.keys()):
+            for result in self.activation_results[activation_level]:
+                module_activation_map.setdefault(result.module, []).append((activation_level, [result]))
+
+        for module, activation_entries in module_activation_map.items():
+            per_level: dict[int, list[ComparisonResult]] = {}
+            for activation_level, results in activation_entries:
+                per_level.setdefault(activation_level, []).extend(results)
+
+            ranked = []
+            for activation_level, results in per_level.items():
+                total = len(results)
+                ranked.append(
+                    {
+                        "activation_level": activation_level,
+                        "avg_final_score": sum(r.with_skill_final_score for r in results) / total,
+                        "avg_quality_improvement_pct": sum(r.quality_improvement_pct for r in results) / total,
+                        "avg_token_improvement_pct": sum(r.token_improvement_pct for r in results) / total,
+                        "completion_rate": sum(1 for r in results if r.with_skill_completed) / total * 100,
+                    }
+                )
+
+            if not ranked:
+                continue
+
+            ranked.sort(key=lambda item: item["activation_level"])
+            best = max(ranked, key=lambda item: item["avg_final_score"])
+            threshold = best["avg_final_score"] * 0.95
+            chosen = next((item for item in ranked if item["avg_final_score"] >= threshold), best)
+
+            if chosen["activation_level"] == 25:
+                rationale = "25% 已达到接近最优综合分，建议先用轻量激活。"
+            elif chosen["activation_level"] == 50:
+                rationale = "50% 在质量与 token 成本间取得较稳妥平衡。"
+            elif chosen["activation_level"] == 75:
+                rationale = "75% 接近最优，适合质量优先但仍需控成本。"
+            else:
+                rationale = "100% 取得当前最优或近最优结果，适合质量优先场景。"
+
+            recommendations.append(
+                ActivationRecommendation(
+                    module=module,
+                    recommended_activation_level=chosen["activation_level"],
+                    rationale=rationale,
+                    best_final_score=best["avg_final_score"],
+                    best_quality_improvement_pct=best["avg_quality_improvement_pct"],
+                    best_token_improvement_pct=best["avg_token_improvement_pct"],
+                    best_completion_rate=best["completion_rate"],
+                )
+            )
+
+        priority = {"EXECUTING": 0, "REVIEWING": 1, "DEBUGGING": 2, "RESEARCH": 3, "PLANNING": 4, "THINKING": 5, "FULL_WORKFLOW": 6}
+        return sorted(recommendations, key=lambda rec: priority.get(rec.module, 99))
 
 
 # =============================================================================
