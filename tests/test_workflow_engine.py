@@ -111,6 +111,7 @@ class TestWorkflowEngine(unittest.TestCase):
 
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
+        self.assertEqual(unified_snapshot["failure_event_summary"]["failure_event_count"], 0)
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
@@ -617,6 +618,15 @@ class TestNewPhases(unittest.TestCase):
             )
         )
 
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["failure_event_summary"]["escalation_event_count"], 1)
+        self.assertEqual(
+            snapshot["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"],
+            75,
+        )
+        unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
+        self.assertEqual(unified_snapshot["failure_event_summary"]["escalation_event_count"], 1)
+
     def test_handle_workflow_failure_does_not_escalate_on_generic_unknown_error(self):
         """Generic recoverable failures should not automatically increase activation."""
         workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
@@ -639,6 +649,11 @@ class TestNewPhases(unittest.TestCase):
                 for decision in state.decisions
             )
         )
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["failure_event_summary"]["failure_event_count"], 1)
+        self.assertEqual(snapshot["failure_event_summary"]["escalation_event_count"], 0)
+        self.assertEqual(snapshot["failure_event_summary"]["error_types"], ["unknown"])
 
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""

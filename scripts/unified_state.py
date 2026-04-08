@@ -305,6 +305,59 @@ def get_runtime_profile_summary(state: WorkflowState | None) -> dict[str, Any]:
     }
 
 
+def get_failure_event_summary(state: WorkflowState | None) -> dict[str, Any]:
+    """Summarize failure-related decisions for snapshot/debugging views."""
+    if state is None:
+        return {
+            "failure_event_count": 0,
+            "escalation_event_count": 0,
+            "latest_failure_event": None,
+            "latest_escalation_event": None,
+            "error_types": [],
+        }
+
+    failure_events: list[dict[str, Any]] = []
+    escalation_events: list[dict[str, Any]] = []
+
+    for decision in state.decisions:
+        metadata = decision.metadata if hasattr(decision, "metadata") and isinstance(decision.metadata, dict) else {}
+        error_type = metadata.get("error_type")
+        if not error_type and decision.decision != "Escalate skill activation":
+            continue
+
+        event = {
+            "timestamp": decision.timestamp,
+            "decision": decision.decision,
+            "reason": decision.reason,
+            "error_type": error_type,
+            "retry_count": metadata.get("retry_count"),
+        }
+        failure_events.append(event)
+
+        if decision.decision == "Escalate skill activation":
+            event = dict(event)
+            event["current_activation_level"] = metadata.get("current_activation_level")
+            event["escalated_activation_level"] = metadata.get("escalated_activation_level")
+            event["escalation_reason"] = metadata.get("escalation_reason")
+            escalation_events.append(event)
+
+    error_types = sorted(
+        {
+            str(event["error_type"])
+            for event in failure_events
+            if event.get("error_type")
+        }
+    )
+
+    return {
+        "failure_event_count": len(failure_events),
+        "escalation_event_count": len(escalation_events),
+        "latest_failure_event": failure_events[-1] if failure_events else None,
+        "latest_escalation_event": escalation_events[-1] if escalation_events else None,
+        "error_types": error_types,
+    }
+
+
 # ============================================================================
 # Phase Transitions
 # ============================================================================
@@ -582,6 +635,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "task_id": state.task.task_id if state.task else None,
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
         "runtime_profile_summary": get_runtime_profile_summary(state),
+        "failure_event_summary": get_failure_event_summary(state),
     }
 
 
