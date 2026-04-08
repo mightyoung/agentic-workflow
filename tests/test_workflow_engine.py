@@ -402,7 +402,7 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _setup_code_task_with_gate(self, gate_value):
+    def _setup_code_task_with_gate(self, gate_value, with_review: bool = False):
         """Set up a workflow with a code task that has explicit gate value."""
         # Init with EXECUTING (code task)
         workflow_engine.initialize_workflow("帮我实现这个功能", workdir=self.temp_dir)
@@ -427,6 +427,28 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
             tracker_data["tasks"][0]["quality_gates_passed"] = gate_value
             tracker_path.write_text(json.dumps(tracker_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+        if with_review:
+            review_dir = Path(self.temp_dir) / ".reviews" / "review"
+            review_dir.mkdir(parents=True, exist_ok=True)
+            review_content = """# Code Review: Test task
+
+## Stage 1: Spec Compliance
+- Contract/owned_files alignment: reviewed against contract
+- Acceptance coverage: checked via task contract and target files
+- Scope completeness: target files count = 1
+
+## Stage 2: Code Quality
+- Correctness: reviewed
+- Security: reviewed
+- Performance: reviewed
+- Maintainability: reviewed
+
+## Verdict
+- Status: REVIEWED
+"""
+            (review_dir / "review_latest.md").write_text(review_content, encoding="utf-8")
+            (review_dir / "review_test.md").write_text(review_content, encoding="utf-8")
+
     def test_complete_blocks_when_quality_gate_none(self):
         """complete_workflow must block when quality_gates_passed=None for code tasks."""
         self._setup_code_task_with_gate(None)
@@ -443,9 +465,16 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
 
     def test_complete_allows_when_quality_gate_true(self):
         """complete_workflow must allow when quality_gates_passed=True for code tasks."""
-        self._setup_code_task_with_gate(True)
+        self._setup_code_task_with_gate(True, with_review=True)
         result = workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
         self.assertEqual(result["final_state"], "completed")
+
+    def test_complete_blocks_when_review_missing(self):
+        """complete_workflow must block when the review artifact is missing."""
+        self._setup_code_task_with_gate(True, with_review=False)
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.complete_workflow(workdir=self.temp_dir, final_state="completed")
+        self.assertIn("review artifact not found", str(ctx.exception))
 
     def test_advance_to_complete_blocks_when_quality_gate_none(self):
         """advance(phase=COMPLETE) must block when quality_gates_passed=None for code tasks."""

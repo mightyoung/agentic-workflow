@@ -31,6 +31,7 @@ from safe_io import safe_write_text_locked
 from unified_state import (
     get_failure_event_summary,
     get_planning_summary,
+    get_review_summary,
     get_runtime_profile_summary,
     load_state,
 )
@@ -237,6 +238,7 @@ def conditional_checkpoint(
         "phase": current_phase,
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
+        "review_summary": get_review_summary(workdir),
         "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
@@ -314,6 +316,16 @@ def conditional_checkpoint(
 - Worktree recommended: {checkpoint_data['planning_summary'].get('worktree_recommended', False)}
 - Worktree reason: {checkpoint_data['planning_summary'].get('worktree_reason') or 'unset'}
 - Plan digest: {checkpoint_data['planning_summary'].get('plan_digest') or 'unset'}
+
+## Review Summary
+- Review found: {checkpoint_data['review_summary'].get('review_found', False)}
+- Review source: {checkpoint_data['review_summary'].get('review_source') or 'unset'}
+- Review status: {checkpoint_data['review_summary'].get('review_status') or 'unset'}
+- Stage 1: {checkpoint_data['review_summary'].get('stage_1_status') or 'unset'}
+- Stage 2: {checkpoint_data['review_summary'].get('stage_2_status') or 'unset'}
+- Risk level: {checkpoint_data['review_summary'].get('risk_level') or 'unset'}
+- Verdict: {checkpoint_data['review_summary'].get('verdict') or 'unset'}
+- Degraded mode: {checkpoint_data['review_summary'].get('degraded_mode', False)}
 
 ## Failure Events
 - Failure events: {failure_event_summary.get('failure_event_count', 0)}

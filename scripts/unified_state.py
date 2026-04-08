@@ -9,6 +9,7 @@ Provides a single source of truth, reducing fragility from markdown parsing.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -456,6 +457,74 @@ def get_failure_event_summary(state: WorkflowState | None) -> dict[str, Any]:
     }
 
 
+def get_review_summary(workdir: str) -> dict[str, Any]:
+    """Summarize the latest review artifact for completion gates and snapshots."""
+    from review_paths import legacy_review_paths, review_latest_path
+
+    review_candidates = [review_latest_path(workdir), *legacy_review_paths(workdir)]
+    review_path: Path | None = None
+    for candidate in review_candidates:
+        if candidate.exists():
+            review_path = candidate
+            break
+
+    if review_path is None:
+        return {
+            "review_found": False,
+            "review_path": None,
+            "review_source": "none",
+            "review_status": "missing",
+            "stage_1_status": "unknown",
+            "stage_2_status": "unknown",
+            "risk_level": None,
+            "verdict": None,
+            "degraded_mode": False,
+            "files_reviewed": 0,
+        }
+
+    try:
+        content = review_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return {
+            "review_found": False,
+            "review_path": str(review_path),
+            "review_source": "unreadable",
+            "review_status": "error",
+            "stage_1_status": "unknown",
+            "stage_2_status": "unknown",
+            "risk_level": None,
+            "verdict": None,
+            "degraded_mode": False,
+            "files_reviewed": 0,
+        }
+
+    def _extract(pattern: str) -> str | None:
+        match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
+        return match.group(1).strip() if match else None
+
+    review_status = "reviewed" if "## Verdict" in content or "## Risk Level" in content else "unknown"
+    stage_1_status = "reviewed" if "## Stage 1: Spec Compliance" in content else "missing"
+    stage_2_status = "reviewed" if "## Stage 2: Code Quality" in content else "missing"
+    risk_level = _extract(r"^\s*\*\*Overall\*\*:\s*(.+)$")
+    verdict = _extract(r"^-\s*Status:\s*(.+)$")
+    files_reviewed_str = _extract(r"^\s*\*\*Files Reviewed\*\*:\s*(\d+)\s*code files$")
+    files_reviewed = int(files_reviewed_str) if files_reviewed_str and files_reviewed_str.isdigit() else 0
+    degraded_mode = "Degraded Mode" in content or "degraded mode" in content.lower()
+
+    return {
+        "review_found": True,
+        "review_path": str(review_path),
+        "review_source": "review_latest" if review_path.name == "review_latest.md" else "legacy_or_session",
+        "review_status": review_status,
+        "stage_1_status": stage_1_status,
+        "stage_2_status": stage_2_status,
+        "risk_level": risk_level,
+        "verdict": verdict,
+        "degraded_mode": degraded_mode,
+        "files_reviewed": files_reviewed,
+    }
+
+
 # ============================================================================
 # Phase Transitions
 # ============================================================================
@@ -721,6 +790,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
             "errors": ["state file does not exist"],
             "runtime_profile_summary": get_runtime_profile_summary(None),
             "planning_summary": get_planning_summary(workdir, None),
+            "review_summary": get_review_summary(workdir),
             "failure_event_summary": get_failure_event_summary(None),
         }
 
@@ -737,6 +807,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
+        "review_summary": get_review_summary(workdir),
         "failure_event_summary": get_failure_event_summary(state),
     }
 

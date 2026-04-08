@@ -98,6 +98,17 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **failure_event_count**: 0
 - **escalation_event_count**: 0
 
+## 审查摘要
+- **review_found**: (未设置)
+- **review_source**: (未设置)
+- **review_status**: (未设置)
+- **stage_1_status**: (未设置)
+- **stage_2_status**: (未设置)
+- **risk_level**: (未设置)
+- **verdict**: (未设置)
+- **degraded_mode**: (未设置)
+- **files_reviewed**: 0
+
 ## 关键信息 (WAL协议收集)
 
 ### 修正记录
@@ -408,6 +419,45 @@ def update_resume_summary(
         content = re.sub(pattern, section, content, count=1)
     else:
         insert_after = r"(\## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?)"
+        if re.search(insert_after, content):
+            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
+        else:
+            content += "\n" + section + "\n"
+
+    safe_write_text_locked(path, content)
+    return True
+
+
+def update_review_summary(
+    path: str,
+    review_summary: dict[str, Any] | None,
+) -> bool:
+    """更新审查摘要到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    review_summary = review_summary or {}
+    section = (
+        "## 审查摘要\n"
+        f"- **review_found**: {review_summary.get('review_found', False)}\n"
+        f"- **review_source**: {review_summary.get('review_source', '(未设置)')}\n"
+        f"- **review_status**: {review_summary.get('review_status', '(未设置)')}\n"
+        f"- **stage_1_status**: {review_summary.get('stage_1_status', '(未设置)')}\n"
+        f"- **stage_2_status**: {review_summary.get('stage_2_status', '(未设置)')}\n"
+        f"- **risk_level**: {review_summary.get('risk_level', '(未设置)')}\n"
+        f"- **verdict**: {review_summary.get('verdict', '(未设置)')}\n"
+        f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
+        f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
+    )
+
+    pattern = r"## 审查摘要\n(?:- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n)?"
+    if re.search(pattern, content):
+        content = re.sub(pattern, section, content, count=1)
+    else:
+        insert_after = r"(\## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?)"
         if re.search(insert_after, content):
             content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
         else:
