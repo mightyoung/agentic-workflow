@@ -2,6 +2,10 @@
 """
 Integrated Workflow Engine - 中间层与执行层整合
 
+Status:
+    Experimental prototype only.
+    The authoritative runtime remains scripts/workflow_engine.py.
+
 整合以下组件:
 1. MiddlewareChain - 意图识别、复杂度评估、阶段路由
 2. SubAgentRunner - 真实AI subagent执行

@@ -2,6 +2,10 @@
 """
 Workflow Engine v2 - 基于Middleware的灵活工作流引擎
 
+Status:
+    Experimental prototype only.
+    It does not replace the authoritative scripts/workflow_engine.py runtime.
+
 借鉴deer-flow的Middleware Chain设计,实现:
 1. 意图分析 -> 2. 复杂度评估 -> 3. Skill加载 -> 4. 执行
 

@@ -2,6 +2,10 @@
 """
 Middleware Chain System - 借鉴 deer-flow 的中间层设计
 
+Status:
+    Experimental prototype used for orchestration experiments.
+    It is not the authoritative workflow state machine.
+
 核心设计:
 1. MiddlewareProtocol - 中间件协议接口
 2. MiddlewareChain - 中间件链式调用

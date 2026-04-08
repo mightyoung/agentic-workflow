@@ -37,6 +37,9 @@ Review 产物现在统一落在 `.reviews/review/` 目录：
 
 ### 🔬 实验版 (未纳入主线)
 
+- `middleware.py`: 中间件链原型（意图/复杂度/skill 注入）
+- `workflow_engine_v2.py`: middleware 驱动的备选 runtime 原型
+- `integrated_engine.py`: middleware 与执行器整合原型
 - `semantic_router.py`: 语义路由（基于嵌入向量）
 - `execution_loop.py`: 执行循环模式 (ReAct/Plan-and-Execute/Reflexion)
 - `parallel_executor.py`: 并行执行 Band
@@ -46,6 +49,7 @@ Review 产物现在统一落在 `.reviews/review/` 目录：
 
 说明：
 - 实验版模块尚未接入主流程
+- `workflow_engine.py` 仍然是唯一权威 runtime；上述原型不得替代主线状态/工件管线
 - 命令示例以本目录脚本的真实 CLI 为准
 - 如果环境没有 `python` 命令，请使用 `python3`
 
