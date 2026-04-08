@@ -37,6 +37,20 @@ requires:
 | **L** | 重构模块 | RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → COMPLETE |
 | **XL** | 设计新系统 | RESEARCH → THINKING → PLANNING → EXECUTING → REVIEWING → REFINING → COMPLETE |
 
+## 默认 Skill Policy
+
+`skill_policy` 是默认启用策略，`use_skill` 是它的执行结果。当前主线默认策略如下：
+
+| 阶段 | 默认策略 | 说明 |
+|---|---|---|
+| EXECUTING | default_enable | 默认启用 |
+| REVIEWING | conditional_enable | 需要审查/高风险变更时启用 |
+| DEBUGGING | conditional_enable_after_optimization | 优先在修复收益明确时启用 |
+| RESEARCH | defer_or_lighten | 仅在需要外部事实时启用 |
+| PLANNING | defer | 默认走轻量规划，复杂任务再提升 |
+| THINKING | disable | 默认禁用 |
+| FULL_WORKFLOW | disable | 由各阶段分别决策，不直接整体开启 |
+
 ## 进度输出 (必须执行)
 
 每进入新阶段时输出：

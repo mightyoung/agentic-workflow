@@ -21,6 +21,9 @@ requires:
 
 PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 
+默认策略: `defer`。复杂任务会进入正式规划链，但 skill 注入本身保持轻量，
+避免把规划阶段做成默认重型上下文。
+
 **正式规划链** (spec-kit):
 1. `.specs/<feature>/spec.md` - 用户故事和需求
 2. `.specs/<feature>/plan.md` - 技术方案和约束

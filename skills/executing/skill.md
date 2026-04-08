@@ -21,6 +21,9 @@ requires:
 
 EXECUTING 阶段负责把计划转成实际变更。
 
+默认策略: `default_enable`。当前主线会优先为 EXECUTING 保留 skill，上游返回的 `skill_policy`
+是 canonical 决策，`use_skill` 只是执行结果。
+
 当前真实能力聚焦在：
 
 - 基于 `.specs/<feature>/tasks.md` 和 `.contract.json` 执行任务

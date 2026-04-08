@@ -19,12 +19,12 @@ This section describes what actually works **today** via the scripts layer.
 | ROUTER | ✅ | — | Keyword-based routing |
 | OFFICE-HOURS | ✅ | — | Product consultation |
 | EXPLORING | ✅ | — | Socratic deep exploration |
-| RESEARCH | ✅ | .research/findings/findings_{session}.md | Web search → findings report (also writes .research/findings/findings_latest.md) |
-| THINKING | ✅ | — | Expert reasoning |
-| PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | Task breakdown with spec-kit chain |
-| EXECUTING | ✅ | — | TDD-driven implementation |
-| REVIEWING | ✅ | .reviews/review/review_{session}.md | Real code analysis when files present (also writes .reviews/review/review_latest.md) |
-| DEBUGGING | ✅ | — | 5-step systematic debugging |
+| RESEARCH | ✅ | .research/findings/findings_{session}.md | Web search → findings report (policy: defer_or_lighten, also writes .research/findings/findings_latest.md) |
+| THINKING | ✅ | — | Expert reasoning (policy: disable by default) |
+| PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | Task breakdown with spec-kit chain (policy: defer) |
+| EXECUTING | ✅ | — | TDD-driven implementation (policy: default_enable) |
+| REVIEWING | ✅ | .reviews/review/review_{session}.md | Real code analysis when files present (policy: conditional_enable, also writes .reviews/review/review_latest.md) |
+| DEBUGGING | ✅ | — | 5-step systematic debugging (policy: conditional_enable_after_optimization) |
 | REFINING | ✅ | — | Feedback loop iteration |
 | COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
 

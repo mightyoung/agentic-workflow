@@ -20,6 +20,9 @@ requires:
 
 REVIEWING 阶段负责对实现结果做质量审查，并输出可执行的问题清单。
 
+默认策略: `conditional_enable`。只有在真实 diff、需要门禁审查或高风险变更时，才默认启用完整 skill；`use_skill`
+是运行时执行结果，`skill_policy` 是上游 canonical 决策。
+
 当前真实口径：
 
 - 以项目文件和实际变更为审查对象

@@ -20,6 +20,9 @@ requires:
 
 RESEARCH 阶段是 agentic-workflow 的技术调研阶段，负责在实施前搜索最佳实践、技术方案和成熟参考。
 
+默认策略: `defer_or_lighten`。只有在需要外部事实、最佳实践或权威来源时才注入完整 research skill，
+否则优先保持轻量，避免 token 开销过高。
+
 ### 核心职责
 
 - 搜索网络最佳实践和技术方案
