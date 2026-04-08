@@ -1362,6 +1362,13 @@ def initialize_workflow(
 
     memory_ops.update_task_info(str(session_path), prompt, current_phase)
     memory_ops.update_resume_point(str(session_path), current_phase, 0)
+    memory_ops.update_runtime_profile(
+        str(session_path),
+        skill_policy=runtime_profile["skill_policy"],
+        use_skill=runtime_profile["use_skill"],
+        tokens_expected=runtime_profile["tokens_expected"],
+        profile_source=runtime_profile["profile_source"],
+    )
 
     # Create progress.md
     progress_file = workdir_path / "progress.md"
@@ -1605,6 +1612,15 @@ def advance_workflow(
 
     memory_ops.update_task_info(str(session_path), state.task.description if state.task else "(未设置)", phase)
     memory_ops.update_resume_point(str(session_path), phase, progress)
+    runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
+    if runtime_profile:
+        memory_ops.update_runtime_profile(
+            str(session_path),
+            skill_policy=str(runtime_profile.get("skill_policy", "")),
+            use_skill=bool(runtime_profile.get("use_skill", False)),
+            tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
+            profile_source=str(runtime_profile.get("profile_source", "router")),
+        )
 
     if task_status:
         task_tracker.update_status(task_id, task_status, progress=progress, path=str(tracker_path))

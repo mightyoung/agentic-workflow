@@ -49,6 +49,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertTrue((Path(self.temp_dir) / ".specs").exists())
         self.assertTrue((Path(self.temp_dir) / ".workflow_state.json").exists())
         self.assertTrue((Path(self.temp_dir) / ".task_tracker.json").exists())
+        session_state = (Path(self.temp_dir) / "SESSION-STATE.md").read_text(encoding="utf-8")
+        self.assertIn("## Skill 策略", session_state)
+        self.assertIn("skill_policy", session_state)
+        self.assertIn("use_skill", session_state)
 
         specs_root = Path(self.temp_dir) / ".specs"
         feature_dirs = list(specs_root.glob("*/"))

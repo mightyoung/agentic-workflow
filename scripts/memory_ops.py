@@ -66,6 +66,12 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **开始时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - **优先级**: P2
 
+## Skill 策略
+- **skill_policy**: (未设置)
+- **use_skill**: (未设置)
+- **tokens_expected**: (未设置)
+- **profile_source**: (未设置)
+
 ## 关键信息 (WAL协议收集)
 
 ### 修正记录
@@ -257,6 +263,42 @@ def update_resume_point(path: str, phase: str, progress: int) -> bool:
 
     safe_write_text_locked(path, content)
 
+    return True
+
+
+def update_runtime_profile(
+    path: str,
+    skill_policy: str,
+    use_skill: bool,
+    tokens_expected: int,
+    profile_source: str,
+) -> bool:
+    """更新运行时画像到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    section = (
+        "## Skill 策略\n"
+        f"- **skill_policy**: {skill_policy}\n"
+        f"- **use_skill**: {str(use_skill)}\n"
+        f"- **tokens_expected**: {tokens_expected}\n"
+        f"- **profile_source**: {profile_source}\n"
+    )
+
+    pattern = r"## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?"
+    if re.search(pattern, content):
+        content = re.sub(pattern, section, content, count=1)
+    else:
+        insert_after = r"(\- \*\*优先级\*\*: .*\n)"
+        if re.search(insert_after, content):
+            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
+        else:
+            content += "\n" + section + "\n"
+
+    safe_write_text_locked(path, content)
     return True
 
 
