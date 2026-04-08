@@ -57,6 +57,7 @@ from unified_state import (
     can_transition,
     create_initial_state,
     get_allowed_transitions,
+    get_runtime_profile_summary,
     load_state,
     register_artifact,
     save_state,
@@ -2633,6 +2634,17 @@ def handle_workflow_failure(
             if state.metadata is None:
                 state.metadata = {}
             state.metadata["runtime_profile"] = runtime_profile
+            state.decisions.append(Decision(
+                timestamp=datetime.now().isoformat(),
+                decision="Escalate skill activation",
+                reason=f"Failure {error_type} escalated activation to {escalated_activation_level}",
+                metadata={
+                    "error_type": error_type,
+                    "current_activation_level": current_activation_level,
+                    "escalated_activation_level": escalated_activation_level,
+                    "profile_source": runtime_profile.get("profile_source", "router"),
+                },
+            ))
             session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
             memory_ops.update_runtime_profile(
                 str(session_path),
@@ -2975,7 +2987,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     # Validate state
     from unified_state import validate_workflow_state
     is_valid, errors = validate_workflow_state(workdir)
-    runtime_profile_summary = state.metadata.get("runtime_profile", {}) if state.metadata else {}
+    runtime_profile_summary = get_runtime_profile_summary(state)
 
     return {
         "exists": True,
@@ -2986,13 +2998,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "current_phase": current_phase,
         "trigger_type": state.trigger_type,
         "task": task,
-        "runtime_profile_summary": {
-            "skill_policy": runtime_profile_summary.get("skill_policy") if runtime_profile_summary else None,
-            "use_skill": runtime_profile_summary.get("use_skill") if runtime_profile_summary else None,
-            "skill_activation_level": runtime_profile_summary.get("skill_activation_level") if runtime_profile_summary else None,
-            "tokens_expected": runtime_profile_summary.get("tokens_expected") if runtime_profile_summary else None,
-            "profile_source": runtime_profile_summary.get("profile_source") if runtime_profile_summary else None,
-        },
+        "runtime_profile_summary": runtime_profile_summary,
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,
         "plan_source": plan_source,

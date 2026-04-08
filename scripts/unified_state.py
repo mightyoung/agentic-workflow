@@ -293,6 +293,18 @@ def validate_workflow_state(workdir: str = ".") -> tuple[bool, list[str]]:
     return len(errors) == 0, errors
 
 
+def get_runtime_profile_summary(state: WorkflowState | None) -> dict[str, Any]:
+    """Extract a compact runtime profile summary from workflow state metadata."""
+    runtime_profile = state.metadata.get("runtime_profile", {}) if state and state.metadata else {}
+    return {
+        "skill_policy": runtime_profile.get("skill_policy") if runtime_profile else None,
+        "use_skill": runtime_profile.get("use_skill") if runtime_profile else None,
+        "skill_activation_level": runtime_profile.get("skill_activation_level") if runtime_profile else None,
+        "tokens_expected": runtime_profile.get("tokens_expected") if runtime_profile else None,
+        "profile_source": runtime_profile.get("profile_source") if runtime_profile else None,
+    }
+
+
 # ============================================================================
 # Phase Transitions
 # ============================================================================
@@ -569,6 +581,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "session_id": state.session_id,
         "task_id": state.task.task_id if state.task else None,
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
+        "runtime_profile_summary": get_runtime_profile_summary(state),
     }
 
 

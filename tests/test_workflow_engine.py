@@ -109,6 +109,9 @@ class TestWorkflowEngine(unittest.TestCase):
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
 
+        unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
+        self.assertEqual(unified_snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
+
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
         self.assertEqual(init_result["phase"], "DEBUGGING")
@@ -588,6 +591,30 @@ class TestNewPhases(unittest.TestCase):
         memory_content = memory_md.read_text(encoding="utf-8")
         self.assertIn("Task:", memory_content)
         self.assertIn("Fix:", memory_content)
+
+    def test_handle_workflow_failure_escalates_skill_activation_audit(self):
+        """Failure handling should persist an auditable skill activation escalation."""
+        workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
+
+        result = workflow_engine.handle_workflow_failure(
+            self.temp_dir,
+            error="AssertionError: stack push failed",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        self.assertTrue(result["success"])
+
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 75)
+        self.assertTrue(
+            any(
+                decision.decision == "Escalate skill activation"
+                and decision.metadata.get("escalated_activation_level") == 75
+                for decision in state.decisions
+            )
+        )
 
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""
