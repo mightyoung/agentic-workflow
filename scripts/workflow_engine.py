@@ -2479,6 +2479,8 @@ def resume_workflow(
     # 更新 unified state - 这是关键同步步骤
     state = load_state(workdir)
     if state is not None:
+        runtime_profile_summary = get_runtime_profile_summary(state)
+        failure_event_summary = get_failure_event_summary(state)
         # 记录恢复决策
         from datetime import datetime
 
@@ -2487,7 +2489,14 @@ def resume_workflow(
             timestamp=datetime.now().isoformat(),
             decision=f"Resumed from {session_id}",
             reason=f"resume_from={result['resume_from']}",
-            metadata={"original_session": session_id, "resumed_session": new_session_id},
+            metadata={
+                "original_session": session_id,
+                "resumed_session": new_session_id,
+                "resume_from": result["resume_from"],
+                "next_phase": next_phase,
+                "runtime_profile_summary": runtime_profile_summary,
+                "failure_event_summary": failure_event_summary,
+            },
         ))
 
         # 更新 session_id
@@ -2497,6 +2506,9 @@ def resume_workflow(
         state.phase["current"] = next_phase
 
         save_state(workdir, state)
+    else:
+        runtime_profile_summary = {}
+        failure_event_summary = {}
 
     # 重新初始化 trajectory logger
     new_logger = TrajectoryLogger(workdir, new_session_id)
@@ -2510,6 +2522,8 @@ def resume_workflow(
         "new_session_id": new_session_id,
         "resume_from": result["resume_from"],
         "next_phase": next_phase,
+        "runtime_profile_summary": runtime_profile_summary,
+        "failure_event_summary": failure_event_summary,
         "state_synced": True,
     }
 

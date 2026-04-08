@@ -666,6 +666,33 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(snapshot["failure_event_summary"]["error_types"], ["unknown"])
         self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "M")
 
+    def test_resume_workflow_surfaces_runtime_and_failure_summaries(self):
+        """Resuming should expose runtime profile and failure summaries in the result."""
+        init_result = workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
+        workflow_engine.handle_workflow_failure(
+            self.temp_dir,
+            error="quality gate failed: pytest tests/test_stack.py",
+            strategy="retry",
+            max_retries=3,
+        )
+
+        result = workflow_engine.resume_workflow(self.temp_dir, init_result["session_id"])
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["runtime_profile_summary"]["complexity"], "M")
+        self.assertEqual(result["runtime_profile_summary"]["skill_activation_level"], 100)
+        self.assertEqual(result["failure_event_summary"]["escalation_event_count"], 1)
+        self.assertEqual(result["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 100)
+
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        self.assertTrue(
+            any(
+                decision.decision == "Resumed from " + init_result["session_id"]
+                for decision in state.decisions
+            )
+        )
+
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
