@@ -33,6 +33,8 @@ from findings_paths import (
     findings_session_path,
     legacy_findings_paths,
 )
+from middleware import Request as MiddlewareRequest
+from middleware import create_default_chain as create_middleware_chain
 from review_paths import (
     ensure_review_dir,
     legacy_review_paths,
@@ -1203,6 +1205,65 @@ def validate_transition(current_phase: str, next_phase: str) -> None:
         raise ValueError(f"illegal phase transition: {current_phase} -> {next_phase}")
 
 
+def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
+    """
+    Build the initial runtime profile for a prompt.
+
+    The authoritative workflow runtime still owns state and gates, but it now
+    reuses the middleware chain to normalize intent, complexity, phase sequence,
+    and skill context. Router remains the fallback when middleware is unavailable.
+    """
+    trigger_type, routed_phase, _confidence = router.route(prompt)
+    complexity, complexity_conf = router.estimate_complexity(prompt)
+    phase_sequence = router.get_phase_sequence(complexity)
+    current_phase = _phase_display_name(trigger_type, routed_phase)
+
+    profile: dict[str, Any] = {
+        "trigger_type": trigger_type,
+        "phase": current_phase,
+        "complexity": complexity,
+        "complexity_confidence": complexity_conf,
+        "phase_sequence": phase_sequence,
+        "skill_context": "",
+        "tokens_expected": 0,
+        "use_skill": True,
+        "intent": None,
+        "profile_source": "router",
+    }
+
+    try:
+        request = MiddlewareRequest(text=prompt, metadata={"cwd": workdir})
+        create_middleware_chain().execute(request)
+
+        if request.intent is not None:
+            profile["intent"] = request.intent
+
+        if request.intent == "CHAT":
+            profile["trigger_type"] = "DIRECT_ANSWER"
+            profile["phase"] = "DIRECT_ANSWER"
+            profile["use_skill"] = False
+        elif request.intent == "FULL_WORKFLOW":
+            profile["trigger_type"] = "FULL_WORKFLOW"
+            profile["phase"] = request.phase.value
+
+            profile["complexity"] = request.complexity.value
+            if request.metadata.get("phase_sequence"):
+                profile["phase_sequence"] = [
+                    phase.value if hasattr(phase, "value") else str(phase)
+                    for phase in request.metadata["phase_sequence"]
+                ]
+
+        profile["skill_context"] = request.skill_context
+        profile["tokens_expected"] = request.tokens_expected
+        profile["use_skill"] = request.use_skill
+        profile["profile_source"] = "middleware+router"
+    except Exception:
+        # Keep router-derived defaults when middleware is unavailable.
+        pass
+
+    return profile
+
+
 def initialize_workflow(
     prompt: str,
     workdir: str = ".",
@@ -1234,12 +1295,12 @@ def initialize_workflow(
     memory_ops.ensure_session_state_exists(str(session_path))
     task_tracker.save_tracker(str(tracker_path), task_tracker.load_tracker(str(tracker_path)))
 
-    trigger_type, routed_phase, _confidence = router.route(prompt)
-    current_phase = _phase_display_name(trigger_type, routed_phase)
-
-    # Estimate complexity and get phase sequence
-    complexity, complexity_conf = router.estimate_complexity(prompt)
-    phase_sequence = router.get_phase_sequence(complexity)
+    runtime_profile = _build_runtime_profile(prompt, workdir)
+    trigger_type = runtime_profile["trigger_type"]
+    current_phase = runtime_profile["phase"]
+    complexity = runtime_profile["complexity"]
+    complexity_conf = runtime_profile["complexity_confidence"]
+    phase_sequence = runtime_profile["phase_sequence"]
 
     # Create unified state
     state = create_initial_state(
@@ -1255,6 +1316,7 @@ def initialize_workflow(
     state.metadata["complexity"] = complexity
     state.metadata["complexity_confidence"] = complexity_conf
     state.metadata["phase_sequence"] = phase_sequence
+    state.metadata["runtime_profile"] = runtime_profile
 
     # NOTE: create_initial_state already sets the phase to initial_phase
     # Don't call transition_phase here as it would try to transition to the same phase
@@ -1359,6 +1421,10 @@ def initialize_workflow(
         "state_file": str(workflow_state_path(workdir)),
         "trajectory_session_id": state.session_id,
         "complexity": complexity,
+        "skill_context": runtime_profile["skill_context"],
+        "tokens_expected": runtime_profile["tokens_expected"],
+        "use_skill": runtime_profile["use_skill"],
+        "profile_source": runtime_profile["profile_source"],
         "phase_sequence": phase_sequence,
         "total_phases": len(phase_sequence),
     }

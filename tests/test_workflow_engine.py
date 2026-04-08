@@ -66,9 +66,22 @@ class TestWorkflowEngine(unittest.TestCase):
     def test_initialize_direct_answer_does_not_create_task_tracker_entry(self):
         result = workflow_engine.initialize_workflow("hello", workdir=self.temp_dir)
         self.assertEqual(result["phase"], "DIRECT_ANSWER")
+        self.assertEqual(result["profile_source"], "middleware+router")
+        self.assertFalse(result["use_skill"])
 
         tracker = json.loads((Path(self.temp_dir) / ".task_tracker.json").read_text(encoding="utf-8"))
         self.assertEqual(tracker["tasks"], [])
+
+    def test_initialize_full_workflow_uses_runtime_profile(self):
+        result = workflow_engine.initialize_workflow("/agentic-workflow 开发一个电商系统", workdir=self.temp_dir)
+
+        self.assertEqual(result["trigger_type"], "FULL_WORKFLOW")
+        self.assertEqual(result["phase"], "RESEARCH")
+        self.assertEqual(result["complexity"], "XL")
+        self.assertEqual(result["profile_source"], "middleware+router")
+        self.assertTrue(result["use_skill"])
+        self.assertGreater(result["tokens_expected"], 0)
+        self.assertIn("RESEARCH", result["skill_context"])
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
