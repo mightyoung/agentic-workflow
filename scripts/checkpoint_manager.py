@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from safe_io import safe_write_text_locked
-from unified_state import get_runtime_profile_summary, load_state
+from unified_state import get_failure_event_summary, get_runtime_profile_summary, load_state
 
 # Import from workflow_engine (local imports to avoid circular dependency at runtime)
 _imported_fns: dict[str, Any] = {}
@@ -231,6 +231,7 @@ def conditional_checkpoint(
         "reason": reason,
         "phase": current_phase,
         "runtime_profile_summary": get_runtime_profile_summary(state),
+        "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
         "next_tasks": next_tasks,
@@ -276,6 +277,7 @@ def conditional_checkpoint(
 
     # Build handoff content
     runtime_profile_summary = get_runtime_profile_summary(state)
+    failure_event_summary = get_failure_event_summary(state)
 
     handoff_content = f"""# Checkpoint Handoff: {checkpoint_id}
 
@@ -290,6 +292,12 @@ def conditional_checkpoint(
 - Skill activation level: {runtime_profile_summary.get('skill_activation_level') if runtime_profile_summary.get('skill_activation_level') is not None else 'unset'}
 - Tokens expected: {runtime_profile_summary.get('tokens_expected') if runtime_profile_summary.get('tokens_expected') is not None else 'unset'}
 - Profile source: {runtime_profile_summary.get('profile_source') or 'unset'}
+
+## Failure Events
+- Failure events: {failure_event_summary.get('failure_event_count', 0)}
+- Escalation events: {failure_event_summary.get('escalation_event_count', 0)}
+- Latest failure type: {failure_event_summary.get('latest_failure_event', {}).get('error_type') if failure_event_summary.get('latest_failure_event') else 'unset'}
+- Latest escalation: {failure_event_summary.get('latest_escalation_event', {}).get('escalated_activation_level') if failure_event_summary.get('latest_escalation_event') else 'unset'}
 
 ## Task
 {state.task.title if state.task else "Unknown task"}

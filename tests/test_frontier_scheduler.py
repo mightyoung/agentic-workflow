@@ -229,6 +229,72 @@ class TestConditionalCheckpoint(unittest.TestCase):
             self.assertIn("Skill activation level: 50", handoff_content)
             self.assertIn("Profile source: middleware+router", handoff_content)
 
+    def test_checkpoint_includes_failure_event_summary(self):
+        """Checkpoint surfaces failure event summary in JSON and handoff."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".workflow_state.json"
+            state_file.write_text(json.dumps({
+                "session_id": "test-session",
+                "phase": {
+                    "current": "EXECUTING",
+                    "history": [{"phase": "EXECUTING", "entered_at": "2026-04-01T00:00:00", "exited_at": None}]
+                },
+                "task": {
+                    "task_id": "T001",
+                    "title": "Test task",
+                    "status": "in_progress",
+                    "description": "",
+                    "priority": "P1",
+                    "owned_files": [],
+                    "dependencies": [],
+                    "verification": "",
+                    "created_at": "2026-04-01T00:00:00",
+                    "completed_at": None,
+                    "progress": 0
+                },
+                "decisions": [
+                    {
+                        "timestamp": "2026-04-01T00:00:01",
+                        "decision": "Escalate skill activation",
+                        "reason": "high_signal_failure:quality_gate_failed escalated activation to 75",
+                        "metadata": {
+                            "error_type": "quality_gate_failed",
+                            "current_activation_level": 50,
+                            "escalated_activation_level": 75,
+                            "escalation_reason": "high_signal_failure:quality_gate_failed",
+                            "retry_count": 0,
+                            "profile_source": "middleware+router"
+                        }
+                    }
+                ],
+                "file_changes": [],
+                "artifacts": [],
+                "metadata": {
+                    "runtime_profile": {
+                        "skill_policy": "default_enable",
+                        "use_skill": True,
+                        "skill_activation_level": 75,
+                        "tokens_expected": 2048,
+                        "profile_source": "middleware+router",
+                    }
+                },
+            }), encoding="utf-8")
+
+            result = conditional_checkpoint(tmpdir)
+            self.assertTrue(result["checkpoint_saved"])
+
+            checkpoint_file = Path(tmpdir) / ".checkpoints" / f"{result['checkpoint_id']}.json"
+            checkpoint_json = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint_json["failure_event_summary"]["failure_event_count"], 1)
+            self.assertEqual(checkpoint_json["failure_event_summary"]["escalation_event_count"], 1)
+            self.assertEqual(checkpoint_json["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 75)
+
+            handoff_file = Path(tmpdir) / f"handoff_{result['checkpoint_id']}.md"
+            handoff_content = handoff_file.read_text(encoding="utf-8")
+            self.assertIn("## Failure Events", handoff_content)
+            self.assertIn("Failure events: 1", handoff_content)
+            self.assertIn("Escalation events: 1", handoff_content)
+
 
 class TestParsePhaseContract(unittest.TestCase):
     """Test contract parsing logic"""
