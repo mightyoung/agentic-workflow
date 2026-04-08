@@ -208,6 +208,14 @@ class TestResumePoint(unittest.TestCase):
         self.assertIsNotNone(result)
         # 由于EXECUTING没有exited_at，resume_from应该是EXECUTING
         self.assertEqual(result["resume_from"], "EXECUTING")
+        self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
+        self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
+        self.assertEqual(result["resume_summary"]["phase_count"], 1)
+
+        resumed_trajectory = result["resumed_trajectory"]
+        self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
+        self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(resumed_trajectory["phases"][0]["notes"][0], f"Resumed from {original_session_id} at EXECUTING")
 
     def test_resume_from_init_no_advance(self):
         """测试从初始化后未推进的session恢复"""
@@ -223,6 +231,8 @@ class TestResumePoint(unittest.TestCase):
         self.assertIsNotNone(result)
         # resume_from 应该是 PLANNING（因为它还没有exited_at）
         self.assertEqual(result["resume_from"], "PLANNING")
+        self.assertEqual(result["resume_summary"]["resume_from"], "PLANNING")
+        self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
 
 
 class TestGetNextPhase(unittest.TestCase):

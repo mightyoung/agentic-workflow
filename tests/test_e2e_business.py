@@ -727,6 +727,9 @@ class TestTrajectoryPersistence(TestE2EBusinessChains):
         self.assertEqual(result["resume_from"], "EXECUTING", "Should resume from EXECUTING")
         self.assertEqual(result["next_phase"], "REVIEWING", "Should suggest REVIEWING as next")
         self.assertTrue(result["can_resume"], "Should be able to resume")
+        self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
+        self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(result["resumed_trajectory"]["resume_summary"]["resume_from"], "EXECUTING")
 
 
 if __name__ == "__main__":

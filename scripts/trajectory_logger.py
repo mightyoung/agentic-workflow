@@ -139,6 +139,7 @@ class Trajectory:
     runtime_profile: dict[str, Any] = field(default_factory=dict)
     current_phase: str = "IDLE"
     phases: list[PhaseRecord] = field(default_factory=list)
+    resume_summary: dict[str, Any] = field(default_factory=dict)
     final_state: str = "running"  # running, completed, failed, aborted
     failure_reason: str | None = None
     completed_at: str | None = None
@@ -153,6 +154,7 @@ class Trajectory:
             "runtime_profile": self.runtime_profile,
             "current_phase": self.current_phase,
             "phases": [p.to_dict() for p in self.phases],
+            "resume_summary": self.resume_summary,
             "final_state": self.final_state,
             "failure_reason": self.failure_reason,
             "completed_at": self.completed_at,
@@ -505,6 +507,43 @@ def load_trajectory(workdir: str, session_id: str) -> dict[str, Any] | None:
         return None
 
 
+def _build_resume_summary(
+    original_session_id: str,
+    original_trajectory: dict[str, Any],
+    resume_from: str,
+    next_phase: str | None,
+) -> dict[str, Any]:
+    """构建恢复摘要，写入恢复轨迹根节点。"""
+    phases = original_trajectory.get("phases", [])
+    errored_phases: list[dict[str, Any]] = []
+    for phase in phases:
+        error = phase.get("error")
+        if error:
+            errored_phases.append(
+                {
+                    "phase": phase.get("phase", ""),
+                    "error": error,
+                    "entered_at": phase.get("entered_at"),
+                    "exited_at": phase.get("exited_at"),
+                }
+            )
+
+    latest_error = errored_phases[-1] if errored_phases else None
+    runtime_profile = original_trajectory.get("runtime_profile", {})
+    return {
+        "original_session_id": original_session_id,
+        "original_run_id": original_trajectory.get("run_id", ""),
+        "original_trigger_type": original_trajectory.get("trigger_type", ""),
+        "original_current_phase": original_trajectory.get("current_phase", "IDLE"),
+        "resume_from": resume_from,
+        "next_phase": next_phase,
+        "runtime_profile": runtime_profile,
+        "phase_count": len(phases),
+        "errored_phase_count": len(errored_phases),
+        "latest_errored_phase": latest_error,
+    }
+
+
 def save_trajectory(workdir: str, trajectory: Trajectory) -> Path:
     """保存轨迹"""
     base_dir = trajectory_date_dir(workdir, trajectory.session_id)
@@ -624,14 +663,17 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
     # 如果从未退出任何phase（phases为空），但有current_phase，可以从current_phase恢复
     if not phases:
         if original_phase not in ("COMPLETE", "failed", "aborted", "IDLE"):
+            next_phase = _get_next_phase_after(original_phase, original_phase)
+            resume_summary = _build_resume_summary(session_id, original_trajectory, original_phase, next_phase)
             return {
                 "session_id": f"r{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "run_id": f"R{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "original_session_id": session_id,
                 "resume_from": original_phase,
-                "next_phase": _get_next_phase_after(original_phase, original_phase),
+                "next_phase": next_phase,
                 "can_resume": True,
                 "original_trajectory": original_trajectory,
+                "resume_summary": resume_summary,
                 "resumed_trajectory": None,
             }
         return None
@@ -663,6 +705,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
 
     # 确定下一个应该进入的phase
     next_phase = _get_next_phase_after(resume_from, original_phase)
+    resume_summary = _build_resume_summary(session_id, original_trajectory, resume_from, next_phase)
 
     # 创建新的恢复trajectory
     new_session_id = f"r{ datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -686,6 +729,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         prompt=f"[RESUMED from {session_id}] {original_trajectory.get('prompt', '')}",
         trigger_type="RESUMED",
         current_phase=resume_from,
+        resume_summary=resume_summary,
     )
 
     # 添加恢复信息到phases
@@ -697,8 +741,13 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
             "from_session": session_id,
             "from_phase": resume_from,
             "original_phase": original_phase,
+            "resume_summary": resume_summary,
             "reason": "workflow resumed from interrupted point",
         }],
+        notes=[
+            f"Resumed from {session_id} at {resume_from}",
+            f"Next phase: {next_phase or 'unknown'}",
+        ],
     ))
 
     # 保存恢复trajectory
@@ -712,6 +761,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         "next_phase": next_phase,
         "can_resume": next_phase is not None,
         "original_trajectory": original_trajectory,
+        "resume_summary": resume_summary,
         "resumed_trajectory": resumed_trajectory.to_dict(),
     }
 
