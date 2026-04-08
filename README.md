@@ -183,14 +183,12 @@ Layer 2: Workflow Runtime (scripts/*.py)
 
 ### Experimental Features (🔬 Not in Main Runtime)
 
-> **Note:** These features are experimental and NOT integrated into the main workflow. Do not rely on them for production use.
+> **Note:** Only `scripts/middleware.py` remains as an experimental helper. The
+> rest of the former experimental runtime modules are archived references and
+> are no longer shipped as executable code.
 
-Experimental modules are documented separately in [docs/roadmap/experimental-modules.md](docs/roadmap/experimental-modules.md), including:
-- Module inventory and integration status
-- Promotion criteria (what makes a module ready for stable)
-- Decision criteria for removal
+Archived references are documented in [docs/roadmap/experimental-modules.md](docs/roadmap/experimental-modules.md).
 
-Available experimental modules:
 - `middleware.py` - Middleware chain helper for routing/orchestration experiments
 - `experimental/` - archived design references only
 
