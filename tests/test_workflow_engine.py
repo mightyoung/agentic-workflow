@@ -14,6 +14,7 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import memory_longterm  # noqa: E402
+from memory_ops import update_thinking_summary  # noqa: E402
 import runtime_profile  # noqa: E402
 import search_adapter  # noqa: E402
 import unified_state  # noqa: E402
@@ -802,6 +803,18 @@ class TestNewPhases(unittest.TestCase):
             strategy="retry",
             max_retries=3,
         )
+        update_thinking_summary(
+            str(Path(self.temp_dir) / "SESSION-STATE.md"),
+            {
+                "workflow_label": "复杂问题攻坚",
+                "workflow": "workflow_2_complex_problem",
+                "major_contradiction": "目标完整性 vs 交付节奏",
+                "stage_judgment": "战略相持",
+                "local_attack_point": "最小可验证切口",
+                "recommendation": "先做事实收集",
+                "memory_hints_count": 1,
+            },
+        )
 
         result = workflow_engine.resume_workflow(self.temp_dir, init_result["session_id"])
 
@@ -812,6 +825,8 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 100)
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
+        self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
 
         state = unified_state.load_state(self.temp_dir)
         self.assertIsNotNone(state)
@@ -828,12 +843,14 @@ class TestNewPhases(unittest.TestCase):
         self.assertIn("resume_from", session_state)
         self.assertIn("next_phase", session_state)
         self.assertIn("failure_event_count", session_state)
+        self.assertIn("thinking_workflow_label", session_state)
 
         resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
         self.assertIsNotNone(resumed_trajectory)
         assert resumed_trajectory is not None
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 
     def test_phase_context_includes_memory_hints(self):

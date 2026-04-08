@@ -519,6 +519,7 @@ def _build_resume_summary(
     original_trajectory: dict[str, Any],
     resume_from: str,
     next_phase: str | None,
+    thinking_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """构建恢复摘要，写入恢复轨迹根节点。"""
     phases = original_trajectory.get("phases", [])
@@ -537,6 +538,7 @@ def _build_resume_summary(
 
     latest_error = errored_phases[-1] if errored_phases else None
     runtime_profile = original_trajectory.get("runtime_profile", {})
+    thinking_summary = thinking_summary or {}
     return {
         "original_session_id": original_session_id,
         "original_run_id": original_trajectory.get("run_id", ""),
@@ -545,6 +547,7 @@ def _build_resume_summary(
         "resume_from": resume_from,
         "next_phase": next_phase,
         "runtime_profile": runtime_profile,
+        "thinking_summary": thinking_summary,
         "phase_count": len(phases),
         "errored_phase_count": len(errored_phases),
         "latest_errored_phase": latest_error,
@@ -661,6 +664,14 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
     if not original_trajectory:
         return None
 
+    thinking_summary: dict[str, Any] = {}
+    try:
+        from memory_ops import get_thinking_summary
+
+        thinking_summary = get_thinking_summary(str(Path(workdir) / "SESSION-STATE.md"))
+    except Exception:
+        thinking_summary = {}
+
     # 获取当前活跃phase
     original_phase = original_trajectory.get("current_phase", "IDLE")
 
@@ -671,7 +682,13 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
     if not phases:
         if original_phase not in ("COMPLETE", "failed", "aborted", "IDLE"):
             next_phase = _get_next_phase_after(original_phase, original_phase)
-            resume_summary = _build_resume_summary(session_id, original_trajectory, original_phase, next_phase)
+            resume_summary = _build_resume_summary(
+                session_id,
+                original_trajectory,
+                original_phase,
+                next_phase,
+                thinking_summary=thinking_summary,
+            )
             return {
                 "session_id": f"r{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "run_id": f"R{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -712,7 +729,13 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
 
     # 确定下一个应该进入的phase
     next_phase = _get_next_phase_after(resume_from, original_phase)
-    resume_summary = _build_resume_summary(session_id, original_trajectory, resume_from, next_phase)
+    resume_summary = _build_resume_summary(
+        session_id,
+        original_trajectory,
+        resume_from,
+        next_phase,
+        thinking_summary=thinking_summary,
+    )
 
     # 创建新的恢复trajectory
     new_session_id = f"r{ datetime.now().strftime('%Y%m%d%H%M%S')}"

@@ -104,6 +104,12 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **use_skill**: (未设置)
 - **skill_activation_level**: (未设置)
 - **complexity**: (未设置)
+- **thinking_workflow_label**: (未设置)
+- **thinking_major_contradiction**: (未设置)
+- **thinking_stage_judgment**: (未设置)
+- **thinking_local_attack_point**: (未设置)
+- **thinking_recommendation**: (未设置)
+- **thinking_memory_hints_count**: 0
 - **failure_event_count**: 0
 - **escalation_event_count**: 0
 
@@ -472,6 +478,7 @@ def update_resume_summary(
     next_phase: str | None,
     original_session_id: str,
     runtime_profile: dict[str, Any] | None = None,
+    thinking_summary: dict[str, Any] | None = None,
     failure_event_summary: dict[str, Any] | None = None,
 ) -> bool:
     """更新恢复摘要到 SESSION-STATE.md。"""
@@ -482,6 +489,7 @@ def update_resume_summary(
         content = f.read()
 
     runtime_profile = runtime_profile or {}
+    thinking_summary = thinking_summary or {}
     failure_event_summary = failure_event_summary or {}
 
     section = (
@@ -493,11 +501,17 @@ def update_resume_summary(
         f"- **use_skill**: {runtime_profile.get('use_skill', '(未设置)')}\n"
         f"- **skill_activation_level**: {runtime_profile.get('skill_activation_level', '(未设置)')}\n"
         f"- **complexity**: {runtime_profile.get('complexity', '(未设置)')}\n"
+        f"- **thinking_workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
+        f"- **thinking_major_contradiction**: {thinking_summary.get('major_contradiction', '(未设置)')}\n"
+        f"- **thinking_stage_judgment**: {thinking_summary.get('stage_judgment', '(未设置)')}\n"
+        f"- **thinking_local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
+        f"- **thinking_recommendation**: {thinking_summary.get('recommendation', '(未设置)')}\n"
+        f"- **thinking_memory_hints_count**: {thinking_summary.get('memory_hints_count', 0)}\n"
         f"- **failure_event_count**: {failure_event_summary.get('failure_event_count', 0)}\n"
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:

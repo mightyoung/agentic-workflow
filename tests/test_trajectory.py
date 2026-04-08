@@ -22,6 +22,7 @@ from pathlib import Path
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+from memory_ops import update_thinking_summary  # noqa: E402
 from trajectory_logger import (
     PhaseRecord,
     TrajectoryLogger,
@@ -203,6 +204,19 @@ class TestResumePoint(unittest.TestCase):
         logger.enter_phase("EXECUTING")
         # 模拟中断 - 没有exit_phase和complete
 
+        update_thinking_summary(
+            str(Path(self.workdir) / "SESSION-STATE.md"),
+            {
+                "workflow_label": "复杂问题攻坚",
+                "workflow": "workflow_2_complex_problem",
+                "major_contradiction": "目标完整性 vs 交付节奏",
+                "stage_judgment": "战略相持",
+                "local_attack_point": "最小可验证切口",
+                "recommendation": "先做事实收集",
+                "memory_hints_count": 1,
+            },
+        )
+
         # 恢复工作流
         result = resume_from_point(self.workdir, original_session_id)
         self.assertIsNotNone(result)
@@ -211,10 +225,12 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
         self.assertEqual(result["resume_summary"]["phase_count"], 1)
+        self.assertEqual(result["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
 
         resumed_trajectory = result["resumed_trajectory"]
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["phases"][0]["notes"][0], f"Resumed from {original_session_id} at EXECUTING")
 
     def test_resume_from_init_no_advance(self):

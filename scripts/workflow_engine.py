@@ -2607,6 +2607,7 @@ def resume_workflow(
     new_session_id = result["session_id"]
     next_phase = result["next_phase"]
     resume_summary = result.get("resume_summary", {})
+    thinking_summary = resume_summary.get("thinking_summary", {})
 
     # 更新 unified state - 这是关键同步步骤
     state = load_state(workdir)
@@ -2629,6 +2630,7 @@ def resume_workflow(
                 "next_phase": next_phase,
                 "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
+                "thinking_summary": thinking_summary,
                 "failure_event_summary": failure_event_summary,
                 "planning_summary": planning_summary,
             },
@@ -2654,6 +2656,7 @@ def resume_workflow(
         next_phase=next_phase,
         original_session_id=session_id,
         runtime_profile=runtime_profile_summary,
+        thinking_summary=thinking_summary,
         failure_event_summary=failure_event_summary,
     )
     memory_ops.update_planning_summary(
@@ -2680,6 +2683,7 @@ def resume_workflow(
         "next_phase": next_phase,
         "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
+        "thinking_summary": thinking_summary,
         "failure_event_summary": failure_event_summary,
         "planning_summary": planning_summary,
         "state_synced": True,
