@@ -18,6 +18,7 @@ import search_adapter  # noqa: E402
 import runtime_profile  # noqa: E402
 import unified_state  # noqa: E402
 import workflow_engine  # noqa: E402
+from trajectory_logger import load_trajectory  # noqa: E402
 
 
 class TestWorkflowEngine(unittest.TestCase):
@@ -683,6 +684,8 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["runtime_profile_summary"]["skill_activation_level"], 100)
         self.assertEqual(result["failure_event_summary"]["escalation_event_count"], 1)
         self.assertEqual(result["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 100)
+        self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
+        self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
 
         state = unified_state.load_state(self.temp_dir)
         self.assertIsNotNone(state)
@@ -692,6 +695,13 @@ class TestNewPhases(unittest.TestCase):
                 for decision in state.decisions
             )
         )
+
+        resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
+        self.assertIsNotNone(resumed_trajectory)
+        assert resumed_trajectory is not None
+        self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
+        self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""

@@ -2475,6 +2475,7 @@ def resume_workflow(
     # 获取新的 session_id 和 next_phase
     new_session_id = result["session_id"]
     next_phase = result["next_phase"]
+    resume_summary = result.get("resume_summary", {})
 
     # 更新 unified state - 这是关键同步步骤
     state = load_state(workdir)
@@ -2494,6 +2495,7 @@ def resume_workflow(
                 "resumed_session": new_session_id,
                 "resume_from": result["resume_from"],
                 "next_phase": next_phase,
+                "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
                 "failure_event_summary": failure_event_summary,
             },
@@ -2512,7 +2514,12 @@ def resume_workflow(
 
     # 重新初始化 trajectory logger
     new_logger = TrajectoryLogger(workdir, new_session_id)
-    new_logger.start(f"[RESUMED from {session_id}]", "RESUMED")
+    new_logger.start(
+        f"[RESUMED from {session_id}]",
+        "RESUMED",
+        runtime_profile=runtime_profile_summary,
+        resume_summary=resume_summary,
+    )
     new_logger.enter_phase(next_phase)
     _active_loggers[new_session_id] = new_logger
 
@@ -2522,6 +2529,7 @@ def resume_workflow(
         "new_session_id": new_session_id,
         "resume_from": result["resume_from"],
         "next_phase": next_phase,
+        "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
         "failure_event_summary": failure_event_summary,
         "state_synced": True,

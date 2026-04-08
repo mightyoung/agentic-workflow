@@ -207,7 +207,13 @@ class TrajectoryLogger:
         """确保目录存在"""
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def start(self, prompt: str, trigger_type: str, runtime_profile: dict[str, Any] | None = None) -> str:
+    def start(
+        self,
+        prompt: str,
+        trigger_type: str,
+        runtime_profile: dict[str, Any] | None = None,
+        resume_summary: dict[str, Any] | None = None,
+    ) -> str:
         """
         开始轨迹记录
 
@@ -240,6 +246,7 @@ class TrajectoryLogger:
             trigger_type=trigger_type,
             runtime_profile=self._runtime_profile,
             current_phase="IDLE",
+            resume_summary=resume_summary or {},
         )
 
         self._save_trajectory(trajectory)
