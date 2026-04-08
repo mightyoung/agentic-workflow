@@ -19,7 +19,7 @@ Each capability must answer three questions:
 |----------|---------|
 | Entry Command | `python3 scripts/router.py "用户输入"` |
 | State Artifact | None (in-memory routing) |
-| Test Coverage | `tests/test_router.py` - routing logic tests |
+| Test Coverage | `tests/test_workflow_chain.py` - router-to-plan integration tests |
 | Verification | Assert correct phase selection for various inputs |
 
 ### 2. Unified State Management

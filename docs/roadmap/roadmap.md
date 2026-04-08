@@ -2,7 +2,7 @@
 
 This directory contains planned features and capabilities.
 
-## Phase 1: Foundation (Completed v5.11.0)
+## Phase 1: Foundation (Completed v6.3.0)
 
 ### Completed
 - [x] Basic workflow engine (`scripts/workflow_engine.py`)
@@ -19,14 +19,14 @@ This directory contains planned features and capabilities.
 - [x] CI/CD integration (GitHub Actions + pre-commit)
 - [x] Project restructuring (experimental/, utils/, tools/ directories)
 
-## Known Limitations
+## Current Boundaries
 
-| Limitation | Description | Workaround |
-|------------|-------------|------------|
-| No semantic routing | Router is keyword-based, not semantic | Use explicit phase triggers |
-| No trajectory resume | Cannot resume from interrupted workflow | Restart from beginning |
-| No parallel phase execution | Bands designed but not implemented | Sequential execution |
-| State in markdown files | SESSION-STATE.md, progress.md are fragile | Use `.workflow_state.json` |
+| Boundary | Description | Practical Guidance |
+|----------|-------------|--------------------|
+| Semantic routing is helper-only | Primary routing is still keyword-based; middleware may enrich the input portrait but does not replace router.py | Use explicit phase triggers when intent is ambiguous |
+| Parallel execution is scheduling-only | Frontier can produce parallel-safe groups, but execution is still coordinated through the single authoritative runtime | Treat parallel groups as orchestration hints, not concurrent workers |
+| Markdown state is compatibility-sidecar | `SESSION-STATE.md` and `progress.md` remain for compatibility, but `.workflow_state.json` is the authoritative state | Prefer `.workflow_state.json` for automation and validation |
+| Experimental modules are archived | `scripts/experimental/` is reference-only and not part of the runtime | Do not route new work into archived modules |
 
 ## Architecture Layers
 
@@ -49,5 +49,5 @@ Runtime Surface:
 ├── scripts/memory_ops.py - SESSION-STATE.md operations
 ├── scripts/quality_gate.py - quality enforcement
 ├── scripts/search_adapter.py - web search with metadata validation
-└── scripts/experimental/ - archived design references (not part of the main runtime)
+└── scripts/experimental/ - archived design references only
 ```

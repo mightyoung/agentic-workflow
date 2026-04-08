@@ -6,9 +6,9 @@
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
 
-**Current Version**: 5.13.0
+**Current Version**: 6.3.0
 
-## Current Capabilities (v5.13.0)
+## Current Capabilities (v6.3.0)
 
 This section describes what actually works **today** via the scripts layer.
 
@@ -158,8 +158,7 @@ Layer 2: Workflow Runtime (scripts/*.py)
 ├── trajectory_logger.py ✅ - trajectory + resume
 ├── memory_ops.py ✅ - session state operations
 ├── task_tracker.py ✅ - task tracking
-└── experimental/
-    └── experimental/ 📦 - archived design references only
+└── experimental/ 📦 - archived design references only
 ```
 
 ## Current Capabilities (What Works)
@@ -173,7 +172,11 @@ Layer 2: Workflow Runtime (scripts/*.py)
 - Session state management
 - Task progress tracking
 
-### 🔬 Experimental (Not Yet in Main Runtime)
+### 📦 Archived Design Motifs
+
+These were explored in older experimental branches and are kept as references,
+not as active runtime modules:
+
 - Semantic routing (embedding-based)
 - Execution loop patterns (ReAct/Plan-and-Execute/Reflexion)
 - Parallel execution bands
@@ -215,7 +218,7 @@ new_state = migrate_state(old_state)
 - `SESSION-STATE.md` -> type: session
 - `.task_tracker.json` -> type: tracker
 
-## Roadmap (v5.8.1 - Completed)
+## Roadmap (Historical Milestones - Completed)
 
 > Note: "✅ Done" indicates the feature exists with minimum viable capability. "🔄" indicates mature/implemented.
 
