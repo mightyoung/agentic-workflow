@@ -98,6 +98,7 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertFalse(snapshot["runtime_profile_summary"]["use_skill"])
         self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 0)
         self.assertEqual(snapshot["runtime_profile_summary"]["profile_source"], "middleware+router")
+        self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "XL")
 
     def test_initialize_executing_workflow_uses_seventy_five_activation_baseline(self):
         result = workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
@@ -109,10 +110,12 @@ class TestWorkflowEngine(unittest.TestCase):
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 75)
+        self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "M")
 
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["runtime_profile_summary"]["skill_activation_level"], 75)
         self.assertEqual(unified_snapshot["failure_event_summary"]["failure_event_count"], 0)
+        self.assertEqual(unified_snapshot["runtime_profile_summary"]["complexity"], "M")
 
     def test_runtime_profile_activation_is_size_sensitive_for_executing(self):
         self.assertEqual(runtime_profile.skill_activation_level_for_phase("EXECUTING", "XS"), 50)
@@ -630,6 +633,7 @@ class TestNewPhases(unittest.TestCase):
             snapshot["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"],
             100,
         )
+        self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "M")
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["failure_event_summary"]["escalation_event_count"], 1)
 
@@ -660,6 +664,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(snapshot["failure_event_summary"]["failure_event_count"], 1)
         self.assertEqual(snapshot["failure_event_summary"]["escalation_event_count"], 0)
         self.assertEqual(snapshot["failure_event_summary"]["error_types"], ["unknown"])
+        self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "M")
 
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""

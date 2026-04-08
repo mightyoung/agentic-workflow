@@ -292,6 +292,10 @@ def conditional_checkpoint(
 - Skill activation level: {runtime_profile_summary.get('skill_activation_level') if runtime_profile_summary.get('skill_activation_level') is not None else 'unset'}
 - Tokens expected: {runtime_profile_summary.get('tokens_expected') if runtime_profile_summary.get('tokens_expected') is not None else 'unset'}
 - Profile source: {runtime_profile_summary.get('profile_source') or 'unset'}
+- Complexity: {runtime_profile_summary.get('complexity') or 'unset'}
+- Complexity confidence: {runtime_profile_summary.get('complexity_confidence') if runtime_profile_summary.get('complexity_confidence') is not None else 'unset'}
+- Complexity: {runtime_profile_summary.get('complexity') or 'unset'}
+- Complexity confidence: {runtime_profile_summary.get('complexity_confidence') if runtime_profile_summary.get('complexity_confidence') is not None else 'unset'}
 
 ## Failure Events
 - Failure events: {failure_event_summary.get('failure_event_count', 0)}

@@ -302,6 +302,8 @@ def get_runtime_profile_summary(state: WorkflowState | None) -> dict[str, Any]:
         "skill_activation_level": runtime_profile.get("skill_activation_level") if runtime_profile else None,
         "tokens_expected": runtime_profile.get("tokens_expected") if runtime_profile else None,
         "profile_source": runtime_profile.get("profile_source") if runtime_profile else None,
+        "complexity": state.metadata.get("complexity") if state and state.metadata else None,
+        "complexity_confidence": state.metadata.get("complexity_confidence") if state and state.metadata else None,
     }
 
 
