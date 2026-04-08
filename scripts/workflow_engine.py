@@ -2512,6 +2512,16 @@ def resume_workflow(
         runtime_profile_summary = {}
         failure_event_summary = {}
 
+    session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+    memory_ops.update_resume_summary(
+        str(session_path),
+        resume_from=result["resume_from"],
+        next_phase=next_phase,
+        original_session_id=session_id,
+        runtime_profile=runtime_profile_summary,
+        failure_event_summary=failure_event_summary,
+    )
+
     # 重新初始化 trajectory logger
     new_logger = TrajectoryLogger(workdir, new_session_id)
     new_logger.start(

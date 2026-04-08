@@ -696,6 +696,13 @@ class TestNewPhases(unittest.TestCase):
             )
         )
 
+        session_state = (Path(self.temp_dir) / "SESSION-STATE.md").read_text(encoding="utf-8")
+        self.assertIn("## 恢复摘要", session_state)
+        self.assertIn("original_session_id", session_state)
+        self.assertIn("resume_from", session_state)
+        self.assertIn("next_phase", session_state)
+        self.assertIn("failure_event_count", session_state)
+
         resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
         self.assertIsNotNone(resumed_trajectory)
         assert resumed_trajectory is not None
