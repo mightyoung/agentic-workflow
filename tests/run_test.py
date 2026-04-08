@@ -22,7 +22,7 @@ TESTS = [
 
 def route(prompt: str) -> str:
     """路由到对应模块"""
-    trigger_type, phase = router_module.route(prompt)
+    trigger_type, phase, confidence = router_module.route(prompt)
     if trigger_type == "DIRECT_ANSWER":
         return None
     if trigger_type == "FULL_WORKFLOW":
