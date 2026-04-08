@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from memory_ops import get_thinking_summary as get_session_thinking_summary
 from safe_io import safe_write_json_locked
 from state_schema import (
     Decision,
@@ -404,6 +405,50 @@ def get_planning_summary(workdir: str, state: WorkflowState | None = None) -> di
     }
 
 
+def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Extract THINKING summary from session sidecar or current state."""
+    session_state_path = Path(workdir) / "SESSION-STATE.md"
+    summary = get_session_thinking_summary(str(session_state_path))
+    if _is_meaningful_thinking_summary(summary):
+        return summary
+
+    if state is None:
+        state = load_state(workdir)
+    if state is None:
+        return {}
+
+    if state.phase.get("current") != "THINKING" or not state.task:
+        return {}
+
+    try:
+        from runtime_profile import build_thinking_summary
+
+        runtime_profile = get_runtime_profile_summary(state)
+        task_desc = state.task.description or state.task.title or ""
+        complexity = runtime_profile.get("complexity")
+        if not complexity and state.metadata:
+            complexity = state.metadata.get("complexity")
+        return build_thinking_summary(task_desc, str(complexity or "M"))
+    except Exception:
+        return {}
+
+
+def _is_meaningful_thinking_summary(summary: dict[str, Any] | None) -> bool:
+    """Return True only for a THINKING summary with actual content, not placeholders."""
+    if not summary:
+        return False
+    workflow_label = str(summary.get("workflow_label", "")).strip()
+    major_contradiction = str(summary.get("major_contradiction", "")).strip()
+    local_attack_point = str(summary.get("local_attack_point", "")).strip()
+    if workflow_label in {"", "(未设置)", "unset"}:
+        return False
+    if major_contradiction in {"", "(未设置)", "unset"}:
+        return False
+    if local_attack_point in {"", "(未设置)", "unset"}:
+        return False
+    return True
+
+
 def get_failure_event_summary(state: WorkflowState | None) -> dict[str, Any]:
     """Summarize failure-related decisions for snapshot/debugging views."""
     if state is None:
@@ -457,7 +502,7 @@ def get_failure_event_summary(state: WorkflowState | None) -> dict[str, Any]:
     }
 
 
-def get_review_summary(workdir: str) -> dict[str, Any]:
+def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
     """Summarize the latest review artifact for completion gates and snapshots."""
     from review_paths import legacy_review_paths, review_latest_path
 
@@ -469,6 +514,9 @@ def get_review_summary(workdir: str) -> dict[str, Any]:
             break
 
     if review_path is None:
+        fallback = _build_review_state_fallback(state)
+        if fallback:
+            return fallback
         return {
             "review_found": False,
             "review_path": None,
@@ -526,6 +574,33 @@ def get_review_summary(workdir: str) -> dict[str, Any]:
         "verdict": verdict,
         "degraded_mode": degraded_mode,
         "files_reviewed": files_reviewed,
+    }
+
+
+def _build_review_state_fallback(state: WorkflowState | None) -> dict[str, Any]:
+    """Build a minimal review summary from live state when no review artifact exists."""
+    if state is None or state.phase.get("current") != "REVIEWING":
+        return {}
+    if not state.task:
+        return {}
+
+    reviewed_files = 0
+    for file_change in getattr(state, "file_changes", []) or []:
+        path = str(getattr(file_change, "path", ""))
+        if Path(path).suffix in {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rs", ".c", ".cpp"}:
+            reviewed_files += 1
+
+    return {
+        "review_found": False,
+        "review_path": None,
+        "review_source": "state_fallback",
+        "review_status": "pending",
+        "stage_1_status": "pending",
+        "stage_2_status": "pending",
+        "risk_level": None,
+        "verdict": None,
+        "degraded_mode": True,
+        "files_reviewed": reviewed_files,
     }
 
 
@@ -794,7 +869,8 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
             "errors": ["state file does not exist"],
             "runtime_profile_summary": get_runtime_profile_summary(None),
             "planning_summary": get_planning_summary(workdir, None),
-            "review_summary": get_review_summary(workdir),
+            "thinking_summary": get_thinking_summary(workdir, None),
+            "review_summary": get_review_summary(workdir, None),
             "failure_event_summary": get_failure_event_summary(None),
         }
 
@@ -811,7 +887,8 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
-        "review_summary": get_review_summary(workdir),
+        "thinking_summary": get_thinking_summary(workdir, state),
+        "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
     }
 

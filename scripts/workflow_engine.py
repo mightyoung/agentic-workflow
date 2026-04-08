@@ -61,6 +61,7 @@ from unified_state import (
     get_allowed_transitions,
     get_failure_event_summary,
     get_planning_summary,
+    get_thinking_summary,
     get_review_summary,
     get_runtime_profile_summary,
     load_state,
@@ -113,12 +114,19 @@ def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: st
         return False
 
 
-def _run_review_gate_if_applicable(workdir: str, is_code_task: bool) -> tuple[bool, str]:
+def _run_review_gate_if_applicable(
+    workdir: str,
+    is_code_task: bool,
+    state: Any | None = None,
+) -> tuple[bool, str]:
     """Validate that code tasks have a completed two-stage review before completion."""
     if not is_code_task:
         return True, "not applicable"
 
-    review_summary = get_review_summary(workdir)
+    if state is None:
+        state = load_state(workdir)
+
+    review_summary = get_review_summary(workdir, state)
     if not review_summary.get("review_found"):
         return False, "review artifact not found"
     if review_summary.get("review_status") != "reviewed":
@@ -1707,7 +1715,7 @@ def advance_workflow(
         str(session_path),
         get_planning_summary(workdir, state),
     )
-    if current_phase == "THINKING":
+    if phase == "THINKING":
         task_desc = state.task.description if state.task else (state.task.title if state.task else "")
         runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
         thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
@@ -2429,7 +2437,7 @@ def complete_workflow(
                 f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
             )
 
-        review_valid, review_error = _run_review_gate_if_applicable(workdir, True)
+        review_valid, review_error = _run_review_gate_if_applicable(workdir, True, state)
         if not review_valid:
             raise ValueError(
                 f"Cannot complete workflow: {review_error}. "
@@ -3237,7 +3245,8 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "plan_source": plan_source,
             "next_plan_tasks": next_tasks,
             "planning_summary": get_planning_summary(workdir, None),
-            "review_summary": get_review_summary(workdir),
+            "thinking_summary": get_thinking_summary(workdir, None),
+            "review_summary": get_review_summary(workdir, None),
             "runtime_profile_summary": get_runtime_profile_summary(None),
             "failure_event_summary": get_failure_event_summary(None),
             "context_for_next_phase": {
@@ -3283,7 +3292,8 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "task": task,
         "runtime_profile_summary": runtime_profile_summary,
         "planning_summary": planning_summary,
-        "review_summary": get_review_summary(workdir),
+        "thinking_summary": get_thinking_summary(workdir, state),
+        "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,

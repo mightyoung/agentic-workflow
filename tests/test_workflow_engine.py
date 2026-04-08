@@ -208,8 +208,26 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("目标完整性", thinking_summary["major_contradiction"])
         self.assertIn("最小可验证", thinking_summary["local_attack_point"])
         self.assertIn("战略", thinking_summary["stage_judgment"])
+        self.assertEqual(snapshot["thinking_summary"]["workflow_label"], "新项目启动")
+        self.assertIn("目标完整性", snapshot["thinking_summary"]["major_contradiction"])
         self.assertIn("调查研究", snapshot["context_for_next_phase"]["summary"])
         self.assertIn("群众路线", snapshot["context_for_next_phase"]["summary"])
+
+        unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
+        self.assertEqual(unified_snapshot["thinking_summary"]["workflow_label"], "新项目启动")
+        self.assertIn("目标完整性", unified_snapshot["thinking_summary"]["major_contradiction"])
+        self.assertIn("最小可验证", unified_snapshot["thinking_summary"]["local_attack_point"])
+        self.assertIn("战略", unified_snapshot["thinking_summary"]["stage_judgment"])
+
+        # Even if the sidecar is temporarily blank/placeholder, snapshots should
+        # fall back to the current THINKING state instead of surfacing empties.
+        update_thinking_summary(str(Path(self.temp_dir) / "SESSION-STATE.md"), {})
+        snapshot_fallback = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot_fallback["thinking_summary"]["workflow_label"], "新项目启动")
+        self.assertIn("目标完整性", snapshot_fallback["thinking_summary"]["major_contradiction"])
+        unified_fallback = unified_state.get_state_snapshot(self.temp_dir)
+        self.assertEqual(unified_fallback["thinking_summary"]["workflow_label"], "新项目启动")
+        self.assertIn("目标完整性", unified_fallback["thinking_summary"]["major_contradiction"])
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
@@ -231,6 +249,27 @@ class TestWorkflowEngine(unittest.TestCase):
         # Quality gate now runs and may pass or fail based on actual project state
         # Gate failure is recorded but does not block phase transition to REVIEWING
         self.assertIn(snapshot["task"]["quality_gates_passed"], [True, False])
+
+    def test_review_summary_falls_back_to_current_state_without_artifact(self):
+        workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
+
+        workflow_engine.advance_workflow(
+            "REVIEWING",
+            workdir=self.temp_dir,
+            progress=90,
+            task_status="in_progress",
+            note="review fallback check",
+        )
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        review_summary = snapshot["review_summary"]
+        self.assertFalse(review_summary["review_found"])
+        self.assertEqual(review_summary["review_source"], "state_fallback")
+        self.assertEqual(review_summary["review_status"], "pending")
+        self.assertEqual(review_summary["stage_1_status"], "pending")
+        self.assertEqual(review_summary["stage_2_status"], "pending")
+        self.assertTrue(review_summary["degraded_mode"])
+        self.assertGreaterEqual(review_summary["files_reviewed"], 0)
 
     def test_illegal_transition_is_rejected(self):
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)

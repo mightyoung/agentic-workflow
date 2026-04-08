@@ -242,7 +242,7 @@ def conditional_checkpoint(
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
         "thinking_summary": thinking_summary,
-        "review_summary": get_review_summary(workdir),
+        "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
