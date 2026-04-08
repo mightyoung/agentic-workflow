@@ -60,9 +60,9 @@ from scripts.middleware import (
     Complexity,
     Phase,
     Request,
-    SkillMiddleware,
     create_default_chain,
 )
+from scripts.runtime_profile import build_skill_context
 
 # 导入执行组件
 try:
@@ -321,15 +321,12 @@ class IntegratedEngine:
         """
         获取指定phase对应的skill_context
         """
-        # 使用SkillMiddleware生成当前phase的context
-        skill_mw = SkillMiddleware()
-        # 临时创建request来获取对应phase的prompt
-        temp_request = Request(text=orchestration.metadata.get("task", ""))
-        temp_request.phase = phase
-        temp_request.complexity = orchestration.complexity
-        temp_result = skill_mw.process(temp_request)
-        skill_context = temp_result.request_modifications.get("skill_context", orchestration.skill_context)
-        return str(skill_context)
+        skill_context, _tokens = build_skill_context(phase.value, orchestration.complexity.value)
+
+        if orchestration.complexity == Complexity.XL:
+            skill_context = skill_context + "\n\n这是一个复杂任务,请深入分析。"
+
+        return skill_context or orchestration.skill_context
 
     def _get_phase_band(self, phase: Phase) -> int:
         """
