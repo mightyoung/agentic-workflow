@@ -179,8 +179,12 @@ def skill_activation_level_for_phase(phase: str, complexity: str, intent: str | 
 
     if not should_use_skill_for_phase(phase, complexity, intent):
         return 0
-    if phase == "DEBUGGING" and complexity in {"XS", "S"}:
-        return 0
+    if phase == "EXECUTING":
+        return 75 if complexity not in {"XS", "S"} else 50
+    if phase == "REVIEWING":
+        return 50
+    if phase == "DEBUGGING":
+        return 25 if complexity not in {"XS", "S"} else 0
     return 50
 
 

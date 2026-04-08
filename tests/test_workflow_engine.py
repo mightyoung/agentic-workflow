@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import memory_longterm  # noqa: E402
 import search_adapter  # noqa: E402
+import runtime_profile  # noqa: E402
 import unified_state  # noqa: E402
 import workflow_engine  # noqa: E402
 
@@ -98,20 +99,25 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 0)
         self.assertEqual(snapshot["runtime_profile_summary"]["profile_source"], "middleware+router")
 
-    def test_initialize_executing_workflow_uses_fifty_activation_baseline(self):
+    def test_initialize_executing_workflow_uses_seventy_five_activation_baseline(self):
         result = workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
 
         self.assertEqual(result["phase"], "EXECUTING")
         self.assertTrue(result["use_skill"])
         self.assertEqual(result["skill_policy"], "default_enable")
-        self.assertEqual(result["skill_activation_level"], 50)
+        self.assertEqual(result["skill_activation_level"], 75)
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
-        self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
+        self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 75)
 
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
-        self.assertEqual(unified_snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
+        self.assertEqual(unified_snapshot["runtime_profile_summary"]["skill_activation_level"], 75)
         self.assertEqual(unified_snapshot["failure_event_summary"]["failure_event_count"], 0)
+
+    def test_runtime_profile_activation_is_size_sensitive_for_executing(self):
+        self.assertEqual(runtime_profile.skill_activation_level_for_phase("EXECUTING", "XS"), 50)
+        self.assertEqual(runtime_profile.skill_activation_level_for_phase("EXECUTING", "M"), 75)
+        self.assertEqual(runtime_profile.skill_activation_level_for_phase("DEBUGGING", "M"), 25)
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)
@@ -608,11 +614,11 @@ class TestNewPhases(unittest.TestCase):
 
         state = unified_state.load_state(self.temp_dir)
         self.assertIsNotNone(state)
-        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 75)
+        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 100)
         self.assertTrue(
             any(
                 decision.decision == "Escalate skill activation"
-                and decision.metadata.get("escalated_activation_level") == 75
+                and decision.metadata.get("escalated_activation_level") == 100
                 and decision.metadata.get("escalation_reason") == "high_signal_failure:quality_gate_failed"
                 for decision in state.decisions
             )
@@ -622,7 +628,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(snapshot["failure_event_summary"]["escalation_event_count"], 1)
         self.assertEqual(
             snapshot["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"],
-            75,
+            100,
         )
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["failure_event_summary"]["escalation_event_count"], 1)
@@ -642,7 +648,7 @@ class TestNewPhases(unittest.TestCase):
 
         state = unified_state.load_state(self.temp_dir)
         self.assertIsNotNone(state)
-        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 50)
+        self.assertEqual(state.metadata["runtime_profile"]["skill_activation_level"], 75)
         self.assertFalse(
             any(
                 decision.decision == "Escalate skill activation"

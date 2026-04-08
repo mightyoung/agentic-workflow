@@ -199,7 +199,7 @@ class MiddlewareOrchestrationTester:
             [
                 ("intent", "EXECUTING"),
                 ("use_skill", True),
-                ("skill_activation_level", 50),
+                ("skill_activation_level", 75),
                 ("tokens_expected", 1000),
             ]
         )

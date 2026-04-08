@@ -22,9 +22,9 @@ This section describes what actually works **today** via the scripts layer.
 | RESEARCH | ✅ | .research/findings/findings_{session}.md | Web search → findings report (policy: defer_or_lighten, activation: 0%, also writes .research/findings/findings_latest.md) |
 | THINKING | ✅ | — | Expert reasoning (policy: disable by default, activation: 0%) |
 | PLANNING | ✅ | .specs/<feat>/spec.md → plan.md → tasks.md → .contract.json | Task breakdown with spec-kit chain (policy: defer, activation: 0%) |
-| EXECUTING | ✅ | — | TDD-driven implementation (policy: default_enable, activation: 50%) |
+| EXECUTING | ✅ | — | TDD-driven implementation (policy: default_enable, activation: 50%-75% by complexity) |
 | REVIEWING | ✅ | .reviews/review/review_{session}.md | Real code analysis when files present (policy: conditional_enable, activation: 50%, also writes .reviews/review/review_latest.md) |
-| DEBUGGING | ✅ | — | 5-step systematic debugging (policy: conditional_enable_after_optimization, activation: 50%) |
+| DEBUGGING | ✅ | — | 5-step systematic debugging (policy: conditional_enable_after_optimization, activation: 25%) |
 | REFINING | ✅ | — | Feedback loop iteration |
 | COMPLETE | ✅ | completion_summary_{session}.md | Finalization with aggregated summary |
 
@@ -32,7 +32,7 @@ This section describes what actually works **today** via the scripts layer.
 - ✅ = Stable and tested
 - 🔬 Review = Output is generated; review recommended before production use
 
-> 默认 skill 激活档位是 50%，失败后可升级到 75%/100%。默认禁用阶段的 activation 为 0%。
+> 默认 skill 激活档位按 phase 推荐：EXECUTING 75%、REVIEWING 50%、DEBUGGING 25%。失败后可从当前档位升级到 75%/100%。默认禁用阶段的 activation 为 0%。
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 
