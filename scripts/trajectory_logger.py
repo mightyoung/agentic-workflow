@@ -519,6 +519,7 @@ def _build_resume_summary(
     original_trajectory: dict[str, Any],
     resume_from: str,
     next_phase: str | None,
+    planning_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """构建恢复摘要，写入恢复轨迹根节点。"""
@@ -538,6 +539,7 @@ def _build_resume_summary(
 
     latest_error = errored_phases[-1] if errored_phases else None
     runtime_profile = original_trajectory.get("runtime_profile", {})
+    planning_summary = planning_summary or {}
     thinking_summary = thinking_summary or {}
     return {
         "original_session_id": original_session_id,
@@ -547,6 +549,7 @@ def _build_resume_summary(
         "resume_from": resume_from,
         "next_phase": next_phase,
         "runtime_profile": runtime_profile,
+        "planning_summary": planning_summary,
         "thinking_summary": thinking_summary,
         "phase_count": len(phases),
         "errored_phase_count": len(errored_phases),
@@ -665,12 +668,24 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         return None
 
     thinking_summary: dict[str, Any] = {}
+    planning_summary: dict[str, Any] = {}
     try:
-        from memory_ops import get_thinking_summary
+        from memory_ops import get_planning_summary, get_thinking_summary
 
         thinking_summary = get_thinking_summary(str(Path(workdir) / "SESSION-STATE.md"))
+        planning_summary = get_planning_summary(str(Path(workdir) / "SESSION-STATE.md"))
     except Exception:
         thinking_summary = {}
+        planning_summary = {}
+
+    if not planning_summary:
+        try:
+            from unified_state import get_planning_summary as get_state_planning_summary, load_state
+
+            planning_state = load_state(workdir)
+            planning_summary = get_state_planning_summary(workdir, planning_state)
+        except Exception:
+            planning_summary = {}
 
     # 获取当前活跃phase
     original_phase = original_trajectory.get("current_phase", "IDLE")
@@ -687,6 +702,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
                 original_trajectory,
                 original_phase,
                 next_phase,
+                planning_summary=planning_summary,
                 thinking_summary=thinking_summary,
             )
             return {
@@ -734,6 +750,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         original_trajectory,
         resume_from,
         next_phase,
+        planning_summary=planning_summary,
         thinking_summary=thinking_summary,
     )
 

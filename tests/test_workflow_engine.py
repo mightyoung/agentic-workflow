@@ -14,7 +14,7 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import memory_longterm  # noqa: E402
-from memory_ops import update_thinking_summary  # noqa: E402
+from memory_ops import update_planning_summary, update_thinking_summary  # noqa: E402
 import runtime_profile  # noqa: E402
 import search_adapter  # noqa: E402
 import unified_state  # noqa: E402
@@ -842,6 +842,25 @@ class TestNewPhases(unittest.TestCase):
             strategy="retry",
             max_retries=3,
         )
+        update_planning_summary(
+            str(Path(self.temp_dir) / "SESSION-STATE.md"),
+            {
+                "plan_source": "tasks.md",
+                "plan_task_count": 2,
+                "completed_task_count": 1,
+                "in_progress_task_count": 1,
+                "blocked_task_count": 0,
+                "backlog_task_count": 0,
+                "ready_task_count": 1,
+                "parallel_candidate_group_count": 1,
+                "parallel_ready_task_count": 1,
+                "conflict_group_count": 0,
+                "next_task_ids": ["TASK-001"],
+                "worktree_recommended": True,
+                "worktree_reason": "multi-step plan detected",
+                "plan_digest": "tasks.md: 2 task(s), 1 done, 1 in progress, 0 blocked, 1 ready; next=TASK-001; worktree=yes",
+            },
+        )
         update_thinking_summary(
             str(Path(self.temp_dir) / "SESSION-STATE.md"),
             {
@@ -864,6 +883,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["failure_event_summary"]["latest_escalation_event"]["escalated_activation_level"], 100)
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
 
@@ -889,6 +909,7 @@ class TestNewPhases(unittest.TestCase):
         assert resumed_trajectory is not None
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
+        self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 

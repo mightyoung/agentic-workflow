@@ -2615,6 +2615,7 @@ def resume_workflow(
     new_session_id = result["session_id"]
     next_phase = result["next_phase"]
     resume_summary = result.get("resume_summary", {})
+    planning_summary = resume_summary.get("planning_summary", {})
     thinking_summary = resume_summary.get("thinking_summary", {})
 
     # 更新 unified state - 这是关键同步步骤
@@ -2638,9 +2639,9 @@ def resume_workflow(
                 "next_phase": next_phase,
                 "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
+                "planning_summary": planning_summary,
                 "thinking_summary": thinking_summary,
                 "failure_event_summary": failure_event_summary,
-                "planning_summary": planning_summary,
             },
         ))
 
@@ -2657,13 +2658,13 @@ def resume_workflow(
         planning_summary = get_planning_summary(workdir, None)
 
     session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
-    planning_summary = get_planning_summary(workdir, state)
     memory_ops.update_resume_summary(
         str(session_path),
         resume_from=result["resume_from"],
         next_phase=next_phase,
         original_session_id=session_id,
         runtime_profile=runtime_profile_summary,
+        planning_summary=planning_summary,
         thinking_summary=thinking_summary,
         failure_event_summary=failure_event_summary,
     )
@@ -2691,9 +2692,9 @@ def resume_workflow(
         "next_phase": next_phase,
         "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
+        "planning_summary": planning_summary,
         "thinking_summary": thinking_summary,
         "failure_event_summary": failure_event_summary,
-        "planning_summary": planning_summary,
         "state_synced": True,
     }
 
