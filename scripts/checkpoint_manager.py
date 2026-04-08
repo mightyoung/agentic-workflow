@@ -321,6 +321,7 @@ def conditional_checkpoint(
 
 ## Planning Summary
 - Plan source: {checkpoint_data['planning_summary'].get('plan_source') or 'unset'}
+- Planning mode: {checkpoint_data['planning_summary'].get('planning_mode') or 'unset'}
 - Task count: {checkpoint_data['planning_summary'].get('plan_task_count', 0)}
 - Completed tasks: {checkpoint_data['planning_summary'].get('completed_task_count', 0)}
 - In progress: {checkpoint_data['planning_summary'].get('in_progress_task_count', 0)}

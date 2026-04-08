@@ -1462,6 +1462,7 @@ def initialize_workflow(
 
 ## Planning Summary
 - plan_source: {planning_summary.get("plan_source", "none")}
+- planning_mode: {planning_summary.get("planning_mode", "lightweight")}
 - plan_digest: {planning_summary.get("plan_digest", "unset")}
 - worktree_recommended: {planning_summary.get("worktree_recommended", False)}
 

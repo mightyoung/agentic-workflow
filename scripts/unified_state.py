@@ -361,6 +361,12 @@ def _build_planning_summary(workdir: str, state: WorkflowState | None) -> dict[s
     parallel_ready_task_count = sum(len(group) for group in parallel_groups)
     conflict_group_count = len(conflict_groups)
     next_task_ids = [str(task.get("id", "")) for task in next_tasks[:3] if task.get("id")]
+    if plan_source == "tasks.md":
+        planning_mode = "canonical"
+    elif plan_source == "task_plan.md":
+        planning_mode = "legacy"
+    else:
+        planning_mode = "lightweight"
 
     worktree_recommended = False
     worktree_reason = "single-stream or no canonical planning chain"
@@ -404,6 +410,7 @@ def _build_planning_summary(workdir: str, state: WorkflowState | None) -> dict[s
         "parallel_ready_task_count": parallel_ready_task_count,
         "conflict_group_count": conflict_group_count,
         "next_task_ids": next_task_ids,
+        "planning_mode": planning_mode,
         "worktree_recommended": worktree_recommended,
         "worktree_reason": worktree_reason,
         "plan_digest": plan_digest,

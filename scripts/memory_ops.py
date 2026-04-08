@@ -75,6 +75,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 
 ## 计划摘要
 - **plan_source**: (未设置)
+- **planning_mode**: (未设置)
 - **plan_task_count**: 0
 - **completed_task_count**: 0
 - **in_progress_task_count**: 0
@@ -104,6 +105,12 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **use_skill**: (未设置)
 - **skill_activation_level**: (未设置)
 - **complexity**: (未设置)
+- **planning_planning_mode**: (未设置)
+- **planning_plan_source**: (未设置)
+- **planning_plan_task_count**: 0
+- **planning_ready_task_count**: 0
+- **planning_worktree_recommended**: (未设置)
+- **planning_plan_digest**: (未设置)
 - **review_found**: (未设置)
 - **review_source**: (未设置)
 - **review_status**: (未设置)
@@ -380,6 +387,7 @@ def update_planning_summary(
     section = (
         "## 计划摘要\n"
         f"- **plan_source**: {planning_summary.get('plan_source', '(未设置)')}\n"
+        f"- **planning_mode**: {planning_summary.get('planning_mode', '(未设置)')}\n"
         f"- **plan_task_count**: {planning_summary.get('plan_task_count', 0)}\n"
         f"- **completed_task_count**: {planning_summary.get('completed_task_count', 0)}\n"
         f"- **in_progress_task_count**: {planning_summary.get('in_progress_task_count', 0)}\n"
@@ -393,7 +401,7 @@ def update_planning_summary(
         f"- **plan_digest**: {planning_summary.get('plan_digest', '(未设置)')}\n"
     )
 
-    pattern = r"## 计划摘要\n(?:- \*\*plan_source\*\*: .*\n- \*\*plan_task_count\*\*: .*\n- \*\*completed_task_count\*\*: .*\n- \*\*in_progress_task_count\*\*: .*\n- \*\*blocked_task_count\*\*: .*\n- \*\*ready_task_count\*\*: .*\n- \*\*parallel_candidate_group_count\*\*: .*\n- \*\*parallel_ready_task_count\*\*: .*\n- \*\*conflict_group_count\*\*: .*\n- \*\*worktree_recommended\*\*: .*\n- \*\*worktree_reason\*\*: .*\n- \*\*plan_digest\*\*: .*\n)?"
+    pattern = r"## 计划摘要\n(?:- \*\*plan_source\*\*: .*\n- \*\*planning_mode\*\*: .*\n- \*\*plan_task_count\*\*: .*\n- \*\*completed_task_count\*\*: .*\n- \*\*in_progress_task_count\*\*: .*\n- \*\*blocked_task_count\*\*: .*\n- \*\*ready_task_count\*\*: .*\n- \*\*parallel_candidate_group_count\*\*: .*\n- \*\*parallel_ready_task_count\*\*: .*\n- \*\*conflict_group_count\*\*: .*\n- \*\*worktree_recommended\*\*: .*\n- \*\*worktree_reason\*\*: .*\n- \*\*plan_digest\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -418,6 +426,7 @@ def get_planning_summary(path: str) -> dict[str, Any]:
     pattern = (
         r"## 计划摘要\n"
         r"(?:- \*\*plan_source\*\*: (.*)\n"
+        r"- \*\*planning_mode\*\*: (.*)\n"
         r"- \*\*plan_task_count\*\*: (\d+)\n"
         r"- \*\*completed_task_count\*\*: (\d+)\n"
         r"- \*\*in_progress_task_count\*\*: (\d+)\n"
@@ -435,7 +444,7 @@ def get_planning_summary(path: str) -> dict[str, Any]:
         return {}
 
     groups = match.groups()
-    if not groups or len(groups) < 12 or groups[0] is None:
+    if not groups or len(groups) < 13 or groups[0] is None:
         return {}
 
     def _as_int(value: str | None) -> int:
@@ -449,17 +458,18 @@ def get_planning_summary(path: str) -> dict[str, Any]:
 
     return {
         "plan_source": str(groups[0]).strip(),
-        "plan_task_count": _as_int(groups[1]),
-        "completed_task_count": _as_int(groups[2]),
-        "in_progress_task_count": _as_int(groups[3]),
-        "blocked_task_count": _as_int(groups[4]),
-        "ready_task_count": _as_int(groups[5]),
-        "parallel_candidate_group_count": _as_int(groups[6]),
-        "parallel_ready_task_count": _as_int(groups[7]),
-        "conflict_group_count": _as_int(groups[8]),
-        "worktree_recommended": _as_bool(groups[9]),
-        "worktree_reason": str(groups[10]).strip(),
-        "plan_digest": str(groups[11]).strip(),
+        "planning_mode": str(groups[1]).strip(),
+        "plan_task_count": _as_int(groups[2]),
+        "completed_task_count": _as_int(groups[3]),
+        "in_progress_task_count": _as_int(groups[4]),
+        "blocked_task_count": _as_int(groups[5]),
+        "ready_task_count": _as_int(groups[6]),
+        "parallel_candidate_group_count": _as_int(groups[7]),
+        "parallel_ready_task_count": _as_int(groups[8]),
+        "conflict_group_count": _as_int(groups[9]),
+        "worktree_recommended": _as_bool(groups[10]),
+        "worktree_reason": str(groups[11]).strip(),
+        "plan_digest": str(groups[12]).strip(),
     }
 
 
@@ -615,6 +625,7 @@ def update_resume_summary(
         f"- **skill_activation_level**: {runtime_profile.get('skill_activation_level', '(未设置)')}\n"
         f"- **complexity**: {runtime_profile.get('complexity', '(未设置)')}\n"
         f"- **planning_plan_source**: {planning_summary.get('plan_source', '(未设置)')}\n"
+        f"- **planning_planning_mode**: {planning_summary.get('planning_mode', '(未设置)')}\n"
         f"- **planning_plan_task_count**: {planning_summary.get('plan_task_count', 0)}\n"
         f"- **planning_ready_task_count**: {planning_summary.get('ready_task_count', 0)}\n"
         f"- **planning_worktree_recommended**: {planning_summary.get('worktree_recommended', '(未设置)')}\n"
@@ -638,7 +649,7 @@ def update_resume_summary(
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:

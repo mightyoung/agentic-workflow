@@ -220,6 +220,7 @@ class TestResumePoint(unittest.TestCase):
             str(Path(self.workdir) / "SESSION-STATE.md"),
             {
                 "plan_source": "tasks.md",
+                "planning_mode": "canonical",
                 "plan_task_count": 3,
                 "completed_task_count": 1,
                 "in_progress_task_count": 1,
@@ -257,6 +258,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
         self.assertEqual(result["resume_summary"]["phase_count"], 1)
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(result["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(result["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
 
@@ -264,6 +266,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["phases"][0]["notes"][0], f"Resumed from {original_session_id} at EXECUTING")

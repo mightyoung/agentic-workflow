@@ -404,7 +404,20 @@ class TestWorkflowEngine(unittest.TestCase):
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot["plan_source"], "tasks.md")
+        self.assertEqual(snapshot["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(snapshot["next_plan_tasks"][0]["id"], "US1-1")
+
+    def test_snapshot_uses_lightweight_planning_mode_without_canonical_plan(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        specs_dir = Path(self.temp_dir) / ".specs"
+        if specs_dir.exists():
+            import shutil
+
+            shutil.rmtree(specs_dir)
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["planning_summary"]["plan_source"], "none")
+        self.assertEqual(snapshot["planning_summary"]["planning_mode"], "lightweight")
 
     def test_snapshot_includes_context_for_next_phase_memory_hints(self):
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
@@ -846,6 +859,7 @@ class TestNewPhases(unittest.TestCase):
             str(Path(self.temp_dir) / "SESSION-STATE.md"),
             {
                 "plan_source": "tasks.md",
+                "planning_mode": "canonical",
                 "plan_task_count": 2,
                 "completed_task_count": 1,
                 "in_progress_task_count": 1,
@@ -898,6 +912,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(result["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(result["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
@@ -916,6 +931,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertIn("original_session_id", session_state)
         self.assertIn("resume_from", session_state)
         self.assertIn("next_phase", session_state)
+        self.assertIn("planning_planning_mode", session_state)
         self.assertIn("failure_event_count", session_state)
         self.assertIn("review_source", session_state)
         self.assertIn("thinking_workflow_label", session_state)
@@ -926,6 +942,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
