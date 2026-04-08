@@ -1493,7 +1493,7 @@ def initialize_workflow(
     spec_path: Path | None = None
     plan_md_path: Path | None = None
     tasks_path: Path | None = None
-    if auto_create_plan and current_phase == "PLANNING":
+    if auto_create_plan and current_phase == "PLANNING" and complexity not in {"XS", "S"}:
         # Create spec.md and plan.md in .specs/<feature_id>/ directory
         task_title = state.task.title if state.task else prompt[:50]
         task_desc = state.task.description if state.task else prompt

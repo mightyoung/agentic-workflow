@@ -406,18 +406,18 @@ def process_data(data, config):
 2. 识别依赖关系
 3. 估算工作量
 4. 制定执行顺序
-5. 输出到 task_plan.md
+5. 输出到 .specs/<feature>/tasks.md 并给出 plan digest
 """,
         difficulty=TaskDifficulty.EASY,
         module=TaskModule.PLANNING,
-        expected_outcome="完整的任务计划存入 task_plan.md",
+        expected_outcome="完整的任务计划存入 .specs/<feature>/tasks.md 并包含可执行摘要",
         validation_criteria=[
             "任务拆分完整",
             "依赖关系清晰",
             "执行顺序合理",
-            "文件格式正确"
+            "包含 plan digest"
         ],
-        files_to_create=["task_plan.md"],
+        files_to_create=[".specs/blog/tasks.md"],
         test_commands=[]
     ),
 
@@ -567,14 +567,15 @@ def load_config(path):
 """,
         difficulty=TaskDifficulty.MEDIUM,
         module=TaskModule.PLANNING,
-        expected_outcome="完整的任务计划与依赖图",
+        expected_outcome="任务计划存入 .specs/<feature>/tasks.md 并给出 plan digest",
         validation_criteria=[
             "任务拆分完整",
             "依赖关系清晰",
             "风险识别到位",
-            "验证顺序合理"
+            "验证顺序合理",
+            "包含 plan digest"
         ],
-        files_to_create=["task_plan.md"],
+        files_to_create=[".specs/notification/tasks.md"],
         test_commands=[]
     ),
 ]
@@ -1478,6 +1479,10 @@ All criteria met.
 1. Unit tests
 2. Manual review
 
+## Output
+- .specs/<feature>/tasks.md
+- Plan digest
+
 ## Validation Checklist
 - {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
 - {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
@@ -1503,6 +1508,10 @@ All criteria met.
 1. Unit tests
 2. Integration checks
 3. Manual review
+
+## Output
+- .specs/<feature>/tasks.md
+- Plan digest
 
 ## Validation Checklist
 - {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
@@ -1535,6 +1544,10 @@ All criteria met.
 3. Manual review
 4. Regression comparison
 
+## Output
+- .specs/<feature>/tasks.md
+- Plan digest
+
 ## Validation Checklist
 - {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
 - {validation_lines[1] if len(validation_lines) > 1 else task.validation_criteria[-1]}
@@ -1565,6 +1578,10 @@ All criteria met.
 2. Integration checks
 3. Manual review
 4. Regression comparison
+
+## Output
+- .specs/<feature>/tasks.md
+- Plan digest
 
 ## Validation Checklist
 - {validation_lines[0] if len(validation_lines) > 0 else task.validation_criteria[0]}
@@ -1812,6 +1829,10 @@ All criteria met.
 
 ## Dependencies
 - Note the most important dependency.
+
+## Output
+- .specs/<feature>/tasks.md
+- Plan digest
 '''
         if task.module == TaskModule.THINKING:
             return f'''# Minimal Analytical Baseline for {task.name}
