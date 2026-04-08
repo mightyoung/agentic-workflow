@@ -341,6 +341,7 @@ def conditional_checkpoint(
 - Workflow label: {thinking_summary.get('workflow_label') or 'unset'}
 - Workflow: {thinking_summary.get('workflow') or 'unset'}
 - Thinking mode: {thinking_summary.get('thinking_mode') or 'unset'}
+- Thinking methods: {' | '.join(thinking_summary.get('thinking_methods', [])) if thinking_summary.get('thinking_methods') else 'unset'}
 - Major contradiction: {thinking_summary.get('major_contradiction') or 'unset'}
 - Stage judgment: {thinking_summary.get('stage_judgment') or 'unset'}
 - Local attack point: {thinking_summary.get('local_attack_point') or 'unset'}

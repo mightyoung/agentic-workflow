@@ -428,10 +428,22 @@ def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> di
             workflow_label = str(summary.get("workflow_label", "")).strip()
             if workflow == "workflow_1_new_project" or "新项目" in workflow_label:
                 summary["thinking_mode"] = "investigation_first"
+                summary.setdefault("thinking_methods", ["调查研究", "矛盾分析", "群众路线", "持久战略"])
             elif workflow == "workflow_3_iteration" or "迭代" in workflow_label:
                 summary["thinking_mode"] = "mass_line_iteration"
+                summary.setdefault("thinking_methods", ["群众路线", "矛盾分析", "实践认知", "批评自我批评"])
             elif workflow == "workflow_2_complex_problem" or "复杂" in workflow_label:
                 summary["thinking_mode"] = "contradiction_analysis"
+                summary.setdefault("thinking_methods", ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"])
+        if not summary.get("thinking_methods"):
+            workflow = str(summary.get("workflow", "")).strip()
+            workflow_label = str(summary.get("workflow_label", "")).strip()
+            if workflow == "workflow_1_new_project" or "新项目" in workflow_label:
+                summary["thinking_methods"] = ["调查研究", "矛盾分析", "群众路线", "持久战略"]
+            elif workflow == "workflow_3_iteration" or "迭代" in workflow_label:
+                summary["thinking_methods"] = ["群众路线", "矛盾分析", "实践认知", "批评自我批评"]
+            elif workflow == "workflow_2_complex_problem" or "复杂" in workflow_label:
+                summary["thinking_methods"] = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
         return summary
 
     if state is None:
@@ -451,7 +463,10 @@ def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> di
         complexity = runtime_profile.get("complexity")
         if not complexity and state.metadata:
             complexity = state.metadata.get("complexity")
-        return build_thinking_summary(task_desc, str(complexity or "M"))
+        summary = build_thinking_summary(task_desc, str(complexity or "M"))
+        if not summary.get("thinking_methods"):
+            summary["thinking_methods"] = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
+        return summary
     except Exception:
         return {}
 

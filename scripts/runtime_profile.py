@@ -300,6 +300,7 @@ def build_thinking_summary(
         workflow = "workflow_1_new_project"
         workflow_label = "新项目启动"
         workflow_steps = ["investigation-first", "contradiction-analysis", "spark-prairie-fire", "protracted-strategy"]
+        thinking_methods = ["调查研究", "矛盾分析", "群众路线", "持久战略"]
         major_contradiction = "目标完整性 vs 资源/信息不足"
         stage_judgment = "战略防御期" if is_long_horizon else "战略相持期"
         local_attack_point = "先在最小可验证切片上建立根据地"
@@ -308,6 +309,7 @@ def build_thinking_summary(
         workflow = "workflow_3_iteration"
         workflow_label = "方案迭代优化"
         workflow_steps = ["mass-line", "contradiction-analysis", "practice-cognition", "criticism-self-criticism", "mass-line"]
+        thinking_methods = ["群众路线", "矛盾分析", "实践认知", "批评自我批评"]
         major_contradiction = "现有方案收益 vs 新问题成本"
         stage_judgment = "战略相持期"
         local_attack_point = "先把反馈收束成一个可验证的改进点"
@@ -316,6 +318,7 @@ def build_thinking_summary(
         workflow = "workflow_2_complex_problem"
         workflow_label = "复杂问题攻坚"
         workflow_steps = ["investigation-first", "contradiction-analysis", "concentrate-forces", "practice-cognition", "criticism-self-criticism"]
+        thinking_methods = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
         major_contradiction = "现象 vs 根因"
         stage_judgment = "战术攻坚"
         local_attack_point = "先复现最小失败样本，围绕主要矛盾单点突破"
@@ -324,6 +327,7 @@ def build_thinking_summary(
         workflow = "workflow_2_complex_problem"
         workflow_label = "复杂问题攻坚"
         workflow_steps = ["investigation-first", "contradiction-analysis", "concentrate-forces", "practice-cognition", "criticism-self-criticism"]
+        thinking_methods = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
         major_contradiction = "事实 vs 假设"
         stage_judgment = "战术速决" if not is_long_horizon else "战略相持期"
         local_attack_point = "先找到一个最小可验证的切口"
@@ -354,6 +358,7 @@ def build_thinking_summary(
         "workflow": workflow,
         "workflow_label": workflow_label,
         "workflow_steps": workflow_steps,
+        "thinking_methods": thinking_methods,
         "investigation_focus": investigation_focus,
         "thinking_mode": thinking_mode,
         "major_contradiction": major_contradiction,

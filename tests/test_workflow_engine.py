@@ -206,11 +206,19 @@ class TestWorkflowEngine(unittest.TestCase):
         thinking_summary = snapshot["context_for_next_phase"]["thinking_summary"]
         self.assertEqual(thinking_summary["workflow_label"], "新项目启动")
         self.assertEqual(thinking_summary["thinking_mode"], "investigation_first")
+        self.assertEqual(
+            thinking_summary["thinking_methods"],
+            ["调查研究", "矛盾分析", "群众路线", "持久战略"],
+        )
         self.assertIn("目标完整性", thinking_summary["major_contradiction"])
         self.assertIn("最小可验证", thinking_summary["local_attack_point"])
         self.assertIn("战略", thinking_summary["stage_judgment"])
         self.assertEqual(snapshot["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(snapshot["thinking_summary"]["thinking_mode"], "investigation_first")
+        self.assertEqual(
+            snapshot["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "群众路线", "持久战略"],
+        )
         self.assertIn("目标完整性", snapshot["thinking_summary"]["major_contradiction"])
         self.assertIn("调查研究", snapshot["context_for_next_phase"]["summary"])
         self.assertIn("群众路线", snapshot["context_for_next_phase"]["summary"])
@@ -218,6 +226,10 @@ class TestWorkflowEngine(unittest.TestCase):
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(unified_snapshot["thinking_summary"]["thinking_mode"], "investigation_first")
+        self.assertEqual(
+            unified_snapshot["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "群众路线", "持久战略"],
+        )
         self.assertIn("目标完整性", unified_snapshot["thinking_summary"]["major_contradiction"])
         self.assertIn("最小可验证", unified_snapshot["thinking_summary"]["local_attack_point"])
         self.assertIn("战略", unified_snapshot["thinking_summary"]["stage_judgment"])
@@ -228,10 +240,18 @@ class TestWorkflowEngine(unittest.TestCase):
         snapshot_fallback = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot_fallback["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(snapshot_fallback["thinking_summary"]["thinking_mode"], "investigation_first")
+        self.assertEqual(
+            snapshot_fallback["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "群众路线", "持久战略"],
+        )
         self.assertIn("目标完整性", snapshot_fallback["thinking_summary"]["major_contradiction"])
         unified_fallback = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_fallback["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(unified_fallback["thinking_summary"]["thinking_mode"], "investigation_first")
+        self.assertEqual(
+            unified_fallback["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "群众路线", "持久战略"],
+        )
         self.assertIn("目标完整性", unified_fallback["thinking_summary"]["major_contradiction"])
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
@@ -921,6 +941,10 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(result["thinking_summary"]["thinking_mode"], "contradiction_analysis")
+        self.assertEqual(
+            result["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"],
+        )
         self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
 
         state = unified_state.load_state(self.temp_dir)
@@ -952,6 +976,10 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
+        self.assertEqual(
+            resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"],
+        )
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 
     def test_resume_workflow_falls_back_when_thinking_sidecar_is_placeholder(self):
@@ -967,6 +995,10 @@ class TestNewPhases(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(result["thinking_summary"]["thinking_mode"], "contradiction_analysis")
+        self.assertEqual(
+            result["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"],
+        )
         self.assertEqual(result["thinking_summary"]["major_contradiction"], "事实 vs 假设")
         self.assertEqual(result["thinking_summary"]["stage_judgment"], "战术速决")
 
@@ -975,6 +1007,10 @@ class TestNewPhases(unittest.TestCase):
         assert resumed_trajectory is not None
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
+        self.assertEqual(
+            resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_methods"],
+            ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"],
+        )
 
     def test_phase_context_includes_memory_hints(self):
         """Next phase context should expose relevant long-term memory hints."""
