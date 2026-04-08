@@ -35,7 +35,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 
-from runtime_profile import build_skill_context
+from runtime_profile import build_skill_context, token_budget_for_complexity
 
 # ============================================================================
 # 数据模型
@@ -381,16 +381,10 @@ class SkillMiddleware(MiddlewareProtocol):
         if request.complexity == Complexity.XL:
             # 复杂任务可以稍微详细一点
             prompt = prompt + "\n\n这是一个复杂任务,请深入分析。"
-            request.tokens_expected = 4000
         elif request.complexity == Complexity.L:
-            request.tokens_expected = 2500
-        elif request.complexity == Complexity.M:
-            request.tokens_expected = 1500
-        else:
-            request.tokens_expected = 1000
+            pass
 
-        # Use shared runtime profile defaults for the base token budget
-        request.tokens_expected = max(request.tokens_expected, tokens)
+        request.tokens_expected = max(token_budget_for_complexity(request.complexity.value), tokens)
 
         request.skill_context = prompt
 

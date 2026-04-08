@@ -135,3 +135,8 @@ def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
     prompt = (MINIMAL_CORE + "\n\n" + phase_prompt).strip()
     tokens = COMPLEXITY_TOKENS.get(complexity, 1500)
     return prompt, tokens
+
+
+def token_budget_for_complexity(complexity: str) -> int:
+    """Return the shared token budget heuristic for a complexity level."""
+    return COMPLEXITY_TOKENS.get(complexity, 1500)
