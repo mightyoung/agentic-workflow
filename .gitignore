@@ -92,3 +92,5 @@ tests/*.json.backup
 
 # Session observations
 .observations.jsonl
+.workflow_state.json
+tests/skill_comparison_*.md
