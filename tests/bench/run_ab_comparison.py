@@ -154,18 +154,6 @@ class ActivationRecommendation:
     best_completion_rate: float
 
 
-@dataclass
-class ActivationRecommendation:
-    """模块激活推荐"""
-    module: str
-    recommended_activation_level: int
-    rationale: str
-    best_final_score: float
-    best_quality_improvement_pct: float
-    best_token_improvement_pct: float
-    best_completion_rate: float
-
-
 # =============================================================================
 # 测试任务集
 # =============================================================================
@@ -2110,6 +2098,11 @@ All criteria met.
                 "completion_rate_without_skill": round(no_skill_completion_rate, 1),
                 "task_count": total,
             },
+            "interpretation_notes": [
+                "time deltas within +/-1% are treated as noise and should not change the global activation baseline",
+                "the 50% activation baseline remains the default; EXECUTING M+ tasks may escalate to 75%",
+                "activation sweep is diagnostic only and must not override runtime policy without checking completion and token cost",
+            ],
             "by_module": by_module,
             "module_policies": [policy.__dict__ for policy in policies],
             "by_difficulty": by_difficulty,
@@ -2155,6 +2148,7 @@ All criteria met.
         """生成 Markdown 格式报告"""
         summary = report["overall_summary"]
         experiment_info = report["experiment_info"]
+        interpretation_notes = report.get("interpretation_notes", [])
         module_policies = report.get("module_policies", [])
         activation_recommendations = report.get("activation_recommendations", [])
 
@@ -2244,6 +2238,15 @@ All criteria met.
                     f"{activation_recommendation['rationale']} |\n"
                 )
 
+        if interpretation_notes:
+            md += """
+
+## 📌 解读边界
+
+"""
+            for note in interpretation_notes:
+                md += f"- {note}\n"
+
         md += """
 ---
 
@@ -2275,7 +2278,7 @@ All criteria met.
 
 ### 关键发现
 
-1. **执行效率**: 有 Skill 的版本平均 {summary['avg_time_improvement_pct']:+.1f}% 的时间改进
+1. **执行效率**: 有 Skill 的版本平均 {summary['avg_time_improvement_pct']:+.1f}% 的时间改进（<1% 波动按噪声处理）
 2. **Token 消耗**: 有 Skill 的版本 Token 消耗改进为 {summary['avg_token_improvement_pct']:+.1f}%
 3. **代码质量**: 有 Skill 的版本质量评分平均 {summary['avg_quality_improvement_pct']:+.1f}% 改进
 4. **任务完成率**: 有 Skill = {summary['completion_rate_with_skill']:.1f}%, 无 Skill = {summary['completion_rate_without_skill']:.1f}%
@@ -2293,6 +2296,12 @@ All criteria met.
 3. 条件启用: REVIEWING, DEBUGGING
 4. 按需启用: RESEARCH
 5. 暂缓/降级: PLANNING, THINKING, FULL_WORKFLOW
+
+### 决策提醒
+
+- 50% 是默认基线，不要被 0.5% 量级的时间波动推翻
+- 75% 只用于 EXECUTING 的复杂任务，不作为全局默认
+- 25% 仅用于 DEBUGGING 的复杂故障或高价值缺陷
 
 ### 局限说明
 
