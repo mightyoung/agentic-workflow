@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from safe_io import safe_write_text_locked
-from unified_state import load_state
+from unified_state import get_runtime_profile_summary, load_state
 
 # Import from workflow_engine (local imports to avoid circular dependency at runtime)
 _imported_fns: dict[str, Any] = {}
@@ -230,6 +230,7 @@ def conditional_checkpoint(
         "created_at": datetime.now().isoformat(),
         "reason": reason,
         "phase": current_phase,
+        "runtime_profile_summary": get_runtime_profile_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
         "next_tasks": next_tasks,
@@ -274,12 +275,21 @@ def conditional_checkpoint(
                 recent_decisions.append(d.get("decision", str(d)))
 
     # Build handoff content
+    runtime_profile_summary = get_runtime_profile_summary(state)
+
     handoff_content = f"""# Checkpoint Handoff: {checkpoint_id}
 
 **Created**: {datetime.now().isoformat()}
 **Reason**: {reason}
 **Session**: {session_id}
 **Phase**: {current_phase}
+
+## Runtime Profile
+- Skill policy: {runtime_profile_summary.get('skill_policy') or 'unset'}
+- Use skill: {runtime_profile_summary.get('use_skill') if runtime_profile_summary.get('use_skill') is not None else 'unset'}
+- Skill activation level: {runtime_profile_summary.get('skill_activation_level') if runtime_profile_summary.get('skill_activation_level') is not None else 'unset'}
+- Tokens expected: {runtime_profile_summary.get('tokens_expected') if runtime_profile_summary.get('tokens_expected') is not None else 'unset'}
+- Profile source: {runtime_profile_summary.get('profile_source') or 'unset'}
 
 ## Task
 {state.task.title if state.task else "Unknown task"}

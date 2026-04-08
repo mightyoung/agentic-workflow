@@ -178,6 +178,57 @@ class TestConditionalCheckpoint(unittest.TestCase):
             self.assertIn("Test task", handoff_content)
             self.assertIn("EXECUTING", handoff_content)
 
+    def test_checkpoint_includes_runtime_profile_summary(self):
+        """Checkpoint surfaces runtime profile summary in JSON and handoff."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".workflow_state.json"
+            state_file.write_text(json.dumps({
+                "session_id": "test-session",
+                "phase": {
+                    "current": "EXECUTING",
+                    "history": [{"phase": "EXECUTING", "entered_at": "2026-04-01T00:00:00", "exited_at": None}]
+                },
+                "task": {
+                    "task_id": "T001",
+                    "title": "Test task",
+                    "status": "in_progress",
+                    "description": "",
+                    "priority": "P1",
+                    "owned_files": [],
+                    "dependencies": [],
+                    "verification": "",
+                    "created_at": "2026-04-01T00:00:00",
+                    "completed_at": None,
+                    "progress": 0
+                },
+                "decisions": [],
+                "file_changes": [],
+                "artifacts": [],
+                "metadata": {
+                    "runtime_profile": {
+                        "skill_policy": "default_enable",
+                        "use_skill": True,
+                        "skill_activation_level": 50,
+                        "tokens_expected": 2048,
+                        "profile_source": "middleware+router",
+                    }
+                },
+            }), encoding="utf-8")
+
+            result = conditional_checkpoint(tmpdir)
+            self.assertTrue(result["checkpoint_saved"])
+
+            checkpoint_file = Path(tmpdir) / ".checkpoints" / f"{result['checkpoint_id']}.json"
+            checkpoint_json = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint_json["runtime_profile_summary"]["skill_activation_level"], 50)
+            self.assertEqual(checkpoint_json["runtime_profile_summary"]["skill_policy"], "default_enable")
+
+            handoff_file = Path(tmpdir) / f"handoff_{result['checkpoint_id']}.md"
+            handoff_content = handoff_file.read_text(encoding="utf-8")
+            self.assertIn("## Runtime Profile", handoff_content)
+            self.assertIn("Skill activation level: 50", handoff_content)
+            self.assertIn("Profile source: middleware+router", handoff_content)
+
 
 class TestParsePhaseContract(unittest.TestCase):
     """Test contract parsing logic"""
