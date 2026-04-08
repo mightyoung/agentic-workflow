@@ -319,6 +319,11 @@ def get_planning_summary(workdir: str, state: WorkflowState | None = None) -> di
     if state is None:
         state = load_state(workdir)
 
+    return _build_planning_summary(workdir, state)
+
+
+def _build_planning_summary(workdir: str, state: WorkflowState | None) -> dict[str, Any]:
+    """Build the canonical planning summary from live plan/frontier state."""
     phase = state.phase.get("current", "IDLE") if state and state.phase else "IDLE"
     runtime_profile = get_runtime_profile_summary(state)
 
