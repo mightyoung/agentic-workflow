@@ -32,7 +32,7 @@ This section describes what actually works **today** via the scripts layer.
 - ✅ = Stable and tested
 - 🔬 Review = Output is generated; review recommended before production use
 
-> 默认 skill 激活档位按 phase 推荐：EXECUTING 75%、REVIEWING 50%、DEBUGGING 25%。失败后可从当前档位升级到 75%/100%。默认禁用阶段的 activation 为 0%。
+> 默认 skill 激活档位按 phase / complexity 推荐：全局基线 50%；EXECUTING 的 M+ 任务可升到 75%；REVIEWING 默认 50%；DEBUGGING 复杂故障默认 25%；失败后可从当前档位升级到 75%/100%。默认禁用阶段的 activation 为 0%。
 
 ### Runtime Layer (Layer 2 - Execution Engine)
 

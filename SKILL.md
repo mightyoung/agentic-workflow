@@ -43,7 +43,7 @@ requires:
 
 | 阶段 | 默认策略 | 默认激活档位 | 说明 |
 |---|---|---|---|
-| EXECUTING | default_enable | 50%-75% | 小任务 50%，M+ 75%，失败时可升级 |
+| EXECUTING | default_enable | 50%-75% | 全局基线 50%，M+ 75%，失败时可升级 |
 | REVIEWING | conditional_enable | 50% | 需要审查/高风险变更时启用 |
 | DEBUGGING | conditional_enable_after_optimization | 0%-25% | 小任务 0%，复杂故障 25%，优先在修复收益明确时启用 |
 | RESEARCH | defer_or_lighten | 0% | 仅在需要外部事实时启用 |

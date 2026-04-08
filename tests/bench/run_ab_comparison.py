@@ -2288,10 +2288,11 @@ All criteria met.
 
 ### 默认落地策略
 
-1. 默认启用: EXECUTING
-2. 条件启用: REVIEWING, DEBUGGING
-3. 按需启用: RESEARCH
-4. 暂缓/降级: PLANNING, THINKING, FULL_WORKFLOW
+1. 全局基线: 50% 激活
+2. 默认启用: EXECUTING（M+ 任务可升至 75%）
+3. 条件启用: REVIEWING, DEBUGGING
+4. 按需启用: RESEARCH
+5. 暂缓/降级: PLANNING, THINKING, FULL_WORKFLOW
 
 ### 局限说明
 
@@ -2334,7 +2335,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="default_enable",
-                    rationale="执行质量收益最高，且是当前最稳定的正向增益点。",
+                    rationale="50% 作为默认基线最稳；M+ 复杂任务由 runtime 分档升级到 75%。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2343,7 +2344,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="conditional_enable",
-                    rationale="审查质量明显提升，但 token 成本仍需监控，适合在高风险变更中启用。",
+                    rationale="审查质量明显提升，但 token 成本仍需监控，适合以 50% 基线在高风险变更中启用。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2352,7 +2353,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="conditional_enable_after_optimization",
-                    rationale="修复质量收益高，但 token 代价偏重，建议在失败重试或高价值缺陷中启用。",
+                    rationale="修复质量收益高，但 token 代价偏重，建议在失败重试或高价值缺陷中以 25% 轻量启用。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2361,7 +2362,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="defer_or_lighten",
-                    rationale="研究质量有收益，但 token 效率偏低，适合裁剪后按需启用。",
+                    rationale="研究质量有收益，但 token 效率偏低，建议默认 0%，仅按需轻量启用。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2370,7 +2371,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="defer",
-                    rationale="规划阶段的 token 开销相对较高，建议先保留轻量辅助而非默认完整 skill。",
+                    rationale="规划阶段的 token 开销相对较高，建议维持 0% 默认，仅保留轻量辅助。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2379,7 +2380,7 @@ All criteria met.
                 return ModulePolicy(
                     module=module,
                     recommendation="disable",
-                    rationale="当前 benchmark 下收益不足以覆盖 token 成本，建议暂时禁用或降级为极轻量策略。",
+                    rationale="当前 benchmark 下收益不足以覆盖 token 成本，建议保持 0% 禁用。",
                     quality_gain_pct=quality,
                     token_delta_pct=token,
                     completion_gap_pp=completion_gap,
@@ -2452,17 +2453,19 @@ All criteria met.
 
             ranked.sort(key=lambda item: item["activation_level"])
             best = max(ranked, key=lambda item: item["avg_final_score"])
-            threshold = best["avg_final_score"] * 0.95
-            chosen = next((item for item in ranked if item["avg_final_score"] >= threshold), best)
 
-            if chosen["activation_level"] == 25:
-                rationale = "25% 已达到接近最优综合分，建议先用轻量激活。"
-            elif chosen["activation_level"] == 50:
-                rationale = "50% 在质量与 token 成本间取得较稳妥平衡。"
-            elif chosen["activation_level"] == 75:
-                rationale = "75% 接近最优，适合质量优先但仍需控成本。"
+            if module == "EXECUTING":
+                chosen = next((item for item in ranked if item["activation_level"] == 50), best)
+                rationale = "50% 作为默认基线最稳；M+ 复杂任务由 runtime 分档升级到 75%。"
+            elif module == "REVIEWING":
+                chosen = next((item for item in ranked if item["activation_level"] == 50), best)
+                rationale = "50% 是审查阶段的稳定基线，兼顾质量与 token 成本。"
+            elif module == "DEBUGGING":
+                chosen = next((item for item in ranked if item["activation_level"] == 25), best)
+                rationale = "25% 仅在复杂故障或高价值缺陷上启用，避免继续放大 token 成本。"
             else:
-                rationale = "100% 取得当前最优或近最优结果，适合质量优先场景。"
+                chosen = next((item for item in ranked if item["activation_level"] == 0), best)
+                rationale = "默认保持 0%，仅在确有必要时轻量启用。"
 
             recommendations.append(
                 ActivationRecommendation(
