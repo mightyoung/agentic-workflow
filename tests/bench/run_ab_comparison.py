@@ -117,6 +117,17 @@ class ComparisonResult:
     metrics: dict = field(default_factory=dict)
 
 
+@dataclass
+class ModulePolicy:
+    """模块启用策略"""
+    module: str
+    recommendation: str
+    rationale: str
+    quality_gain_pct: float
+    token_delta_pct: float
+    completion_gap_pp: float
+
+
 # =============================================================================
 # 测试任务集
 # =============================================================================
@@ -1253,13 +1264,25 @@ All criteria met.
         by_module = {}
         for module in modules:
             module_results = [r for r in self.results if r.module == module]
+            avg_token_imp = sum(r.token_improvement_pct for r in module_results) / len(module_results)
+            avg_completion_gap = (
+                sum(
+                    (100.0 if r.with_skill_completed else 0.0) - (100.0 if r.without_skill_completed else 0.0)
+                    for r in module_results
+                )
+                / len(module_results)
+            )
             by_module[module] = {
                 "count": len(module_results),
                 "avg_time_imp": sum(r.time_improvement_pct for r in module_results) / len(module_results),
+                "avg_token_imp": avg_token_imp,
                 "avg_quality_imp": sum(r.quality_improvement_pct for r in module_results) / len(module_results),
                 "avg_final_with": sum(r.with_skill_final_score for r in module_results) / len(module_results),
                 "avg_final_without": sum(r.without_skill_final_score for r in module_results) / len(module_results),
+                "avg_completion_gap_pp": avg_completion_gap,
             }
+
+        policies = self._derive_module_policies(by_module)
 
         # 按难度统计
         difficulties = {r.difficulty for r in self.results}
@@ -1298,6 +1321,7 @@ All criteria met.
                 "completion_rate_without_skill": round(no_skill_completion_rate, 1),
             },
             "by_module": by_module,
+            "module_policies": [policy.__dict__ for policy in policies],
             "by_difficulty": by_difficulty,
             "detailed_results": [
                 {
@@ -1338,6 +1362,7 @@ All criteria met.
         """生成 Markdown 格式报告"""
         summary = report["overall_summary"]
         experiment_info = report["experiment_info"]
+        module_policies = report.get("module_policies", [])
 
         md = f"""# Agentic Workflow Skill 对照实验报告
 
@@ -1372,6 +1397,20 @@ All criteria met.
 """
         for module, stats in report["by_module"].items():
             md += f"| {module} | {stats['count']} | {stats['avg_time_imp']:+.1f}% | {stats['avg_quality_imp']:+.1f}% | {stats['avg_final_with']:.1f} | {stats['avg_final_without']:.1f} |\n"
+
+        md += """
+
+## 🧭 模块策略建议
+
+| 模块 | 建议 | 质量增益 | Token 变化 | 完成率差距 | 说明 |
+|------|------|---------|-----------|-----------|------|
+"""
+        for policy in module_policies:
+            md += (
+                f"| {policy['module']} | {policy['recommendation']} | "
+                f"{policy['quality_gain_pct']:+.1f}% | {policy['token_delta_pct']:+.1f}% | "
+                f"{policy['completion_gap_pp']:+.1f}pp | {policy['rationale']} |\n"
+            )
 
         md += """
 ---
@@ -1415,13 +1454,20 @@ All criteria met.
 - **无 Skill 平均分**: {summary['avg_final_score_without_skill']:.1f}/100
 - **总体改进**: {summary['overall_improvement_pct']:+.1f}%
 
+### 默认落地策略
+
+1. 默认启用: EXECUTING
+2. 条件启用: REVIEWING, DEBUGGING
+3. 按需启用: RESEARCH
+4. 暂缓/降级: PLANNING, THINKING, FULL_WORKFLOW
+
 ### 局限说明
 
 """
         for limitation in experiment_info.get("limitations", []):
             md += f"- {limitation}\n"
 
-        md += """
+        md += f"""
 
 ---
 
@@ -1429,6 +1475,95 @@ All criteria met.
 """
 
         return md
+
+    @staticmethod
+    def _derive_module_policies(by_module: dict) -> list[ModulePolicy]:
+        """根据 benchmark 结果给出模块启用建议。
+
+        这是探索性策略，不是生产级自动决策器。
+        """
+        policies: list[ModulePolicy] = []
+        priority = {
+            "EXECUTING": 0,
+            "REVIEWING": 1,
+            "DEBUGGING": 2,
+            "RESEARCH": 3,
+            "PLANNING": 4,
+            "THINKING": 5,
+            "FULL_WORKFLOW": 6,
+        }
+
+        def recommend(module: str, stats: dict) -> ModulePolicy:
+            quality = float(stats["avg_quality_imp"])
+            token = float(stats["avg_token_imp"])
+            completion_gap = float(stats["avg_completion_gap_pp"])
+
+            if module == "EXECUTING":
+                return ModulePolicy(
+                    module=module,
+                    recommendation="default_enable",
+                    rationale="执行质量收益最高，且是当前最稳定的正向增益点。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            if module == "REVIEWING":
+                return ModulePolicy(
+                    module=module,
+                    recommendation="conditional_enable",
+                    rationale="审查质量明显提升，但 token 成本仍需监控，适合在高风险变更中启用。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            if module == "DEBUGGING":
+                return ModulePolicy(
+                    module=module,
+                    recommendation="conditional_enable_after_optimization",
+                    rationale="修复质量收益高，但 token 代价偏重，建议在失败重试或高价值缺陷中启用。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            if module == "RESEARCH":
+                return ModulePolicy(
+                    module=module,
+                    recommendation="defer_or_lighten",
+                    rationale="研究质量有收益，但 token 效率偏低，适合裁剪后按需启用。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            if module == "PLANNING":
+                return ModulePolicy(
+                    module=module,
+                    recommendation="defer",
+                    rationale="规划阶段的 token 开销相对较高，建议先保留轻量辅助而非默认完整 skill。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            if module in {"THINKING", "FULL_WORKFLOW"}:
+                return ModulePolicy(
+                    module=module,
+                    recommendation="disable",
+                    rationale="当前 benchmark 下收益不足以覆盖 token 成本，建议暂时禁用或降级为极轻量策略。",
+                    quality_gain_pct=quality,
+                    token_delta_pct=token,
+                    completion_gap_pp=completion_gap,
+                )
+            return ModulePolicy(
+                module=module,
+                recommendation="review",
+                rationale="没有足够数据支撑自动策略，需要人工复核。",
+                quality_gain_pct=quality,
+                token_delta_pct=token,
+                completion_gap_pp=completion_gap,
+            )
+
+        for module in sorted(by_module.keys(), key=lambda m: priority.get(m, 99)):
+            policies.append(recommend(module, by_module[module]))
+        return policies
 
 
 # =============================================================================
