@@ -20,14 +20,9 @@
 
 | 功能 | 脚本 | 状态 |
 |------|------|------|
-| 语义路由 | `scripts/experimental/semantic_router.py` | 待评估 |
-| 并行执行 | `scripts/experimental/parallel_executor.py` | 待毕业 |
-| 多Agent编排 | `scripts/experimental/agent_spawner.py` | 被替代 (team_agent) |
-| 执行循环 | `scripts/experimental/execution_loop.py` | 部分毕业 → reflexion.py |
-| Generator-Evaluator | `scripts/experimental/evaluator.py` | 待评估 |
-| 上下文管理 | `scripts/experimental/context_manager.py` | 被替代 (trajectory_logger) |
+| 中间件 helper | `scripts/middleware.py` | 实验辅助层 |
 
-**已毕业**: `scripts/reflexion.py` (从 execution_loop.py 反思引擎毕业)
+**已毕业**: `scripts/reflexion.py` (反思经验层)
 
 ## CLI 快速参考
 

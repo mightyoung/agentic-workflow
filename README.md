@@ -48,12 +48,7 @@ The actual executable surface:
 | `scripts/search_adapter.py` | ✅ Stable | Web search adapter for RESEARCH (Exa/DuckDuckGo) |
 | `scripts/team_agent.py` | ✅ Stable | Small-team orchestration foundations (lead + typed workers) |
 | `scripts/middleware.py` | 🔬 Experimental | Intent/complexity/skill middleware helper |
-| `scripts/experimental/parallel_executor.py` | 🔬 Experimental | Parallel Band execution |
-| `scripts/experimental/agent_spawner.py` | 🔬 Experimental | Multi-agent orchestration (heavyweight) |
-| `scripts/experimental/semantic_router.py` | 🔬 Experimental | Semantic similarity routing |
-| `scripts/experimental/execution_loop.py` | 🔬 Experimental | Execution loop patterns |
-| `scripts/experimental/evaluator.py` | 🔬 Experimental | Generator-Evaluator pattern |
-| `scripts/experimental/context_manager.py` | 🔬 Experimental | Context reset patterns |
+| `scripts/experimental/` | 📦 Archived | Archived design references only |
 
 ### State Files
 
@@ -164,12 +159,7 @@ Layer 2: Workflow Runtime (scripts/*.py)
 ├── memory_ops.py ✅ - session state operations
 ├── task_tracker.py ✅ - task tracking
 └── experimental/
-    ├── semantic_router.py 🔬 - semantic routing
-    ├── execution_loop.py 🔬 - execution loops
-    ├── parallel_executor.py 🔬 - parallel execution
-    ├── agent_spawner.py 🔬 - multi-agent
-    ├── evaluator.py 🔬 - Generator-Evaluator
-    └── context_manager.py 🔬 - context management
+    └── experimental/ 📦 - archived design references only
 ```
 
 ## Current Capabilities (What Works)
@@ -201,13 +191,8 @@ Experimental modules are documented separately in [docs/roadmap/experimental-mod
 - Decision criteria for removal
 
 Available experimental modules:
-- `middleware.py` - Middleware chain prototype for routing/orchestration experiments
-- `semantic_router.py` - Embedding-based routing (design reference)
-- `execution_loop.py` - ReAct/Plan-and-Execute patterns (design reference)
-- `parallel_executor.py` - Parallel Band execution (high complexity)
-- `agent_spawner.py` - Multi-agent orchestration (based on ruflo patterns)
-- `evaluator.py` - Generator-Evaluator pattern (based on Anthropic harness)
-- `context_manager.py` - Context checkpoint/handoff (based on Anthropic harness)
+- `middleware.py` - Middleware chain helper for routing/orchestration experiments
+- `experimental/` - archived design references only
 
 ### P2 New Features
 

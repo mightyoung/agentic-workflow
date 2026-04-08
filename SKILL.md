@@ -96,6 +96,7 @@ python3 scripts/workflow_engine.py --op status --workdir .
 
 - `scripts/workflow_engine.py` 是唯一权威 runtime
 - `scripts/middleware.py` 目前仅用于实验和对照验证
+- `scripts/experimental/` 已归档，不作为可执行主线的一部分
 - 这些原型不得替代主线的 state / artifact / contract / checkpoint 管线
 
 ## 关键文件约定
