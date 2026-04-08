@@ -619,9 +619,11 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     elif current_phase == "THINKING":
         # THINKING produces analysis — PLANNING should use conclusions
         thinking_summary = build_thinking_summary(task_text, complexity or "M", memory_hints, experience_check)
+        thinking_methods = thinking_summary.get("thinking_methods", [])
+        methods_text = " → ".join(thinking_methods) if thinking_methods else "调查研究 → 矛盾分析 → 群众路线 → 持久战略"
         summary = (
             f"{thinking_summary.get('workflow_label', 'THINKING')}："
-            f"调查研究 → 矛盾分析 → 群众路线 → 持久战略。"
+            f"{methods_text}。"
             f"当前阶段: {thinking_summary.get('stage_judgment', '战术速决')}。"
             f"主要矛盾: {thinking_summary.get('major_contradiction', '事实 vs 假设')}。"
             f"局部攻坚点: {thinking_summary.get('local_attack_point', '先找最小可验证切口')}。"
@@ -650,6 +652,53 @@ def _phase_display_name(trigger_type: str, phase: str) -> str:
     if trigger_type == "FULL_WORKFLOW":
         return "PLANNING"
     return phase
+
+
+def _render_progress_content(
+    current_phase: str,
+    runtime_profile: dict[str, Any],
+    planning_summary: dict[str, Any],
+    state: WorkflowState,
+    thinking_summary: dict[str, Any] | None = None,
+) -> str:
+    lines = [
+        "# Progress",
+        "",
+        "## Current Phase",
+        f"- phase: {current_phase}",
+        "- status: active",
+        f"- updated: {datetime.now().isoformat()}",
+        "",
+        "## Skill Policy",
+        f"- policy: {runtime_profile['skill_policy']}",
+        f"- use_skill: {runtime_profile['use_skill']}",
+        f"- activation_level: {runtime_profile['skill_activation_level']}",
+        f"- profile_source: {runtime_profile['profile_source']}",
+        "",
+        "## Planning Summary",
+        f"- plan_source: {planning_summary.get('plan_source', 'none')}",
+        f"- planning_mode: {planning_summary.get('planning_mode', 'lightweight')}",
+        f"- plan_digest: {planning_summary.get('plan_digest', 'unset')}",
+        f"- worktree_recommended: {planning_summary.get('worktree_recommended', False)}",
+        "",
+        "## Session",
+        f"- session_id: {state.session_id}",
+        f"- task_id: {state.task.task_id if state.task else 'N/A'}",
+    ]
+    if thinking_summary:
+        lines.extend(
+            [
+                "",
+                "## THINKING Summary",
+                f"- workflow_label: {thinking_summary.get('workflow_label', 'unset')}",
+                f"- thinking_mode: {thinking_summary.get('thinking_mode', 'unset')}",
+                f"- thinking_methods: {' | '.join(thinking_summary.get('thinking_methods', [])) if thinking_summary.get('thinking_methods') else 'unset'}",
+                f"- major_contradiction: {thinking_summary.get('major_contradiction', 'unset')}",
+                f"- stage_judgment: {thinking_summary.get('stage_judgment', 'unset')}",
+                f"- local_attack_point: {thinking_summary.get('local_attack_point', 'unset')}",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def parse_task_plan(workdir: str = ".") -> list[dict[str, Any]]:
@@ -1444,32 +1493,14 @@ def initialize_workflow(
         str(session_path),
         planning_summary,
     )
-
-    # Create progress.md
     progress_file = workdir_path / "progress.md"
-    progress_content = f"""# Progress
-
-## Current Phase
-- phase: {current_phase}
-- status: active
-- updated: {datetime.now().isoformat()}
-
-## Skill Policy
-- policy: {runtime_profile["skill_policy"]}
-- use_skill: {runtime_profile["use_skill"]}
-- activation_level: {runtime_profile["skill_activation_level"]}
-- profile_source: {runtime_profile["profile_source"]}
-
-## Planning Summary
-- plan_source: {planning_summary.get("plan_source", "none")}
-- planning_mode: {planning_summary.get("planning_mode", "lightweight")}
-- plan_digest: {planning_summary.get("plan_digest", "unset")}
-- worktree_recommended: {planning_summary.get("worktree_recommended", False)}
-
-## Session
-- session_id: {state.session_id}
-- task_id: {state.task.task_id if state.task else 'N/A'}
-"""
+    progress_content = _render_progress_content(
+        current_phase,
+        runtime_profile,
+        planning_summary,
+        state,
+        thinking_summary if current_phase == "THINKING" else None,
+    )
     safe_write_text_locked(progress_file, progress_content)
 
     # Register progress.md artifact (authoritative tracking via registry only)
@@ -1668,41 +1699,31 @@ def advance_workflow(
     elif current_phase == "EXECUTING" and phase == "REVIEWING":
         update_contract_json(workdir, status="review")
 
+    runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
+    thinking_summary: dict[str, Any] | None = None
+
     # Update progress.md
     progress_file = Path(workdir) / "progress.md"
     if progress_file.exists():
-        content = progress_file.read_text(encoding="utf-8")
-        content = re.sub(r"\n?## Planning Summary\n(?:.*\n?)*\Z", "", content, flags=re.S)
-        # Simple update of phase and status
-        lines = content.split("\n")
-        new_lines = []
-        in_phase_section = False
-        for line in lines:
-            if "## Current Phase" in line:
-                in_phase_section = True
-            if in_phase_section and line.startswith("- phase:"):
-                new_lines.append(f"- phase: {phase}")
-                in_phase_section = False
-                continue
-            if in_phase_section and line.startswith("- status:"):
-                new_lines.append(f"- status: {task_status or 'active'}")
-                in_phase_section = False
-                continue
-            new_lines.append(line)
         planning_summary = get_planning_summary(workdir, state)
-        new_lines.append("")
-        new_lines.append("## Planning Summary")
-        new_lines.append(f"- plan_source: {planning_summary.get('plan_source', 'none')}")
-        new_lines.append(f"- plan_digest: {planning_summary.get('plan_digest', 'unset')}")
-        new_lines.append(f"- worktree_recommended: {planning_summary.get('worktree_recommended', False)}")
-        safe_write_text_locked(progress_file, "\n".join(new_lines))
+        if phase == "THINKING":
+            task_desc = state.task.description if state.task else (state.task.title if state.task else "")
+            runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
+            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+        progress_content = _render_progress_content(
+            phase,
+            runtime_profile,
+            planning_summary,
+            state,
+            thinking_summary,
+        )
+        safe_write_text_locked(progress_file, progress_content)
 
     # Save updated state
     save_state(workdir, state)
 
     memory_ops.update_task_info(str(session_path), state.task.description if state.task else "(未设置)", phase)
     memory_ops.update_resume_point(str(session_path), phase, progress)
-    runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
     if runtime_profile:
         memory_ops.update_runtime_profile(
             str(session_path),
@@ -1717,9 +1738,10 @@ def advance_workflow(
         get_planning_summary(workdir, state),
     )
     if phase == "THINKING":
-        task_desc = state.task.description if state.task else (state.task.title if state.task else "")
-        runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
-        thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+        if thinking_summary is None:
+            task_desc = state.task.description if state.task else (state.task.title if state.task else "")
+            runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
+            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
         memory_ops.update_thinking_summary(
             str(session_path),
             thinking_summary,

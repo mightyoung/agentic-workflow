@@ -223,6 +223,20 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("调查研究", snapshot["context_for_next_phase"]["summary"])
         self.assertIn("群众路线", snapshot["context_for_next_phase"]["summary"])
 
+        progress_content = (Path(self.temp_dir) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("## THINKING Summary", progress_content)
+        self.assertIn("thinking_mode: investigation_first", progress_content)
+        self.assertIn("thinking_methods: 调查研究 | 矛盾分析 | 群众路线 | 持久战略", progress_content)
+
+        workflow_engine.advance_workflow(
+            "REVIEWING",
+            workdir=self.temp_dir,
+            progress=40,
+            note="leave thinking phase",
+        )
+        progress_after_leave = (Path(self.temp_dir) / "progress.md").read_text(encoding="utf-8")
+        self.assertNotIn("## THINKING Summary", progress_after_leave)
+
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(unified_snapshot["thinking_summary"]["thinking_mode"], "investigation_first")
