@@ -22,7 +22,7 @@ from pathlib import Path
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from memory_ops import update_planning_summary, update_thinking_summary  # noqa: E402
+from memory_ops import update_planning_summary, update_review_summary, update_thinking_summary  # noqa: E402
 from trajectory_logger import (
     PhaseRecord,
     TrajectoryLogger,
@@ -233,6 +233,20 @@ class TestResumePoint(unittest.TestCase):
                 "plan_digest": "tasks.md: 3 task(s), 1 done, 1 in progress, 0 blocked, 1 ready; next=TASK-002; worktree=yes",
             },
         )
+        update_review_summary(
+            str(Path(self.workdir) / "SESSION-STATE.md"),
+            {
+                "review_found": True,
+                "review_source": "review_latest",
+                "review_status": "reviewed",
+                "stage_1_status": "reviewed",
+                "stage_2_status": "reviewed",
+                "risk_level": "low",
+                "verdict": "approved",
+                "degraded_mode": False,
+                "files_reviewed": 2,
+            },
+        )
 
         # 恢复工作流
         result = resume_from_point(self.workdir, original_session_id)
@@ -243,12 +257,14 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
         self.assertEqual(result["resume_summary"]["phase_count"], 1)
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(result["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
 
         resumed_trajectory = result["resumed_trajectory"]
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["phases"][0]["notes"][0], f"Resumed from {original_session_id} at EXECUTING")
 

@@ -14,7 +14,7 @@ ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import memory_longterm  # noqa: E402
-from memory_ops import update_planning_summary, update_thinking_summary  # noqa: E402
+from memory_ops import update_planning_summary, update_review_summary, update_thinking_summary  # noqa: E402
 import runtime_profile  # noqa: E402
 import search_adapter  # noqa: E402
 import unified_state  # noqa: E402
@@ -873,6 +873,20 @@ class TestNewPhases(unittest.TestCase):
                 "memory_hints_count": 1,
             },
         )
+        update_review_summary(
+            str(Path(self.temp_dir) / "SESSION-STATE.md"),
+            {
+                "review_found": True,
+                "review_source": "review_latest",
+                "review_status": "reviewed",
+                "stage_1_status": "reviewed",
+                "stage_2_status": "reviewed",
+                "risk_level": "low",
+                "verdict": "approved",
+                "degraded_mode": False,
+                "files_reviewed": 2,
+            },
+        )
 
         result = workflow_engine.resume_workflow(self.temp_dir, init_result["session_id"])
 
@@ -884,6 +898,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(result["review_summary"]["review_source"], "review_latest")
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
 
@@ -902,6 +917,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertIn("resume_from", session_state)
         self.assertIn("next_phase", session_state)
         self.assertIn("failure_event_count", session_state)
+        self.assertIn("review_source", session_state)
         self.assertIn("thinking_workflow_label", session_state)
 
         resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
@@ -910,6 +926,7 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(resumed_trajectory["resume_summary"]["next_phase"], "REVIEWING")
         self.assertEqual(resumed_trajectory["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
+        self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["review_source"], "review_latest")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["runtime_profile"]["skill_activation_level"], 100)
 

@@ -2616,6 +2616,7 @@ def resume_workflow(
     next_phase = result["next_phase"]
     resume_summary = result.get("resume_summary", {})
     planning_summary = resume_summary.get("planning_summary", {})
+    review_summary = resume_summary.get("review_summary", {})
     thinking_summary = resume_summary.get("thinking_summary", {})
 
     # 更新 unified state - 这是关键同步步骤
@@ -2624,8 +2625,11 @@ def resume_workflow(
         runtime_profile_summary = get_runtime_profile_summary(state)
         failure_event_summary = get_failure_event_summary(state)
         state_planning_summary = get_planning_summary(workdir, state)
+        state_review_summary = get_review_summary(workdir, state)
         if not planning_summary or planning_summary.get("plan_source") in {None, "", "none"}:
             planning_summary = state_planning_summary
+        if not review_summary or review_summary.get("review_source") in {None, "", "none"}:
+            review_summary = state_review_summary
         # 记录恢复决策
         from datetime import datetime
 
@@ -2642,6 +2646,7 @@ def resume_workflow(
                 "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
                 "planning_summary": planning_summary,
+                "review_summary": review_summary,
                 "thinking_summary": thinking_summary,
                 "failure_event_summary": failure_event_summary,
             },
@@ -2658,6 +2663,7 @@ def resume_workflow(
         runtime_profile_summary = {}
         failure_event_summary = {}
         planning_summary = planning_summary or get_planning_summary(workdir, None)
+        review_summary = review_summary or get_review_summary(workdir, None)
 
     session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
     memory_ops.update_resume_summary(
@@ -2667,6 +2673,7 @@ def resume_workflow(
         original_session_id=session_id,
         runtime_profile=runtime_profile_summary,
         planning_summary=planning_summary,
+        review_summary=review_summary,
         thinking_summary=thinking_summary,
         failure_event_summary=failure_event_summary,
     )
@@ -2695,6 +2702,7 @@ def resume_workflow(
         "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
         "planning_summary": planning_summary,
+        "review_summary": review_summary,
         "thinking_summary": thinking_summary,
         "failure_event_summary": failure_event_summary,
         "state_synced": True,

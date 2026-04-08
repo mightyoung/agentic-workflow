@@ -104,6 +104,15 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **use_skill**: (未设置)
 - **skill_activation_level**: (未设置)
 - **complexity**: (未设置)
+- **review_found**: (未设置)
+- **review_source**: (未设置)
+- **review_status**: (未设置)
+- **stage_1_status**: (未设置)
+- **stage_2_status**: (未设置)
+- **risk_level**: (未设置)
+- **verdict**: (未设置)
+- **degraded_mode**: (未设置)
+- **files_reviewed**: 0
 - **thinking_workflow_label**: (未设置)
 - **thinking_major_contradiction**: (未设置)
 - **thinking_stage_judgment**: (未设置)
@@ -528,6 +537,50 @@ def get_thinking_summary(path: str) -> dict[str, Any]:
     }
 
 
+def get_review_summary(path: str) -> dict[str, Any]:
+    """从 SESSION-STATE.md 读取审查摘要。"""
+    if not os.path.exists(path):
+        return {}
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = (
+        r"## 审查摘要\n"
+        r"(?:- \*\*review_found\*\*: (.*)\n"
+        r"- \*\*review_source\*\*: (.*)\n"
+        r"- \*\*review_status\*\*: (.*)\n"
+        r"- \*\*stage_1_status\*\*: (.*)\n"
+        r"- \*\*stage_2_status\*\*: (.*)\n"
+        r"- \*\*risk_level\*\*: (.*)\n"
+        r"- \*\*verdict\*\*: (.*)\n"
+        r"- \*\*degraded_mode\*\*: (.*)\n"
+        r"- \*\*files_reviewed\*\*: (\d+)\n)?"
+    )
+    match = re.search(pattern, content)
+    if not match:
+        return {}
+
+    groups = match.groups()
+    if not groups or len(groups) < 9 or groups[0] is None:
+        return {}
+
+    def _as_bool(value: str | None) -> bool:
+        return str(value).strip().lower() in {"true", "1", "yes", "y"}
+
+    return {
+        "review_found": _as_bool(groups[0]),
+        "review_source": str(groups[1]).strip(),
+        "review_status": str(groups[2]).strip(),
+        "stage_1_status": str(groups[3]).strip(),
+        "stage_2_status": str(groups[4]).strip(),
+        "risk_level": str(groups[5]).strip() if groups[5] else None,
+        "verdict": str(groups[6]).strip() if groups[6] else None,
+        "degraded_mode": _as_bool(groups[7]),
+        "files_reviewed": int(groups[8]),
+    }
+
+
 def update_resume_summary(
     path: str,
     resume_from: str,
@@ -535,6 +588,7 @@ def update_resume_summary(
     original_session_id: str,
     runtime_profile: dict[str, Any] | None = None,
     planning_summary: dict[str, Any] | None = None,
+    review_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
     failure_event_summary: dict[str, Any] | None = None,
 ) -> bool:
@@ -547,6 +601,7 @@ def update_resume_summary(
 
     runtime_profile = runtime_profile or {}
     planning_summary = planning_summary or {}
+    review_summary = review_summary or {}
     thinking_summary = thinking_summary or {}
     failure_event_summary = failure_event_summary or {}
 
@@ -564,6 +619,15 @@ def update_resume_summary(
         f"- **planning_ready_task_count**: {planning_summary.get('ready_task_count', 0)}\n"
         f"- **planning_worktree_recommended**: {planning_summary.get('worktree_recommended', '(未设置)')}\n"
         f"- **planning_plan_digest**: {planning_summary.get('plan_digest', '(未设置)')}\n"
+        f"- **review_found**: {review_summary.get('review_found', False)}\n"
+        f"- **review_source**: {review_summary.get('review_source', '(未设置)')}\n"
+        f"- **review_status**: {review_summary.get('review_status', '(未设置)')}\n"
+        f"- **stage_1_status**: {review_summary.get('stage_1_status', '(未设置)')}\n"
+        f"- **stage_2_status**: {review_summary.get('stage_2_status', '(未设置)')}\n"
+        f"- **risk_level**: {review_summary.get('risk_level', '(未设置)')}\n"
+        f"- **verdict**: {review_summary.get('verdict', '(未设置)')}\n"
+        f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
+        f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
         f"- **thinking_workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
         f"- **thinking_major_contradiction**: {thinking_summary.get('major_contradiction', '(未设置)')}\n"
         f"- **thinking_stage_judgment**: {thinking_summary.get('stage_judgment', '(未设置)')}\n"
@@ -574,7 +638,7 @@ def update_resume_summary(
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:

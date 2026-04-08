@@ -520,6 +520,7 @@ def _build_resume_summary(
     resume_from: str,
     next_phase: str | None,
     planning_summary: dict[str, Any] | None = None,
+    review_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """构建恢复摘要，写入恢复轨迹根节点。"""
@@ -540,6 +541,7 @@ def _build_resume_summary(
     latest_error = errored_phases[-1] if errored_phases else None
     runtime_profile = original_trajectory.get("runtime_profile", {})
     planning_summary = planning_summary or {}
+    review_summary = review_summary or {}
     thinking_summary = thinking_summary or {}
     return {
         "original_session_id": original_session_id,
@@ -550,6 +552,7 @@ def _build_resume_summary(
         "next_phase": next_phase,
         "runtime_profile": runtime_profile,
         "planning_summary": planning_summary,
+        "review_summary": review_summary,
         "thinking_summary": thinking_summary,
         "phase_count": len(phases),
         "errored_phase_count": len(errored_phases),
@@ -669,14 +672,17 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
 
     thinking_summary: dict[str, Any] = {}
     planning_summary: dict[str, Any] = {}
+    review_summary: dict[str, Any] = {}
     try:
-        from memory_ops import get_planning_summary, get_thinking_summary
+        from memory_ops import get_planning_summary, get_review_summary, get_thinking_summary
 
         thinking_summary = get_thinking_summary(str(Path(workdir) / "SESSION-STATE.md"))
         planning_summary = get_planning_summary(str(Path(workdir) / "SESSION-STATE.md"))
+        review_summary = get_review_summary(str(Path(workdir) / "SESSION-STATE.md"))
     except Exception:
         thinking_summary = {}
         planning_summary = {}
+        review_summary = {}
 
     if not planning_summary:
         try:
@@ -686,6 +692,15 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
             planning_summary = get_state_planning_summary(workdir, planning_state)
         except Exception:
             planning_summary = {}
+
+    if not review_summary:
+        try:
+            from unified_state import get_review_summary as get_state_review_summary, load_state
+
+            review_state = load_state(workdir)
+            review_summary = get_state_review_summary(workdir, review_state)
+        except Exception:
+            review_summary = {}
 
     # 获取当前活跃phase
     original_phase = original_trajectory.get("current_phase", "IDLE")
@@ -703,6 +718,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
                 original_phase,
                 next_phase,
                 planning_summary=planning_summary,
+                review_summary=review_summary,
                 thinking_summary=thinking_summary,
             )
             return {
@@ -751,6 +767,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         resume_from,
         next_phase,
         planning_summary=planning_summary,
+        review_summary=review_summary,
         thinking_summary=thinking_summary,
     )
 
