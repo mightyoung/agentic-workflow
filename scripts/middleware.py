@@ -37,6 +37,7 @@ from enum import Enum
 
 from runtime_profile import (
     build_skill_context,
+    skill_activation_level_for_phase,
     skill_policy_for_phase,
     should_use_skill_for_phase,
     token_budget_for_complexity,
@@ -84,6 +85,7 @@ class Request:
     tokens_expected: int = 0
     use_skill: bool = True
     skill_policy: str = ""
+    skill_activation_level: int = 0
 
 
 @dataclass
@@ -204,9 +206,15 @@ class IntentMiddleware(MiddlewareProtocol):
             request.intent = "CHAT"
             request.use_skill = False
             request.skill_policy = "disable"
+            request.skill_activation_level = 0
             return MiddlewareResult(
                 continue_chain=False,
-                request_modifications={"intent": "CHAT", "use_skill": False, "skill_policy": "disable"},
+                request_modifications={
+                    "intent": "CHAT",
+                    "use_skill": False,
+                    "skill_policy": "disable",
+                    "skill_activation_level": 0,
+                },
                 skip_reason="负面意图检测到"
             )
 
@@ -219,6 +227,9 @@ class IntentMiddleware(MiddlewareProtocol):
                 request.phase.value, request.complexity.value, request.intent
             )
             request.skill_policy = skill_policy_for_phase(
+                request.phase.value, request.complexity.value, request.intent
+            )
+            request.skill_activation_level = skill_activation_level_for_phase(
                 request.phase.value, request.complexity.value, request.intent
             )
             request.metadata["phase_sequence"] = [
@@ -238,6 +249,7 @@ class IntentMiddleware(MiddlewareProtocol):
                     "complexity": Complexity.XL,
                     "use_skill": request.use_skill,
                     "skill_policy": request.skill_policy,
+                    "skill_activation_level": request.skill_activation_level,
                     "phase_sequence": request.metadata["phase_sequence"],
                 },
             )
@@ -262,6 +274,9 @@ class IntentMiddleware(MiddlewareProtocol):
                 request.use_skill = should_use_skill_for_phase(
                     request.phase.value, request.complexity.value, request.intent
                 )
+                request.skill_activation_level = skill_activation_level_for_phase(
+                    request.phase.value, request.complexity.value, request.intent
+                )
 
                 return MiddlewareResult(
                     continue_chain=True,
@@ -270,6 +285,7 @@ class IntentMiddleware(MiddlewareProtocol):
                         "phase": request.phase,
                         "use_skill": request.use_skill,
                         "skill_policy": request.skill_policy,
+                        "skill_activation_level": request.skill_activation_level,
                     }
                 )
 
@@ -282,6 +298,9 @@ class IntentMiddleware(MiddlewareProtocol):
         request.use_skill = should_use_skill_for_phase(
             request.phase.value, request.complexity.value, request.intent
         )
+        request.skill_activation_level = skill_activation_level_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
         return MiddlewareResult(
             continue_chain=True,
             request_modifications={
@@ -289,6 +308,7 @@ class IntentMiddleware(MiddlewareProtocol):
                 "phase": Phase.EXECUTING,
                 "use_skill": request.use_skill,
                 "skill_policy": request.skill_policy,
+                "skill_activation_level": request.skill_activation_level,
             }
         )
 
@@ -322,11 +342,13 @@ class ComplexityMiddleware(MiddlewareProtocol):
             phase_sequence = self._get_phase_sequence(Complexity.XL)
             request.complexity = Complexity.XL
             request.metadata["phase_sequence"] = phase_sequence
+            request.skill_activation_level = 0
             return MiddlewareResult(
                 continue_chain=True,
                 request_modifications={
                     "complexity": Complexity.XL,
                     "phase_sequence": phase_sequence,
+                    "skill_activation_level": 0,
                 },
             )
 
@@ -352,6 +374,9 @@ class ComplexityMiddleware(MiddlewareProtocol):
         request.use_skill = should_use_skill_for_phase(
             request.phase.value, request.complexity.value, request.intent
         )
+        request.skill_activation_level = skill_activation_level_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
 
         return MiddlewareResult(
             continue_chain=True,
@@ -360,6 +385,7 @@ class ComplexityMiddleware(MiddlewareProtocol):
                 "phase_sequence": phase_sequence,
                 "use_skill": request.use_skill,
                 "skill_policy": request.skill_policy,
+                "skill_activation_level": request.skill_activation_level,
             }
         )
 
@@ -397,12 +423,14 @@ class SkillMiddleware(MiddlewareProtocol):
         if not request.use_skill:
             request.skill_context = ""
             request.tokens_expected = 500  # 简单任务预估500 tokens
+            request.skill_activation_level = 0
             return MiddlewareResult(
                 continue_chain=True,
                 request_modifications={
                     "skill_context": "",
                     "tokens_expected": 500,
                     "skill_policy": request.skill_policy,
+                    "skill_activation_level": 0,
                 }
             )
 
@@ -417,6 +445,9 @@ class SkillMiddleware(MiddlewareProtocol):
             pass
 
         request.tokens_expected = max(token_budget_for_complexity(request.complexity.value), tokens)
+        request.skill_activation_level = skill_activation_level_for_phase(
+            request.phase.value, request.complexity.value, request.intent
+        )
 
         request.skill_context = prompt
 
@@ -426,6 +457,7 @@ class SkillMiddleware(MiddlewareProtocol):
                 "skill_context": prompt,
                 "tokens_expected": request.tokens_expected,
                 "skill_policy": request.skill_policy,
+                "skill_activation_level": request.skill_activation_level,
             }
         )
 

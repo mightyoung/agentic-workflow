@@ -69,6 +69,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 ## Skill 策略
 - **skill_policy**: (未设置)
 - **use_skill**: (未设置)
+- **skill_activation_level**: (未设置)
 - **tokens_expected**: (未设置)
 - **profile_source**: (未设置)
 
@@ -270,6 +271,7 @@ def update_runtime_profile(
     path: str,
     skill_policy: str,
     use_skill: bool,
+    skill_activation_level: int,
     tokens_expected: int,
     profile_source: str,
 ) -> bool:
@@ -284,11 +286,12 @@ def update_runtime_profile(
         "## Skill 策略\n"
         f"- **skill_policy**: {skill_policy}\n"
         f"- **use_skill**: {str(use_skill)}\n"
+        f"- **skill_activation_level**: {skill_activation_level}\n"
         f"- **tokens_expected**: {tokens_expected}\n"
         f"- **profile_source**: {profile_source}\n"
     )
 
-    pattern = r"## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?"
+    pattern = r"## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:

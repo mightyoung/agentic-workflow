@@ -63,6 +63,7 @@ class MiddlewareOrchestrationTester:
         print(f"阶段: {request.phase.value}")
         print(f"复杂度: {request.complexity.value}")
         print(f"使用Skill: {request.use_skill}")
+        print(f"Skill激活级别: {request.skill_activation_level}")
         print(f"Token预估: {request.tokens_expected}")
         print(f"阶段序列: {[p.value for p in request.metadata.get('phase_sequence', [])]}")
 
@@ -72,6 +73,7 @@ class MiddlewareOrchestrationTester:
             'phase': request.phase,
             'complexity': request.complexity,
             'use_skill': request.use_skill,
+            'skill_activation_level': request.skill_activation_level,
             'tokens_expected': request.tokens_expected,
             'phase_sequence': request.metadata.get('phase_sequence', []),
         }
@@ -151,6 +153,7 @@ class MiddlewareOrchestrationTester:
                 ("intent", "DEBUGGING"),
                 ("complexity", Complexity.S),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 
@@ -162,6 +165,7 @@ class MiddlewareOrchestrationTester:
                 ("intent", "RESEARCH"),
                 ("complexity", Complexity.M),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 
@@ -173,6 +177,7 @@ class MiddlewareOrchestrationTester:
                 ("intent", "THINKING"),
                 ("complexity", Complexity.M),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 
@@ -183,6 +188,7 @@ class MiddlewareOrchestrationTester:
             [
                 ("intent", "PLANNING"),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 
@@ -193,6 +199,7 @@ class MiddlewareOrchestrationTester:
             [
                 ("intent", "EXECUTING"),
                 ("use_skill", True),
+                ("skill_activation_level", 50),
                 ("tokens_expected", 1000),
             ]
         )
@@ -205,6 +212,7 @@ class MiddlewareOrchestrationTester:
                 ("intent", "FULL_WORKFLOW"),
                 ("phase", Phase.RESEARCH),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 
@@ -215,6 +223,8 @@ class MiddlewareOrchestrationTester:
             [
                 ("intent", "EXECUTING"),
                 ("complexity", Complexity.XS),
+                ("use_skill", False),
+                ("skill_activation_level", 0),
                 ("tokens_expected", 1000),
                 ("phase_sequence", [2]),  # 检查长度>=2
             ]
@@ -228,6 +238,7 @@ class MiddlewareOrchestrationTester:
                 ("intent", "CHAT"),
                 ("phase", Phase.IDLE),
                 ("use_skill", False),
+                ("skill_activation_level", 0),
             ]
         )
 

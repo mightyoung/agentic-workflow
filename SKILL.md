@@ -39,17 +39,19 @@ requires:
 
 ## 默认 Skill Policy
 
-`skill_policy` 是默认启用策略，`use_skill` 是它的执行结果。当前主线默认策略如下：
+`skill_policy` 是默认启用策略，`skill_activation_level` 是默认激活档位，`use_skill` 是它们的执行结果。当前主线默认策略如下：
 
-| 阶段 | 默认策略 | 说明 |
-|---|---|---|
-| EXECUTING | default_enable | 默认启用 |
-| REVIEWING | conditional_enable | 需要审查/高风险变更时启用 |
-| DEBUGGING | conditional_enable_after_optimization | 优先在修复收益明确时启用 |
-| RESEARCH | defer_or_lighten | 仅在需要外部事实时启用 |
-| PLANNING | defer | 默认走轻量规划，复杂任务再提升 |
-| THINKING | disable | 默认禁用 |
-| FULL_WORKFLOW | disable | 由各阶段分别决策，不直接整体开启 |
+| 阶段 | 默认策略 | 默认激活档位 | 说明 |
+|---|---|---|---|
+| EXECUTING | default_enable | 50% | 默认启用，失败时可升级 |
+| REVIEWING | conditional_enable | 50% | 需要审查/高风险变更时启用 |
+| DEBUGGING | conditional_enable_after_optimization | 50% | 优先在修复收益明确时启用 |
+| RESEARCH | defer_or_lighten | 0% | 仅在需要外部事实时启用 |
+| PLANNING | defer | 0% | 默认走轻量规划，复杂任务再提升 |
+| THINKING | disable | 0% | 默认禁用 |
+| FULL_WORKFLOW | disable | 0% | 由各阶段分别决策，不直接整体开启 |
+
+失败后，runtime 会把启用中的 skill 激活档位从 50% 逐步升级到 75%/100%，避免一开始就全量注入。
 
 ## 进度输出 (必须执行)
 

@@ -42,6 +42,7 @@ class TestWorkflowEngine(unittest.TestCase):
         result = workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
 
         self.assertEqual(result["phase"], "PLANNING")
+        self.assertEqual(result["skill_activation_level"], 0)
         self.assertTrue(result["plan_created"])
         self.assertTrue((Path(self.temp_dir) / "SESSION-STATE.md").exists())
         self.assertTrue((Path(self.temp_dir) / "progress.md").exists())
@@ -53,6 +54,7 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("## Skill 策略", session_state)
         self.assertIn("skill_policy", session_state)
         self.assertIn("use_skill", session_state)
+        self.assertIn("skill_activation_level", session_state)
 
         specs_root = Path(self.temp_dir) / ".specs"
         feature_dirs = list(specs_root.glob("*/"))
@@ -72,6 +74,7 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(result["phase"], "DIRECT_ANSWER")
         self.assertEqual(result["profile_source"], "middleware+router")
         self.assertFalse(result["use_skill"])
+        self.assertEqual(result["skill_activation_level"], 0)
 
         tracker = json.loads((Path(self.temp_dir) / ".task_tracker.json").read_text(encoding="utf-8"))
         self.assertEqual(tracker["tasks"], [])
@@ -86,12 +89,25 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertFalse(result["use_skill"])
         self.assertGreater(result["tokens_expected"], 0)
         self.assertEqual(result["skill_policy"], "disable")
+        self.assertEqual(result["skill_activation_level"], 0)
         self.assertEqual(result["skill_context"], "")
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
         self.assertEqual(snapshot["runtime_profile_summary"]["skill_policy"], "disable")
         self.assertFalse(snapshot["runtime_profile_summary"]["use_skill"])
+        self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 0)
         self.assertEqual(snapshot["runtime_profile_summary"]["profile_source"], "middleware+router")
+
+    def test_initialize_executing_workflow_uses_fifty_activation_baseline(self):
+        result = workflow_engine.initialize_workflow("用TDD方式实现一个栈", workdir=self.temp_dir)
+
+        self.assertEqual(result["phase"], "EXECUTING")
+        self.assertTrue(result["use_skill"])
+        self.assertEqual(result["skill_policy"], "default_enable")
+        self.assertEqual(result["skill_activation_level"], 50)
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["runtime_profile_summary"]["skill_activation_level"], 50)
 
     def test_advance_workflow_updates_runtime_and_tracker(self):
         init_result = workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)

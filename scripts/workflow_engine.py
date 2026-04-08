@@ -43,6 +43,8 @@ from review_paths import (
 )
 from runtime_profile import (
     build_skill_context,
+    escalate_skill_activation_level,
+    skill_activation_level_for_phase,
     skill_policy_for_phase,
     should_use_skill_for_phase,
 )
@@ -1239,6 +1241,10 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
             skill_context = ""
             tokens_expected = 500
 
+    skill_activation_level = (
+        skill_activation_level_for_phase(current_phase, complexity, trigger_type) if use_skill else 0
+    )
+
     profile: dict[str, Any] = {
         "trigger_type": trigger_type,
         "phase": current_phase,
@@ -1249,6 +1255,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         "tokens_expected": tokens_expected,
         "use_skill": use_skill,
         "skill_policy": skill_policy,
+        "skill_activation_level": skill_activation_level,
         "intent": None,
         "profile_source": "router",
     }
@@ -1263,6 +1270,9 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         if request.intent is not None:
             profile["intent"] = request.intent
             profile["skill_policy"] = getattr(request, "skill_policy", profile["skill_policy"])
+            profile["skill_activation_level"] = getattr(
+                request, "skill_activation_level", profile["skill_activation_level"]
+            )
             profile["profile_source"] = "middleware+router"
 
         if request.intent == "CHAT":
@@ -1272,6 +1282,7 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
             profile["skill_context"] = ""
             profile["tokens_expected"] = 500
             profile["skill_policy"] = "disable"
+            profile["skill_activation_level"] = 0
             profile["profile_source"] = "middleware+router"
         elif request.intent == "FULL_WORKFLOW":
             profile["trigger_type"] = "FULL_WORKFLOW"
@@ -1283,6 +1294,9 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
                     for phase in request.metadata["phase_sequence"]
                 ]
             profile["profile_source"] = "middleware+router"
+            profile["skill_activation_level"] = 0 if not profile["use_skill"] else skill_activation_level_for_phase(
+                profile["phase"], profile["complexity"], profile["intent"]
+            )
     except Exception:
         # Keep router-derived defaults when middleware is unavailable.
         pass
@@ -1366,6 +1380,7 @@ def initialize_workflow(
         str(session_path),
         skill_policy=runtime_profile["skill_policy"],
         use_skill=runtime_profile["use_skill"],
+        skill_activation_level=runtime_profile["skill_activation_level"],
         tokens_expected=runtime_profile["tokens_expected"],
         profile_source=runtime_profile["profile_source"],
     )
@@ -1382,6 +1397,7 @@ def initialize_workflow(
 ## Skill Policy
 - policy: {runtime_profile["skill_policy"]}
 - use_skill: {runtime_profile["use_skill"]}
+- activation_level: {runtime_profile["skill_activation_level"]}
 - profile_source: {runtime_profile["profile_source"]}
 
 ## Session
@@ -1462,6 +1478,7 @@ def initialize_workflow(
         "skill_policy": runtime_profile["skill_policy"],
         "skill_context": runtime_profile["skill_context"],
         "tokens_expected": runtime_profile["tokens_expected"],
+        "skill_activation_level": runtime_profile["skill_activation_level"],
         "use_skill": runtime_profile["use_skill"],
         "profile_source": runtime_profile["profile_source"],
         "phase_sequence": phase_sequence,
@@ -1618,6 +1635,7 @@ def advance_workflow(
             str(session_path),
             skill_policy=str(runtime_profile.get("skill_policy", "")),
             use_skill=bool(runtime_profile.get("use_skill", False)),
+            skill_activation_level=int(runtime_profile.get("skill_activation_level", 0)),
             tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
             profile_source=str(runtime_profile.get("profile_source", "router")),
         )
@@ -2605,6 +2623,35 @@ def handle_workflow_failure(
     if error_type == "quality_gate_failed":
         quality_gate_details = _extract_quality_gate_details(workdir)
 
+    # Escalate activation level after failure so the next retry carries more guidance.
+    runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
+    if runtime_profile:
+        current_activation_level = int(runtime_profile.get("skill_activation_level", 0))
+        escalated_activation_level = escalate_skill_activation_level(current_activation_level)
+        if escalated_activation_level != current_activation_level:
+            runtime_profile["skill_activation_level"] = escalated_activation_level
+            if state.metadata is None:
+                state.metadata = {}
+            state.metadata["runtime_profile"] = runtime_profile
+            session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+            memory_ops.update_runtime_profile(
+                str(session_path),
+                skill_policy=str(runtime_profile.get("skill_policy", "")),
+                use_skill=bool(runtime_profile.get("use_skill", False)),
+                skill_activation_level=escalated_activation_level,
+                tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
+                profile_source=str(runtime_profile.get("profile_source", "router")),
+            )
+            if state.session_id in _active_loggers:
+                logger = _active_loggers[state.session_id]
+                logger.log_decision(
+                    "Escalate skill activation",
+                    f"Failure {error_type} escalated activation to {escalated_activation_level}",
+                    activation_level=escalated_activation_level,
+                    error_type=error_type,
+                )
+            save_state(workdir, state)
+
     # Syntax errors always go to debugging immediately - they can't be fixed by retry
     if error_type == "syntax_error":
         strategy = "debugging"
@@ -2942,6 +2989,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "runtime_profile_summary": {
             "skill_policy": runtime_profile_summary.get("skill_policy") if runtime_profile_summary else None,
             "use_skill": runtime_profile_summary.get("use_skill") if runtime_profile_summary else None,
+            "skill_activation_level": runtime_profile_summary.get("skill_activation_level") if runtime_profile_summary else None,
             "tokens_expected": runtime_profile_summary.get("tokens_expected") if runtime_profile_summary else None,
             "profile_source": runtime_profile_summary.get("profile_source") if runtime_profile_summary else None,
         },

@@ -171,6 +171,30 @@ def skill_policy_for_phase(phase: str, complexity: str, intent: str | None = Non
     return SKILL_POLICY_RECOMMENDATIONS.get(phase, "default_enable")
 
 
+def skill_activation_level_for_phase(phase: str, complexity: str, intent: str | None = None) -> int:
+    """Return the default skill activation level for a phase/complexity pair."""
+    phase = (phase or "").upper()
+    complexity = (complexity or "").upper()
+    intent = (intent or "").upper()
+
+    if not should_use_skill_for_phase(phase, complexity, intent):
+        return 0
+    if phase == "DEBUGGING" and complexity in {"XS", "S"}:
+        return 0
+    return 50
+
+
+def escalate_skill_activation_level(current_level: int) -> int:
+    """Increase skill activation after a failure, capped at 100."""
+    if current_level <= 0:
+        return 0
+    if current_level < 50:
+        return 50
+    if current_level < 75:
+        return 75
+    return 100
+
+
 def should_use_skill_for_phase(phase: str, complexity: str, intent: str | None = None) -> bool:
     """Return the default skill on/off decision for a phase/complexity pair."""
     phase = (phase or "").upper()
