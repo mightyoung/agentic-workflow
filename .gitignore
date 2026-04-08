@@ -84,6 +84,7 @@ tests/__pycache__/
 tests/*.json
 tests/*.json.backup
 *.json.backup
+tests/bench/ab_experiment_results/
 
 # Temporary files
 *.tmp
