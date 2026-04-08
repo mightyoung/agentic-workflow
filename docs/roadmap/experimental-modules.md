@@ -1,48 +1,27 @@
-# Experimental Modules
+# Archived Experimental References
 
-This directory contains documentation for experimental features that are not yet integrated into the main runtime.
+This document is a reference archive for experimental features that were explored
+outside the authoritative runtime. The main runtime is `scripts/workflow_engine.py`;
+these modules are not part of the active promotion path.
 
 ## Purpose
 
-These modules represent ambitious extensions to the core workflow system. They are kept here to:
-- Allow experimentation without affecting stable code
-- Provide a clear boundary between production and research code
-- Enable easy removal if a module doesn't prove useful
+These modules are kept here only as references to prior design experiments.
+They should not be treated as a roadmap for the stable runtime.
 
 ## Module Inventory
 
-| Module | Purpose | Integration Status | Notes |
-|--------|---------|-------------------|-------|
-| `semantic_router.py` | Embedding-based phase routing | Not integrated | Falls back to keyword routing |
-| `execution_loop.py` | ReAct/Plan-and-Execute patterns | Not integrated | Design reference only |
-| `parallel_executor.py` | Parallel Band execution | Not integrated | High complexity |
-| `agent_spawner.py` | Multi-agent orchestration | Not integrated | Based on ruflo patterns |
-| `evaluator.py` | Generator-Evaluator pattern | Not integrated | Based on Anthropic harness |
-| `context_manager.py` | Context checkpoint/handoff | Not integrated | Based on Anthropic harness |
+| Module | Purpose | Status | Notes |
+|--------|---------|--------|-------|
+| `semantic_router.py` | Embedding-based phase routing | Archived reference | Falls back to keyword routing in the stable runtime |
+| `execution_loop.py` | ReAct/Plan-and-Execute patterns | Archived reference | Design reference only |
+| `parallel_executor.py` | Parallel Band execution | Archived reference | High complexity; not in the stable runtime |
+| `agent_spawner.py` | Multi-agent orchestration | Archived reference | Replaced by `team_agent.py` |
+| `evaluator.py` | Generator-Evaluator pattern | Archived reference | Not in the stable runtime |
+| `context_manager.py` | Context checkpoint/handoff | Archived reference | Replaced by checkpoint/trajectory flow |
 
-## Decision Criteria for Promotion
+## Archival Rule
 
-A module should be promoted from experimental to stable when:
-
-1. **Integration**: It is called by `workflow_engine.py` in the main execution path
-2. **Testing**: It has dedicated tests with >80% coverage
-3. **Documentation**: Entry command, state artifact, and test coverage are documented
-4. **Stability**: No known critical bugs, handles edge cases gracefully
-5. **User Need**: Clear use case that core modules cannot fulfill
-
-## Review Cadence
-
-Experimental modules should be reviewed quarterly (every 3 months) to:
-- Remove modules that proved unsuccessful
-- Promote successful modules to stable
-- Update documentation
-
-## Path Forward
-
-To promote an experimental module:
-
-1. Ensure it works standalone with CLI interface
-2. Write integration tests
-3. Update `workflow_engine.py` to call it in the main path
-4. Update README.md capability tables
-5. Remove "(experimental)" designation
+If a new capability is needed, implement it directly in the stable runtime or
+in a shared helper that is consumed by the stable runtime. Do not revive these
+modules as a parallel mainline without a concrete migration plan.

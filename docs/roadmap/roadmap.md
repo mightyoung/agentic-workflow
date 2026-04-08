@@ -19,55 +19,12 @@ This directory contains planned features and capabilities.
 - [x] CI/CD integration (GitHub Actions + pre-commit)
 - [x] Project restructuring (experimental/, utils/, tools/ directories)
 
-## Phase 2: Control Plane (Planned)
-
-### Planned Features
-
-#### Multi-Agent Spawning
-- [ ] 12 subagent definitions exist in `agents/` but actual spawning not integrated
-- [ ] Need: `scripts/agent_spawner.py` to coordinate subagent lifecycle
-
-#### Parallel Execution Orchestration
-- [ ] Design exists in `skills/_shared/parallel-execution.md`
-- [ ] Need: Actual orchestration in workflow_engine.py
-- [ ] Need: Band-aware phase scheduling
-
-#### Semantic Router (L3)
-- [ ] Current: keyword-based routing in `router.py`
-- [ ] Planned: complexity assessment + semantic understanding
-- [ ] Need: `scripts/semantic_router.py` integration (in experimental/)
-
-### Dependencies
-- Phase 2 requires Phase 1 complete
-
-## Phase 3: Intelligence (Future)
-
-### Planned Features
-
-#### Trajectory-based Learning
-- [x] `./trajectories/` directory for persistence (done)
-- [ ] Pattern detection from past runs
-- [ ] Experience store integration (`scripts/experience_store.py`)
-
-#### Auto Task Decomposition with LLM
-- [ ] Current: keyword-based decomposition in `task_decomposer.py`
-- [ ] Planned: LLM-powered task breakdown with dependency graph
-- [ ] Need: Integration with planning phase
-
-#### WAL (Write-Ahead Log) Auto-commit
-- [ ] Design: automatic commit on phase completion
-- [ ] Need: `scripts/wal_scanner.py` integration with git hooks
-
-### Dependencies
-- Phase 3 requires Phase 2 complete
-
 ## Known Limitations
 
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
 | No semantic routing | Router is keyword-based, not semantic | Use explicit phase triggers |
 | No trajectory resume | Cannot resume from interrupted workflow | Restart from beginning |
-| No multi-agent orchestration | Subagents defined but not coordinated | Manual agent spawning |
 | No parallel phase execution | Bands designed but not implemented | Sequential execution |
 | State in markdown files | SESSION-STATE.md, progress.md are fragile | Use `.workflow_state.json` |
 
@@ -80,7 +37,7 @@ Layer 1: Skill Specs (skills/*.md)
 
 Layer 2: Workflow Runtime (scripts/*.py)
 ├── Current: workflow_engine.py, router.py, state management
-├── Experimental: agent_spawner.py, parallel_executor.py, semantic_router.py
+├── Shared helpers: middleware.py, runtime_profile.py
 └── Describes HOW to execute
 
 Runtime Surface:
@@ -92,5 +49,5 @@ Runtime Surface:
 ├── scripts/memory_ops.py - SESSION-STATE.md operations
 ├── scripts/quality_gate.py - quality enforcement
 ├── scripts/search_adapter.py - web search with metadata validation
-└── scripts/experimental/ - experimental features (semantic_router, parallel_executor, etc.)
+└── scripts/experimental/ - archived design references (not part of the main runtime)
 ```
