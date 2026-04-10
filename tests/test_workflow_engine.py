@@ -861,6 +861,72 @@ class TestNewPhases(unittest.TestCase):
             workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
         self.assertIn("analyze gate failed", str(ctx.exception))
 
+    def test_execution_contract_gate_blocks_placeholder_contract_fields(self):
+        """Test PLANNING -> EXECUTING is blocked when contract fields are still placeholders."""
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        state_path = Path(self.temp_dir) / ".workflow_state.json"
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        state_data["trigger_type"] = "FULL_WORKFLOW"
+        state_data["metadata"]["complexity"] = "M"
+        state_data["metadata"]["complexity_confidence"] = 0.95
+        state_path.write_text(json.dumps(state_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        specs_root = Path(self.temp_dir) / ".specs"
+        feature_dirs = sorted(specs_root.glob("*/"), key=lambda p: p.stat().st_mtime, reverse=True)
+        self.assertTrue(feature_dirs, "Expected init to create at least one feature directory")
+        feature_dir = feature_dirs[0]
+        spec_file = feature_dir / "spec.md"
+        spec_file.write_text(
+            "# Spec: Execution Contract Gate\n\n"
+            + "x" * 320
+            + "\n\n## User Stories\n\n"
+            + "### Story 1: Gate\n"
+            + "## Success Criteria\n"
+            + "- [ ] **SC-1:** Measurable outcome\n"
+            + "## Constraints\n"
+            + "- **Tech Stack:** Python 3.11+\n",
+            encoding="utf-8",
+        )
+        tasks_file = feature_dir / "tasks.md"
+        tasks_file.write_text(
+            "# Tasks\n\n"
+            + "Generated-By: agentic-workflow\n"
+            + "Session: test-session\n"
+            + "Source-Spec: .specs/execution_contract_gate/spec.md\n"
+            + "Timestamp: 2026-04-11T00:00:00\n\n"
+            + "- [ ] **TASK-US1-1:** Gate Task\n"
+            + "  **Files:** src/main.py\n"
+            + "  **Verification:** pytest tests/test_workflow_engine.py -q\n",
+            encoding="utf-8",
+        )
+        contract_file = Path(self.temp_dir) / ".contract.json"
+        contract_file.write_text(
+            json.dumps({
+                "version": "1.1",
+                "task": "帮我制定一个开发计划",
+                "description": "帮我制定一个开发计划",
+                "created": "2026-04-11T00:00:00",
+                "goals": ["Deliver the requested task"],
+                "goal_status": {},
+                "verification_methods": ["pytest tests/test_workflow_engine.py -q"],
+                "verification_results": {},
+                "owned_files": ["src/main.py"],
+                "acceptance_criteria": ["to be filled"],
+                "impact_files": ["unset"],
+                "dependencies": [],
+                "rollback_note": "to be filled",
+                "review_evidence": None,
+                "failure_threshold": {"hard_failure": [], "soft_failure": [], "retry_strategy": "max_3_retries"},
+                "status": "active",
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
+        self.assertIn("execution contract gate failed", str(ctx.exception))
+        self.assertIn("acceptance_criteria", str(ctx.exception))
+
     def test_handle_workflow_failure_records_reflection_memory(self):
         """Failure handling should persist a reflection artifact and long-term memory entry."""
         workflow_engine.initialize_workflow("修复这个bug", workdir=self.temp_dir)

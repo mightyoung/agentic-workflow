@@ -24,6 +24,7 @@ from analyze_gate import validate_analyze_gate
 from contract_manager import (
     _create_phase_contract,
     parse_phase_contract,
+    validate_execution_contract_readiness,
     update_contract_json,
     validate_contract_gate,
 )
@@ -693,7 +694,26 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
 
     elif current_phase == "EXECUTING":
         # EXECUTING produces code changes — REVIEWING should diff them
-        summary = "Code changes made. Run `git diff` to review actual changes."
+        contract_parts: list[str] = []
+        if contract_summary.get("goals"):
+            contract_parts.append(
+                "Contract goals: "
+                + " | ".join(str(goal) for goal in contract_summary.get("goals", [])[:3])
+            )
+        if contract_summary.get("acceptance_criteria"):
+            contract_parts.append(
+                "Acceptance: "
+                + " | ".join(str(item) for item in contract_summary.get("acceptance_criteria", [])[:2])
+            )
+        if contract_summary.get("impact_files"):
+            contract_parts.append(
+                "Impact files: "
+                + ", ".join(str(item) for item in contract_summary.get("impact_files", [])[:3])
+            )
+        if contract_parts:
+            summary = "Code changes made. Run `git diff` to review actual changes. " + " ".join(contract_parts)
+        else:
+            summary = "Code changes made. Run `git diff` to review actual changes."
 
     elif current_phase == "REVIEWING":
         # REVIEWING produces review feedback — REFINING should fix issues
@@ -1843,6 +1863,12 @@ def advance_workflow(
         if analyze_result.warnings:
             logger.log_decision(f"analyze gate warnings: {'; '.join(analyze_result.warnings)}") if state.session_id in _active_loggers else None
 
+    # Contract readiness gate: execution should not begin with placeholder artifacts.
+    if phase == "EXECUTING" and current_phase in ("PLANNING", "ANALYZING"):
+        contract_ready, contract_error = validate_execution_contract_readiness(workdir, state)
+        if not contract_ready:
+            raise ValueError(f"execution contract gate failed: {contract_error}")
+
     # Transition phase using unified_state
     state = transition_phase(state, phase, reason=note or "advance_workflow")
 
@@ -2461,6 +2487,27 @@ def advance_workflow(
         safe_write_text_locked(review_latest, review_content)
         register_artifact(workdir, ArtifactType.REVIEW, str(review_path), "REVIEWING", "system", metadata=metadata)
         memory_ops.update_review_summary(str(session_path), review_summary)
+
+    # Keep the progress sidecar in sync after contract activation so execution
+    # sees the negotiated contract rather than a stale draft snapshot.
+    if phase == "EXECUTING" and current_phase in ("PLANNING", "ANALYZING"):
+        planning_summary = get_planning_summary(workdir, state)
+        research_summary = get_research_summary(workdir, state)
+        thinking_summary = build_thinking_summary(
+            state.task.description if state.task else (state.task.title if state.task else ""),
+            str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M")),
+            research_summary=research_summary,
+            contract_summary=parse_phase_contract(workdir),
+        )
+        progress_content = _render_progress_content(
+            phase,
+            runtime_profile,
+            planning_summary,
+            state,
+            research_summary,
+            thinking_summary,
+        )
+        safe_write_text_locked(progress_file, progress_content)
 
     # Block COMPLETE transition if quality gate failed for code tasks
     if phase == "COMPLETE":

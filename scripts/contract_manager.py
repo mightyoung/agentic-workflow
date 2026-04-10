@@ -415,3 +415,71 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
             return False, f"Review evidence file not found: {review_evidence}"
 
     return True, ""
+
+
+def validate_execution_contract_readiness(workdir: str, state: Any) -> tuple[bool, str]:
+    """
+    Validate that a contract is ready to enter EXECUTING.
+
+    This is stricter than a generic parse, but intentionally ignores the
+    contract status field so PLANNING can validate readiness before the
+    runtime flips the contract to active.
+    """
+    trigger_type = getattr(state, "trigger_type", None) if state else None
+    if trigger_type in ("RESULT_ONLY", "DIRECT_ANSWER", "STAGE"):
+        return True, ""
+
+    metadata = getattr(state, "metadata", None) or {}
+    complexity = metadata.get("complexity", "")
+    if complexity in ("XS", "S"):
+        return True, ""
+
+    json_contract_path = Path(workdir) / ".contract.json"
+    if not json_contract_path.exists():
+        return False, "Contract not found - execution requires a negotiated contract"
+
+    try:
+        contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
+    except (json_lib.JSONDecodeError, OSError):
+        return False, "Contract could not be read - fix the contract before executing"
+
+    if not isinstance(contract, dict):
+        return False, "Contract is malformed - fix the contract before executing"
+
+    def _has_real_value(values: list[Any] | Any) -> bool:
+        if not values:
+            return False
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, list):
+            return False
+        cleaned = [str(v).strip() for v in values if str(v).strip()]
+        if not cleaned:
+            return False
+        return any(not any(p.lower() in value.lower() for p in PLACEHOLDER_PATTERNS) for value in cleaned)
+
+    goals = contract.get("goals", [])
+    if not _has_real_value(goals):
+        return False, "Contract goals are missing or placeholder - fill in actual execution goals"
+
+    acceptance_criteria = contract.get("acceptance_criteria", [])
+    if not _has_real_value(acceptance_criteria):
+        return False, "Contract acceptance_criteria are missing or placeholder - define measurable acceptance"
+
+    impact_files = contract.get("impact_files", [])
+    if not _has_real_value(impact_files):
+        return False, "Contract impact_files are missing or placeholder - list affected files before executing"
+
+    verification_methods = contract.get("verification_methods", [])
+    if not _has_real_value(verification_methods):
+        return False, "Contract verification_methods are missing or placeholder - define executable verification"
+
+    rollback_note = str(contract.get("rollback_note", "")).strip()
+    if not rollback_note or any(p.lower() in rollback_note.lower() for p in PLACEHOLDER_PATTERNS):
+        return False, "Contract rollback_note is missing or placeholder - define a rollback path before executing"
+
+    status = str(contract.get("status", "")).strip().lower()
+    if status == "broken":
+        return False, "Contract status is broken - fix the contract before executing"
+
+    return True, ""
