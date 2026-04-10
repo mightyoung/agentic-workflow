@@ -29,6 +29,18 @@ from pathlib import Path
 from typing import Any
 
 
+PLACEHOLDER_VERIFICATION_PATTERNS = (
+    "[verification command]",
+    "[verification]",
+    "verification command",
+    "tbd",
+    "todo",
+    "to be filled",
+    "to be determined",
+    "placeholder",
+)
+
+
 @dataclass
 class AnalyzeResult:
     """Result of analyze gate validation"""
@@ -213,9 +225,16 @@ class AnalyzeGate:
                     result.add_error(f"Task {task_id} is high priority but has no verification method.")
             else:
                 verification = verification_match.group(1).strip()
-                if not verification or verification == "[verification command]":
+                if not verification or self._is_placeholder_verification(verification):
                     if is_high_priority:
                         result.add_error(f"Task {task_id} has placeholder verification. Provide actual test command.")
+
+    def _is_placeholder_verification(self, verification: str) -> bool:
+        """Return True when a verification string is still a placeholder."""
+        normalized = verification.strip().lower()
+        if not normalized:
+            return True
+        return any(pattern in normalized for pattern in PLACEHOLDER_VERIFICATION_PATTERNS)
 
     def _check_contract_not_draft(self, result: AnalyzeResult) -> None:
         """Check that .contract.json exists and is not draft."""

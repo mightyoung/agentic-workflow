@@ -173,6 +173,7 @@ Every run must record:
 - checks executed
 - hard-gate result
 - soft observations
+- benchmark evidence reference when the run is motivated by benchmark data
 - keep or discard decision
 
 ## Required Baseline Before Any Mutation

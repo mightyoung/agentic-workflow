@@ -4,7 +4,8 @@
 #
 # Usage:
 #   record_result.sh --run-id <id> --hypothesis <text> --files <paths> \
-#       --checks <summary> --status <keep|discard|rollback|stabilization> [--notes <text>]
+#       --checks <summary> --status <keep|discard|rollback|stabilization> \
+#       [--benchmark-evidence <ref>] [--notes <text>]
 #
 #   Shorthand:
 #   record_result.sh <hypothesis> <files> <status> [notes]
@@ -13,6 +14,7 @@
 #   record_result.sh "improve routing heuristics" "scripts/router.py" "keep" "routing +5%"
 #   record_result.sh --run-id 20260401-01 --hypothesis "tighten REVIEWING" \
 #       --files "scripts/workflow_engine.py" --checks "10/10 gates" --status keep \
+#       --benchmark-evidence "tests/bench/ab_experiment_results/ab_experiment_20260408_223414.json" \
 #       --notes "review targeting improved"
 
 set -e
@@ -24,7 +26,7 @@ HELPER="$SCRIPT_DIR/_record_helper.py"
 usage() {
     echo "Usage: record_result.sh [--run-id <id>] --hypothesis <text> --files <paths>"
     echo "       --checks <summary> --status <keep|discard|rollback|stabilization>"
-    echo "       [--notes <text>]"
+    echo "       [--benchmark-evidence <ref>] [--notes <text>]"
     echo ""
     echo "   Shorthand: record_result.sh <hypothesis> <files> <status> [notes]"
     echo ""
@@ -38,6 +40,7 @@ HYPOTHESIS=""
 FILES=""
 CHECKS=""
 STATUS=""
+BENCHMARK_EVIDENCE=""
 NOTES=""
 
 if [[ "$#" -eq 0 ]]; then
@@ -62,6 +65,8 @@ if [[ "$1" == "--"* ]]; then
                 CHECKS="$2"; shift 2;;
             --status)
                 STATUS="$2"; shift 2;;
+            --benchmark-evidence)
+                BENCHMARK_EVIDENCE="$2"; shift 2;;
             --notes)
                 NOTES="$2"; shift 2;;
             --*)
@@ -104,7 +109,7 @@ if [[ -z "$RUN_ID" ]]; then
 fi
 
 # Use Python helper for locked TSV append (cross-platform fcntl)
-python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$NOTES" << 'PYEOF'
+python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$NOTES" << 'PYEOF'
 import sys
 import fcntl
 import os
@@ -115,7 +120,8 @@ hypothesis = sys.argv[3]
 files = sys.argv[4]
 checks = sys.argv[5]
 status = sys.argv[6]
-notes = sys.argv[7]
+benchmark_evidence = sys.argv[7]
+notes = sys.argv[8]
 
 # TSV-safe cleaning: replace tabs and newlines with spaces
 def tsv_clean(value):
@@ -125,6 +131,10 @@ hypothesis = tsv_clean(hypothesis)
 files = tsv_clean(files)
 checks = tsv_clean(checks)
 notes = tsv_clean(notes)
+benchmark_evidence = tsv_clean(benchmark_evidence)
+
+if benchmark_evidence:
+    notes = f"benchmark_evidence={benchmark_evidence}" + (f" | {notes}" if notes else "")
 
 lock_path = ledger_path + '.lock'
 

@@ -131,6 +131,30 @@ class TestAnalyzeGate(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertTrue(any("verification" in e.lower() for e in result.errors))
 
+    def test_validate_p0_task_with_placeholder_verification_fails(self):
+        """Test validation fails when P0 task has placeholder verification."""
+        feature_dir = self.specs_dir / "test_feature"
+        feature_dir.mkdir()
+        spec_file = feature_dir / "spec.md"
+        spec_file.write_text(
+            "# Spec: Test\n\n" + "x" * 300 + "\n\n## User Stories\n\n### Story 1: Title\n",
+            encoding="utf-8"
+        )
+        tasks_file = feature_dir / "tasks.md"
+        tasks_file.write_text(
+            "# Tasks\n\n"
+            + "Generated-By: test\nSession: test\nSource-Spec: test\nTimestamp: test\n\n"
+            + "- [ ] **TASK-US1-1:** P0 Critical Task\n"
+            + "  **Files:** test.py\n"
+            + "  **Verification:** [verification command]\n",
+            encoding="utf-8"
+        )
+
+        gate = AnalyzeGate(self.temp_dir)
+        result = gate.validate()
+        self.assertFalse(result.passed)
+        self.assertTrue(any("placeholder verification" in e.lower() for e in result.errors))
+
     def test_validate_contract_draft_fails(self):
         """Test validation fails when contract.json status is draft."""
         feature_dir = self.specs_dir / "test_feature"

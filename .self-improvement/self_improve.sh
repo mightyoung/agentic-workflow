@@ -3,6 +3,7 @@
 #
 # Usage:
 #   self_improve.sh --hypothesis <text> [--zone B] [--allow-dirty]
+#   BENCHMARK_EVIDENCE=<ref> self_improve.sh --hypothesis <text>
 #
 # This script:
 #   1. Creates a dedicated self-improve branch (or validates current context)
@@ -19,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LEDGER="$SCRIPT_DIR/results.tsv"
 RECORD_HELPER="$SCRIPT_DIR/record_result.sh"
+BENCHMARK_EVIDENCE="${BENCHMARK_EVIDENCE:-}"
 
 usage() {
     echo "Self-Improvement Runner"
@@ -29,6 +31,7 @@ usage() {
     echo "  --hypothesis <text>  What this improvement run tries to achieve (required)"
     echo "  --zone <A|B|C>       Which zone to target (default: B - Guided Mutable Surface)"
     echo "  --allow-dirty        Allow dirty tree (only for exploratory work)"
+    echo "  BENCHMARK_EVIDENCE   Optional benchmark report path/reference to attach"
     echo "  --help, -h           Show this help"
     echo ""
     echo "Examples:"
@@ -60,6 +63,11 @@ done
 if [[ -z "$HYPOTHESIS" ]]; then
     echo "Error: --hypothesis is required"
     usage
+fi
+
+BENCHMARK_ARGS=()
+if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
+    BENCHMARK_ARGS+=(--benchmark-evidence "$BENCHMARK_EVIDENCE")
 fi
 
 cd "$PROJECT_ROOT"
@@ -125,6 +133,7 @@ if [[ "$baseline_result" == "FAIL" ]]; then
         --files "baseline check failed" \
         --checks "0/10 gates passed" \
         --status "$status" \
+        "${BENCHMARK_ARGS[@]}" \
         --notes "Baseline failed before any changes - context not ready"
 
     echo ""
@@ -162,6 +171,7 @@ files_placeholder="(no changes yet)"
     --files "$files_placeholder" \
     --checks "10/10 baseline gates passed" \
     --status "in_progress" \
+    "${BENCHMARK_ARGS[@]}" \
     --notes "Zone $ZONE improvement - branch: $new_branch"
 
 echo ""
