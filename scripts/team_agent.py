@@ -37,7 +37,16 @@ import search_adapter
 from findings_paths import ensure_findings_dir, findings_latest_path
 from review_paths import ensure_review_dir, review_latest_path
 from safe_io import safe_write_text_locked
-from unified_state import ArtifactType, get_planning_summary, register_artifact
+from unified_state import (
+    ArtifactType,
+    get_planning_summary,
+    get_research_summary,
+    get_review_summary,
+    get_runtime_profile_summary,
+    get_thinking_summary,
+    load_state,
+    register_artifact,
+)
 
 # Optional real agent runner (lazy import to avoid hard dependency)
 _subagent_runner = None
@@ -102,6 +111,102 @@ class WorkerEnvelope(TypedDict):
     degraded_mode: bool
     warning: str | None
     error: str | None
+
+
+def _compact_value(value: Any, limit: int = 120) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _compact_list(values: Any, limit: int = 3) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    compacted: list[str] = []
+    for item in values[:limit]:
+        item_text = _compact_value(item, 80)
+        if item_text:
+            compacted.append(item_text)
+    return compacted
+
+
+def build_shared_memory_capsule(
+    workdir: str,
+    task: str,
+    contract: dict[str, Any] | None = None,
+    frontier: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a short lead-facing memory capsule from the runtime state."""
+    state = load_state(workdir)
+    runtime_profile = get_runtime_profile_summary(state)
+    planning_summary = get_planning_summary(workdir, state)
+    research_summary = get_research_summary(workdir, state)
+    thinking_summary = get_thinking_summary(workdir, state)
+    review_summary = get_review_summary(workdir, state)
+    contract = contract or {}
+    frontier = frontier or {}
+
+    capsule = {
+        "task": _compact_value(task, 160),
+        "runtime_profile": {
+            "complexity": runtime_profile.get("complexity"),
+            "skill_policy": runtime_profile.get("skill_policy"),
+            "skill_activation_level": runtime_profile.get("skill_activation_level"),
+            "profile_source": runtime_profile.get("profile_source"),
+        },
+        "contract": {
+            "status": contract.get("status"),
+            "goal_count": len(contract.get("goals", [])) if isinstance(contract.get("goals"), list) else 0,
+            "acceptance_count": len(contract.get("acceptance_criteria", [])) if isinstance(contract.get("acceptance_criteria"), list) else 0,
+            "impact_files": _compact_list(contract.get("impact_files", []), limit=3),
+            "dependencies": _compact_list(contract.get("dependencies", []), limit=3),
+            "rollback_note": _compact_value(contract.get("rollback_note", ""), 100),
+        },
+        "planning": {
+            "planning_mode": planning_summary.get("planning_mode"),
+            "plan_source": planning_summary.get("plan_source"),
+            "plan_digest": planning_summary.get("plan_digest"),
+            "worktree_recommended": planning_summary.get("worktree_recommended"),
+            "next_task_ids": _compact_list(planning_summary.get("next_task_ids", []), limit=3),
+        },
+        "research": {
+            "evidence_status": research_summary.get("evidence_status"),
+            "evidence_tier": research_summary.get("evidence_tier"),
+            "sources_count": research_summary.get("sources_count"),
+            "search_engine": research_summary.get("search_engine"),
+            "degraded_mode": research_summary.get("degraded_mode"),
+        },
+        "thinking": {
+            "workflow_label": thinking_summary.get("workflow_label"),
+            "thinking_mode": thinking_summary.get("thinking_mode"),
+            "thinking_methods": _compact_list(thinking_summary.get("thinking_methods", []), limit=5),
+            "major_contradiction": _compact_value(thinking_summary.get("major_contradiction", ""), 100),
+            "stage_judgment": thinking_summary.get("stage_judgment"),
+            "local_attack_point": _compact_value(thinking_summary.get("local_attack_point", ""), 100),
+            "confidence_level": thinking_summary.get("confidence_level"),
+        },
+        "review": {
+            "review_status": review_summary.get("review_status"),
+            "review_source": review_summary.get("review_source"),
+            "stage_1_status": review_summary.get("stage_1_status"),
+            "stage_2_status": review_summary.get("stage_2_status"),
+            "risk_level": review_summary.get("risk_level"),
+            "files_reviewed": review_summary.get("files_reviewed"),
+            "degraded_mode": review_summary.get("degraded_mode"),
+        },
+        "frontier": {
+            "plan_source": frontier.get("plan_source"),
+            "executable_count": len(frontier.get("executable_frontier", [])) if isinstance(frontier.get("executable_frontier"), list) else 0,
+            "parallel_group_count": len(frontier.get("parallel_candidates", [])) if isinstance(frontier.get("parallel_candidates"), list) else 0,
+            "conflict_group_count": len(frontier.get("conflict_groups", [])) if isinstance(frontier.get("conflict_groups"), list) else 0,
+        },
+    }
+    return capsule
 
 
 # ============================================================================
@@ -400,6 +505,13 @@ class WorkerAgent:
 
         # Fallback when SubAgentRunner unavailable: explicit template (not fake output)
         output = f"# Code Implementation Plan\n\nTask: {task}\n\n"
+        capsule = context.get("shared_memory_capsule") if context else None
+        if capsule and capsule.get("contract", {}).get("impact_files"):
+            output += "## Shared Memory Capsule\n"
+            output += f"- Plan digest: {capsule.get('planning', {}).get('plan_digest')}\n"
+            output += f"- Contract status: {capsule.get('contract', {}).get('status')}\n"
+            output += f"- Evidence tier: {capsule.get('research', {}).get('evidence_tier')}\n"
+            output += f"- Thinking mode: {capsule.get('thinking', {}).get('thinking_mode')}\n"
         if context and context.get("owned_files"):
             output += "## Target Files\n"
             for f in context["owned_files"]:
@@ -466,6 +578,13 @@ class WorkerAgent:
         output += "- Performance\n"
         output += "- Maintainability\n"
 
+        capsule = context.get("shared_memory_capsule") if context else None
+        if capsule and capsule.get("review"):
+            output += "\n## Shared Memory Capsule\n"
+            output += f"- Plan digest: {capsule.get('planning', {}).get('plan_digest')}\n"
+            output += f"- Contract status: {capsule.get('contract', {}).get('status')}\n"
+            output += f"- Review status: {capsule.get('review', {}).get('review_status')}\n"
+            output += f"- Thinking mode: {capsule.get('thinking', {}).get('thinking_mode')}\n"
         if context and context.get("owned_files"):
             output += "\n## Files to Review\n"
             for f in context["owned_files"]:
@@ -660,11 +779,21 @@ class TeamAgent:
             "artifacts": [],
         }
 
-        planning_summary = get_planning_summary(str(self.workdir))
+        shared_memory_capsule = build_shared_memory_capsule(
+            str(self.workdir),
+            self.task,
+            contract=self.contract,
+            frontier=self.frontier,
+        )
         self.execution_context = {
+            "shared_memory_capsule": shared_memory_capsule,
             "contract": self.contract,
             "frontier": self.frontier,
-            "planning_summary": planning_summary,
+            "planning_summary": shared_memory_capsule.get("planning", {}),
+            "research_summary": shared_memory_capsule.get("research", {}),
+            "thinking_summary": shared_memory_capsule.get("thinking", {}),
+            "review_summary": shared_memory_capsule.get("review", {}),
+            "runtime_profile_summary": shared_memory_capsule.get("runtime_profile", {}),
         }
 
         executed_ids: set = set()
@@ -816,6 +945,7 @@ class TeamAgent:
         return {
             "session_id": self.session_id,
             "task": self.task,
+            "shared_memory_capsule": self.execution_context.get("shared_memory_capsule", {}),
             "total_tasks": len(sanitized_tasks),
             "tasks": sanitized_tasks,
             "messages_count": len(self.messages),

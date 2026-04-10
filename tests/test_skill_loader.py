@@ -39,6 +39,42 @@ class TestSkillLoader(unittest.TestCase):
         skill = loader.load_skill("nonexistent")
         self.assertIsNone(skill)
 
+    def test_load_skill_supports_hyphenated_skill_dirs(self):
+        """OFFICE_HOURS should resolve to the hyphenated skill directory."""
+        office_hours_dir = self.skills_dir / "office-hours"
+        office_hours_dir.mkdir()
+        (office_hours_dir / "skill.md").write_text(
+            """---
+name: office-hours
+version: 1.0.0
+status: implemented
+description: Product consultation
+tags: [phase, product]
+---
+
+# OFFICE HOURS
+
+## Overview
+Consult before coding.
+
+## Entry Criteria
+Need clarification.
+
+## Core Process
+Ask the right questions.
+
+## Exit Criteria
+Need a confirmed direction.
+""",
+            encoding="utf-8",
+        )
+
+        loader = SkillLoader(str(self.skills_dir))
+        skill = loader.load_skill("OFFICE_HOURS")
+        self.assertIsNotNone(skill)
+        self.assertEqual(skill.phase_name, "OFFICE_HOURS")
+        self.assertEqual(skill.metadata.name, "office-hours")
+
     def test_parse_frontmatter_valid(self):
         """Test _parse_frontmatter with valid YAML frontmatter."""
         loader = SkillLoader(str(self.skills_dir))

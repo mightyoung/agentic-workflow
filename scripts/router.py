@@ -20,7 +20,7 @@ Usage:
 
 import re
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 # 路由关键词配置
 ROUTE_KEYWORDS = {
@@ -158,6 +158,164 @@ PHASE_SEQUENCES = {
     "XL": ["RESEARCH", "THINKING", "PLANNING", "EXECUTING", "REVIEWING", "REFINING", "COMPLETE"],
 }
 
+SKILL_RERANK_TOP_K = 5
+
+
+def _normalize_route_text(text: str) -> str:
+    return text.lower().strip()
+
+
+def _extract_route_terms(text: str) -> list[str]:
+    """Extract lightweight terms for retrieval/rerank."""
+    normalized = _normalize_route_text(text)
+    raw_terms = re.findall(r"[\u4e00-\u9fff]{2,}|[a-zA-Z0-9_]+", normalized)
+    terms: list[str] = []
+    for term in raw_terms:
+        cleaned = term.strip().lower()
+        if cleaned and cleaned not in terms:
+            terms.append(cleaned)
+    return terms
+
+
+def _collect_stage_candidates(text: str) -> list[dict[str, Any]]:
+    """Collect all stage candidates before reranking."""
+    text_lower = text.lower()
+    stage_priority = {
+        "DEBUGGING": 7,
+        "REVIEWING": 6,
+        "REFINING": 5,
+        "EXPLORING": 5,
+        "OFFICE_HOURS": 5,
+        "ANALYZING": 4,
+        "THINKING": 4,
+        "PLANNING": 3,
+        "RESEARCH": 2,
+        "EXECUTING": 1,
+        "SUBAGENT": 0,
+    }
+    candidates: list[dict[str, Any]] = []
+
+    for stage, keywords in ROUTE_KEYWORDS.items():
+        matched_keywords = [keyword for keyword in keywords if keyword in text_lower]
+        if not matched_keywords:
+            continue
+
+        relevance = min(max(len(keyword) for keyword in matched_keywords) / max(len(text_lower), 1), 0.9)
+        priority = stage_priority.get(stage, 0)
+        confidence = min(relevance + (priority * 0.1), 0.95)
+        candidates.append(
+            {
+                "stage": stage,
+                "base_confidence": confidence,
+                "priority": priority,
+                "matched_keywords": matched_keywords,
+                "match_count": len(matched_keywords),
+            }
+        )
+
+    candidates.sort(key=lambda item: (item["base_confidence"], item["priority"], item["match_count"]), reverse=True)
+    return candidates
+
+
+def _skill_body_text(skill: Any) -> str:
+    metadata = getattr(skill, "metadata", None)
+    parts: list[str] = []
+    if metadata:
+        parts.extend(
+            [
+                str(getattr(metadata, "name", "")),
+                str(getattr(metadata, "description", "")),
+                " ".join(getattr(metadata, "tags", []) or []),
+            ]
+        )
+    parts.extend(
+        [
+            str(getattr(skill, "overview", "")),
+            str(getattr(skill, "entry_criteria", "")),
+            str(getattr(skill, "core_process", "")),
+            str(getattr(skill, "phase_prompt_template", "")),
+            str(getattr(skill, "completion_template", "")),
+            str(getattr(skill, "raw_content", "")),
+        ]
+    )
+    return "\n".join(part for part in parts if part).lower()
+
+
+def _score_skill_candidate(text: str, candidate: dict[str, Any], skill: Any | None) -> dict[str, Any]:
+    """Score a stage candidate using the loaded skill body."""
+    base_confidence = float(candidate.get("base_confidence", 0.0))
+    if skill is None:
+        return {
+            **candidate,
+            "skill_name": None,
+            "skill_score": 0.0,
+            "score": base_confidence,
+            "score_reason": "no skill body available",
+        }
+
+    prompt_terms = _extract_route_terms(text)
+    skill_text = _skill_body_text(skill)
+    prompt_text = _normalize_route_text(text)
+    matched_terms = [term for term in prompt_terms if term and term in skill_text]
+    matched_keywords = [kw for kw in candidate.get("matched_keywords", []) if str(kw).lower() in skill_text]
+
+    term_score = len(matched_terms) / max(len(prompt_terms), 1)
+    keyword_score = len(matched_keywords) / max(len(candidate.get("matched_keywords", [])) or 1, 1)
+
+    metadata_bonus = 0.0
+    metadata = getattr(skill, "metadata", None)
+    if metadata:
+        skill_name = str(getattr(metadata, "name", "")).lower()
+        description = str(getattr(metadata, "description", "")).lower()
+        if candidate["stage"].lower() in skill_name:
+            metadata_bonus += 0.1
+        if candidate["stage"].lower() in description:
+            metadata_bonus += 0.05
+
+    exact_phrase_bonus = 0.0
+    for phrase in matched_keywords[:3]:
+        if phrase and phrase.lower() in prompt_text and phrase.lower() in skill_text:
+            exact_phrase_bonus += 0.05
+
+    skill_score = min(term_score * 0.55 + keyword_score * 0.25 + metadata_bonus + exact_phrase_bonus, 1.0)
+    combined_score = min(base_confidence * 0.45 + skill_score * 0.55, 0.98)
+
+    return {
+        **candidate,
+        "skill_name": getattr(getattr(skill, "metadata", None), "name", candidate["stage"].lower()),
+        "skill_score": round(skill_score, 3),
+        "score": round(combined_score, 3),
+        "score_reason": f"terms={matched_terms[:5]} keywords={matched_keywords[:5]}",
+    }
+
+
+def rerank_stage_candidates(
+    text: str,
+    candidates: list[dict[str, Any]],
+    skills_dir: str = "skills",
+    top_k: int = SKILL_RERANK_TOP_K,
+) -> list[dict[str, Any]]:
+    """Retrieve and rerank stage candidates using full skill bodies."""
+    if not candidates:
+        return []
+
+    try:
+        from skill_loader import SkillLoader
+    except Exception:
+        return [
+            _score_skill_candidate(text, candidate, None)
+            for candidate in candidates[:top_k]
+        ]
+
+    loader = SkillLoader(skills_dir)
+    reranked: list[dict[str, Any]] = []
+    for candidate in candidates[:top_k]:
+        skill = loader.load_skill(candidate["stage"])
+        reranked.append(_score_skill_candidate(text, candidate, skill))
+
+    reranked.sort(key=lambda item: (item["score"], item["base_confidence"], item["priority"], item["match_count"]), reverse=True)
+    return reranked
+
 
 def estimate_complexity(text: str) -> tuple[str, float]:
     """
@@ -232,39 +390,20 @@ def detect_stage(text: str) -> tuple[str, float]:
     Returns:
         (stage, confidence) where confidence is 0.0-1.0
     """
-    text_lower = text.lower()
-    stage_priority = {
-        "DEBUGGING": 7,
-        "REVIEWING": 6,
-        "REFINING": 5,
-        "EXPLORING": 5,
-        "OFFICE_HOURS": 5,
-        "ANALYZING": 4,
-        "THINKING": 4,
-        "PLANNING": 3,
-        "RESEARCH": 2,
-        "EXECUTING": 1,
-        "SUBAGENT": 0,
-    }
-    matches: list[tuple[float, int, str]] = []
-
-    for stage, keywords in ROUTE_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in text_lower:
-                # Confidence = keyword relevance (length ratio) * priority factor
-                relevance = min(len(keyword) / max(len(text_lower), 1), 0.9)
-                priority_factor = stage_priority.get(stage, 0) / 10.0
-                confidence = relevance + (priority_factor * 0.1)
-                matches.append((confidence, stage_priority.get(stage, 0), stage))
-
-    if matches:
-        matches.sort(reverse=True)
-        return matches[0][2], min(matches[0][0], 0.95)
+    candidates = _collect_stage_candidates(text)
+    if candidates:
+        best = candidates[0]
+        return best["stage"], float(best["base_confidence"])
 
     return "EXECUTING", 0.1  # Default: low confidence
 
 
-def route(text: str, use_semantic: bool = False) -> tuple[str, str, float]:
+def route(
+    text: str,
+    use_semantic: bool = False,
+    use_skill_rerank: bool = True,
+    skills_dir: str = "skills",
+) -> tuple[str, str, float]:
     """
     Execute routing decision.
 
@@ -304,18 +443,38 @@ def route(text: str, use_semantic: bool = False) -> tuple[str, str, float]:
             pass  # Fallback to keyword
 
     # Step 4: Detect stage (keyword-based)
-    stage, confidence = detect_stage(text)
-    return ("STAGE", stage, confidence)
+    candidates = _collect_stage_candidates(text)
+    if not candidates:
+        return ("STAGE", "EXECUTING", 0.1)
+
+    if use_skill_rerank and len(candidates) > 1:
+        reranked = rerank_stage_candidates(text, candidates, skills_dir=skills_dir)
+        if reranked:
+            best = reranked[0]
+            return ("STAGE", best["stage"], float(best["score"]))
+
+    best = candidates[0]
+    return ("STAGE", best["stage"], float(best["base_confidence"]))
 
 
-def route_with_complexity(text: str, use_semantic: bool = False) -> dict:
+def route_with_complexity(
+    text: str,
+    use_semantic: bool = False,
+    use_skill_rerank: bool = True,
+    skills_dir: str = "skills",
+) -> dict:
     """
     Extended routing that includes complexity estimation and phase sequence.
 
     Returns dict with:
         trigger_type, phase, confidence, complexity, complexity_confidence, phase_sequence
     """
-    trigger_type, phase, confidence = route(text, use_semantic)
+    trigger_type, phase, confidence = route(
+        text,
+        use_semantic=use_semantic,
+        use_skill_rerank=use_skill_rerank,
+        skills_dir=skills_dir,
+    )
     complexity, complexity_conf = estimate_complexity(text)
     phase_sequence = get_phase_sequence(complexity)
 

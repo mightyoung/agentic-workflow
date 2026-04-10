@@ -462,6 +462,42 @@ class TestTeamAgent(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.worker_type, WorkerType.RESEARCHER)
 
+    def test_team_agent_shared_memory_capsule_in_handoff(self):
+        """Team handoff should include a compact shared memory capsule."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workflow_engine.initialize_workflow("Build login flow", workdir=tmpdir)
+            team = TeamAgent(
+                tmpdir,
+                task="Build login flow",
+                contract={
+                    "status": "active",
+                    "goals": ["Ship login flow"],
+                    "acceptance_criteria": ["Login works"],
+                    "impact_files": ["src/app.py"],
+                    "dependencies": [],
+                    "rollback_note": "Revert src/app.py",
+                },
+                frontier={
+                    "executable_frontier": [{"title": "Implement login", "description": "Implement login"}],
+                },
+                use_real_agent=False,
+            )
+
+            team.add_task("Implement login", WorkerType.CODER)
+            team.run()
+            handoff = team.sanitize_for_handoff()
+
+            self.assertIn("shared_memory_capsule", handoff)
+            capsule = handoff["shared_memory_capsule"]
+            self.assertIn("runtime_profile", capsule)
+            self.assertIn("planning", capsule)
+            self.assertIn("research", capsule)
+            self.assertIn("thinking", capsule)
+            self.assertIn("review", capsule)
+            self.assertEqual(capsule["task"], "Build login flow")
+            self.assertIn("plan_source", capsule["planning"])
+            self.assertIn("evidence_status", capsule["research"])
+
 
 class TestCheckpointConfig(unittest.TestCase):
     """Test checkpoint configuration"""

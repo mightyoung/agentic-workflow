@@ -116,12 +116,24 @@ class SkillLoader:
         Returns:
             Skill object or None if not found
         """
-        skill_path = self.skills_dir / phase_name.lower() / self.SKILL_FILE
-        if not skill_path.exists():
+        normalized = phase_name.lower().replace(" ", "_")
+        candidate_dirs = [
+            normalized,
+            normalized.replace("_", "-"),
+            normalized.replace("-", "_"),
+        ]
+        skill_path = None
+        for candidate_dir in candidate_dirs:
+            candidate_path = self.skills_dir / candidate_dir / self.SKILL_FILE
+            if candidate_path.exists():
+                skill_path = candidate_path
+                break
+        if skill_path is None:
             return None
 
         content = skill_path.read_text(encoding="utf-8")
-        skill = self.parse_skill_md(phase_name.upper(), content)
+        canonical_phase_name = phase_name.upper().replace("-", "_").replace(" ", "_")
+        skill = self.parse_skill_md(canonical_phase_name, content)
         if skill:
             skill.path = skill_path.resolve()
         return skill
