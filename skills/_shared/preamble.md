@@ -27,6 +27,18 @@ python3 scripts/workflow_engine.py --op resume --workdir .
 | `.research/findings/findings_latest.md` | 最近一次 RESEARCH 输出的便捷别名 |
 | `.reviews/review/review_{session}.md` | REVIEWING 阶段输出 |
 | `.reviews/review/review_latest.md` | 最近一次 REVIEWING 输出的便捷别名 |
+| `progress.md` | 当前阶段的轻量进度与摘要投影 |
+| `.workflow_state.json` | 当前运行态、阶段、复杂度和激活档位 |
+
+### 结构化摘要
+
+当前运行时会在不同阶段持续复用这些摘要，而不是每次重算：
+
+- `planning_summary`：规划模式、计划摘要、worktree 建议
+- `research_summary`：研究来源、证据状态、是否降级
+- `thinking_summary`：方法、主要矛盾、阶段判断、局部攻坚点
+- `review_summary`：审查范围、Files Reviewed、是否通过门禁
+- `resume_summary`：恢复前情的统一摘要视图
 
 ### 进度格式
 

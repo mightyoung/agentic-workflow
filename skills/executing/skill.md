@@ -6,7 +6,7 @@ description: |
   执行阶段 - TDD 开发循环和代码实现
   当前版本对齐 .specs/<feature>/tasks.md、.contract.json、run_tracker.py 和 step_recorder.py
   Reflexion 强化: mid-task reflection checkpoint + AgentSys 子 agent schema 验证
-  v1.3: 新增 memory_hints/memory_query/memory_intent 复用
+  v1.3: 新增 memory_hints/memory_query/memory_intent 复用与阶段摘要回流
 tags: [phase, executing, tdd, reflexion, agentsys]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]
@@ -32,6 +32,10 @@ EXECUTING 阶段负责把计划转成实际变更。
 - 使用项目内状态文件
 - 使用 `run_tracker.py` / `step_recorder.py` 做轻量执行追踪
 - 先读取当前 phase 上下文里的 `memory_hints`、`memory_query` 和 `memory_intent`，避免重复踩已经被修复过的失败模式
+- 复用 `planning_summary` / `research_summary` / `thinking_summary` / `review_summary`
+  作为执行上下文，不再让 EXECUTING 自己重算上游已经完成的结论
+- `progress.md` / `context_for_next_phase` / checkpoint / resume 会携带同一套摘要，
+  便于执行中断后无损续接
 
 ## Entry Criteria
 

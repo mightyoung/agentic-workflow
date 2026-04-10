@@ -6,7 +6,7 @@ description: |
   调试阶段 - 系统化问题定位和修复
   5步调试法：闻味道 → 揪头发 → 照镜子 → 执行 → 复盘
   包含压力升级机制和7项检查清单
-  v1.2: 强化 context-aware 激活和 memory_hints 复用
+  v1.2: 强化 context-aware 激活、memory_hints 复用与失败升级事件记录
 tags: [phase, debugging, problem-solving]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]
@@ -27,6 +27,11 @@ DEBUGGING 阶段是 agentic-workflow 的系统化调试阶段，采用5步调试
 - 压力升级机制：2次失败切换方案，3次搜索+读源码，4次完整检查，5次+最小PoC
 - 7项检查清单：日志、边界、并发、资源、配置、依赖、环境
 - 铁律：穷尽一切、先做后问、主动出击
+- 当前实现会根据 `owned_files`、diff 规模和失败历史调整调试档位：
+  - 局部简单修复默认降到 `0% / 25%`
+  - 复杂或重复失败才升级到 `50%`
+  - `syntax_error`、`type_error`、`quality_gate_failed`、重复 `test_failure`
+    才会触发激活升级
 
 ## Entry Criteria
 
@@ -181,6 +186,14 @@ python3 -m ruff check . 2>&1 | head -20 || true
 - 自身代码审查结论
 - 排除的嫌疑点列表
 - 剩余可疑点优先级
+
+### Step 4.5: Simple-Failure Downgrade (新增)
+
+对于明显的局部小修复，优先轻量调试而不是默认重型调试：
+
+- 单文件、低依赖、错误信息明确 → 优先 `0% / 25%`
+- 多文件联动、失败历史重复、根因不清 → 升到 `50%`
+- 只有高价值疑难缺陷才进入完整上下文调试
 
 ---
 
