@@ -1,11 +1,12 @@
 ---
 name: planning
-version: 1.2.0
+version: 1.3.0
 status: implemented
 description: |
   规划阶段 - 任务拆分和计划制定
   正式规划链: .specs/<feature>/spec.md → plan.md → tasks.md → .contract.json
   task_plan.md 已降级为兼容投影层，供旧 runtime/frontier 读取
+  v1.3: 新增 planning_mode 字段标识规划模式
 tags: [phase, planning]
 requires:
   tools: [Bash, Read, Write, Grep, Glob]
@@ -29,6 +30,13 @@ PLANNING 阶段负责把任务拆成可以执行和验证的步骤。
 2. `.specs/<feature>/plan.md` - 技术方案和约束
 3. `.specs/<feature>/tasks.md` - 可执行任务清单
 4. `.contract.json` - 履约契约（goals/verification/owned_files）
+
+**规划模式** (planning_mode):
+| 模式 | 说明 | 触发条件 |
+|------|------|---------|
+| canonical | 使用完整spec-kit | tasks.md 存在 |
+| legacy | 使用 task_plan.md | task_plan.md 存在但无tasks.md |
+| lightweight | 轻量TodoWrite | XS/S 复杂度 |
 
 在开始拆分前，优先检查当前 phase 上下文里的 `memory_hints`、`memory_query` 和 `memory_intent`。
 如果长期记忆里已经有相似失败、重复约束或已验证的修复模式，规划时应先复用这些经验，再决定是否新增任务。

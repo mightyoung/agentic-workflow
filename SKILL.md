@@ -4,13 +4,21 @@ description: |
   智能体工作流：单入口设计，所有任务从 router 开始
   TRIGGER when: 开发、修复、规划、分析、审查、调研、实施
   DO NOT TRIGGER when: 简单闲聊
-version: 6.3.0
+version: 6.4.0
 tags: [core, workflow]
 requires:
   tools: [Read, Write, Bash, Grep, Glob]
 ---
 
-# Agentic Workflow v6.3
+# Agentic Workflow v6.4
+
+## 版本说明 (v6.4)
+
+- 新增: `planning_mode` 字段标识规划模式 (canonical/legacy/lightweight)
+- 新增: `thinking_methods` 和 `thinking_mode` 追踪思考方法论
+- 新增: `research_summary` 跨阶段持久化传播
+- 强化: analyze_gate 质量门禁
+- 强化: 进度输出包含 research evidence status
 
 ## 工作流触发与路由
 
@@ -53,6 +61,18 @@ requires:
 
 失败后，runtime 会把启用中的 skill 激活档位从当前档位逐步升级到 75%/100%，避免一开始就全量注入。
 
+### Runtime Profile 摘要字段
+
+进度输出和状态摘要包含以下关键字段：
+
+| 字段 | 说明 | 来源 |
+|------|------|------|
+| `planning_mode` | canonical/legacy/lightweight | 标识规划链的完整度 |
+| `thinking_methods` | 调查研究/矛盾分析/群众路线等 | 当前使用的思考方法 |
+| `thinking_mode` | investigation_first/mass_line_iteration/contradiction_analysis | 思考模式 |
+| `research_summary` | 研究结果摘要 | Research阶段的findings |
+| `evidence_status` | verified/degraded | research证据质量 |
+
 ## 进度输出 (必须执行)
 
 每进入新阶段时输出：
@@ -64,6 +84,12 @@ requires:
 ```
 [N/M PHASE ✓] 一句话总结产出
 ```
+
+进度内容渲染包含：
+- 当前阶段和状态
+- Skill Policy (policy/use_skill/activation_level/profile_source)
+- Planning Summary (plan_source/planning_mode/plan_digest/worktree_recommended)
+- Research Summary (research_found/evidence_status/sources_count/search_engine)
 
 ## 阶段上下文传递 (必须执行)
 

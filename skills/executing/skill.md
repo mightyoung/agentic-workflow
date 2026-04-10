@@ -1,11 +1,12 @@
 ---
 name: executing
-version: 1.2.0
+version: 1.3.0
 status: implemented
 description: |
   执行阶段 - TDD 开发循环和代码实现
   当前版本对齐 .specs/<feature>/tasks.md、.contract.json、run_tracker.py 和 step_recorder.py
   Reflexion 强化: mid-task reflection checkpoint + AgentSys 子 agent schema 验证
+  v1.3: 新增 memory_hints/memory_query/memory_intent 复用
 tags: [phase, executing, tdd, reflexion, agentsys]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]

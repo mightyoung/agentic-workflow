@@ -1,10 +1,11 @@
 ---
 name: complete
-version: 1.1.0
+version: 1.2.0
 status: implemented
 description: |
   完成阶段 - 收尾工作、自反思和状态更新
   当前版本对齐 .workflow_state.json 状态管理
+  v1.2: 新增可选 learn 技能触发建议
 tags: [phase, complete]
 requires:
   tools: [Bash, Read, Write, Grep, Glob]

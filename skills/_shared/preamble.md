@@ -1,7 +1,7 @@
 ---
 name: preamble
-version: 3.0.0
-description: 阶段启动时的最小共享约定
+version: 3.1.0
+description: 阶段启动时的最小共享约定 (v3.1: 更新状态管理约定)
 ---
 
 ## Preamble

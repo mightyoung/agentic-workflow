@@ -1,11 +1,12 @@
 ---
 name: debugging
-version: 1.1.0
+version: 1.2.0
 status: implemented
 description: |
   调试阶段 - 系统化问题定位和修复
   5步调试法：闻味道 → 揪头发 → 照镜子 → 执行 → 复盘
   包含压力升级机制和7项检查清单
+  v1.2: 强化 context-aware 激活和 memory_hints 复用
 tags: [phase, debugging, problem-solving]
 requires:
   tools: [Bash, Read, Write, Grep, Glob, Edit]

@@ -27,7 +27,8 @@ class TestThinkingToTEnhancement(unittest.TestCase):
         cls.content = _read_skill("thinking")
 
     def test_version_bumped(self):
-        self.assertIn("version: 1.3.0", self.content)
+        # thinking must be at least v1.3.0 (ToT enhancement landed)
+        self.assertRegex(self.content, r"version: 1\.[3-9]\.\d+")
 
     def test_has_quantitative_scoring_table(self):
         self.assertIn("量化评分标准", self.content)
@@ -75,7 +76,8 @@ class TestExecutingMidTaskReflection(unittest.TestCase):
         cls.content = _read_skill("executing")
 
     def test_version_bumped(self):
-        self.assertIn("version: 1.2.0", self.content)
+        # executing must be at least v1.2.0 (Reflexion + AgentSys landed)
+        self.assertRegex(self.content, r"version: 1\.[2-9]\.\d+")
 
     def test_has_mid_task_reflection_section(self):
         self.assertIn("Mid-Task Reflection Checkpoint", self.content)

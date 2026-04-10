@@ -1,10 +1,11 @@
 ---
 name: reviewing
-version: 1.1.0
+version: 1.2.0
 status: implemented
 description: |
   审查阶段 - 代码质量、安全和性能审查
   当前版本对齐 .specs/<feature>/tasks.md、.contract.json 与真实审查输出
+  v1.2: 强化 two-stage review 和 memory_hints 复用
 tags: [phase, reviewing]
 requires:
   tools: [Bash, Read, Write, Grep, Glob]
