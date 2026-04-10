@@ -25,6 +25,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LEDGER="$SCRIPT_DIR/results.tsv"
+LEDGER_V2="$SCRIPT_DIR/results_v2.jsonl"
 HELPER="$SCRIPT_DIR/_record_helper.py"
 
 usage() {
@@ -123,22 +124,25 @@ if [[ -z "$RUN_ID" ]]; then
 fi
 
 # Use Python helper for locked TSV append (cross-platform fcntl)
-python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$PROPOSAL_DECISION" "$NOTES" << 'PYEOF'
+python3 - "$LEDGER" "$LEDGER_V2" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$PROPOSAL_DECISION" "$NOTES" << 'PYEOF'
 import sys
 import fcntl
 import os
+import json
+from datetime import datetime, timezone
 
 ledger_path = sys.argv[1]
-run_id = sys.argv[2]
-hypothesis = sys.argv[3]
-files = sys.argv[4]
-checks = sys.argv[5]
-status = sys.argv[6]
-benchmark_evidence = sys.argv[7]
-skill_proposal = sys.argv[8]
-proposal_verification = sys.argv[9]
-proposal_decision = sys.argv[10]
-notes = sys.argv[11]
+ledger_v2_path = sys.argv[2]
+run_id = sys.argv[3]
+hypothesis = sys.argv[4]
+files = sys.argv[5]
+checks = sys.argv[6]
+status = sys.argv[7]
+benchmark_evidence = sys.argv[8]
+skill_proposal = sys.argv[9]
+proposal_verification = sys.argv[10]
+proposal_decision = sys.argv[11]
+notes = sys.argv[12]
 
 # TSV-safe cleaning: replace tabs and newlines with spaces
 def tsv_clean(value):
@@ -163,12 +167,31 @@ if proposal_decision:
     notes = f"proposal_decision={proposal_decision}" + (f" | {notes}" if notes else "")
 
 lock_path = ledger_path + '.lock'
+lock_path_v2 = ledger_v2_path + '.lock'
 
 # Ensure ledger exists with proper header
 header_line = "run_id\thypothesis\tfiles_changed\tchecks_passed\tstatus\tnotes"
 if not os.path.exists(ledger_path):
     with open(ledger_path, 'w') as f:
         f.write(header_line + '\n')
+if not os.path.exists(ledger_v2_path):
+    with open(ledger_v2_path, 'w') as f:
+        f.write("")
+
+record = {
+    "schema_version": 2,
+    "recorded_at": datetime.now(timezone.utc).isoformat(),
+    "run_id": run_id,
+    "hypothesis": hypothesis,
+    "files_changed": files,
+    "checks_passed": checks,
+    "status": status,
+    "notes": notes,
+    "benchmark_evidence": benchmark_evidence or None,
+    "skill_proposal": skill_proposal or None,
+    "proposal_verification": proposal_verification or None,
+    "proposal_decision": proposal_decision or None,
+}
 
 # Lock and append
 with open(lock_path, 'w') as lock_f:
@@ -177,6 +200,14 @@ with open(lock_path, 'w') as lock_f:
         with open(ledger_path, 'a') as f:
             row = '\t'.join([run_id, hypothesis, files, checks, status, notes])
             f.write(row + '\n')
+        with open(lock_path_v2, 'w') as lock_f_v2:
+            fcntl.flock(lock_f_v2.fileno(), fcntl.LOCK_EX)
+            try:
+                with open(ledger_v2_path, 'a') as f_v2:
+                    f_v2.write(json.dumps(record, ensure_ascii=False) + '\n')
+            finally:
+                fcntl.flock(lock_f_v2.fileno(), fcntl.LOCK_UN)
+                os.remove(lock_path_v2)
     finally:
         fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
         os.remove(lock_path)

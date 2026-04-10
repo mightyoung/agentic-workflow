@@ -291,6 +291,11 @@ class TestRecordResultLedger:
         assert "proposal_decision=approve" in ledger_text
         assert "benchmark_evidence=" in ledger_text
 
+        ledger_v2 = local_dir / "results_v2.jsonl"
+        assert ledger_v2.exists()
+        ledger_v2_text = ledger_v2.read_text(encoding="utf-8")
+        assert '"proposal_decision": "approve"' in ledger_v2_text
+
     def test_ledger_handles_special_characters(self, tmp_path):
         """TSV cleaner properly escapes tabs and newlines"""
         ledger = tmp_path / "results.tsv"

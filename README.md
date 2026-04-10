@@ -84,6 +84,7 @@ Key runtime behavior:
 - Human-readable sidecar: `SESSION-STATE.md` + `progress.md`.
 - Recovery chain: trajectory + checkpoint/handoff + `resume_summary`.
 - Artifact tracking: `.artifacts.json` (state, plan, findings, review, summaries).
+- Validation now checks both state schema and state/sidecar alignment.
 
 ## Core Mechanisms
 

@@ -14,8 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from memory_ops import get_thinking_summary as get_session_thinking_summary
+from memory_ops import get_planning_summary as get_session_planning_summary
 from memory_ops import get_research_summary as get_session_research_summary
+from memory_ops import get_review_summary as get_session_review_summary
+from memory_ops import get_runtime_profile as get_session_runtime_profile
+from memory_ops import get_thinking_summary as get_session_thinking_summary
 from safe_io import safe_write_json_locked
 from state_schema import (
     Decision,
@@ -292,6 +295,9 @@ def validate_workflow_state(workdir: str = ".") -> tuple[bool, list[str]]:
 
     data = state.to_dict()
     errors = validate_state(data)
+    aligned, sidecar_errors = compare_state_sidecar_consistency(workdir, state)
+    if not aligned:
+        errors.extend(sidecar_errors)
 
     return len(errors) == 0, errors
 
@@ -330,6 +336,11 @@ def get_research_summary(workdir: str, state: WorkflowState | None = None) -> di
     if _is_meaningful_research_summary(summary):
         return summary
 
+    return _build_research_summary_from_state(workdir, state)
+
+
+def _build_research_summary_from_state(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Build the canonical research summary without consulting the sidecar."""
     research_artifacts = get_artifacts(workdir, ArtifactType.FINDINGS, phase="RESEARCH")
     latest_artifact = research_artifacts[-1] if research_artifacts else None
     metadata = latest_artifact.get("metadata", {}) if isinstance(latest_artifact, dict) else {}
@@ -508,6 +519,11 @@ def get_thinking_summary(workdir: str, state: WorkflowState | None = None) -> di
                 summary["thinking_methods"] = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
         return summary
 
+    return _build_thinking_summary_from_state(workdir, state)
+
+
+def _build_thinking_summary_from_state(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Build the canonical THINKING summary without consulting the sidecar."""
     if state is None:
         state = load_state(workdir)
     if state is None:
@@ -718,6 +734,117 @@ def _build_review_state_fallback(state: WorkflowState | None) -> dict[str, Any]:
         "degraded_mode": True,
         "files_reviewed": reviewed_files,
     }
+
+
+def _compare_field(errors: list[str], section: str, field: str, expected: Any, actual: Any) -> None:
+    def _normalize(value: Any) -> Any:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized.lower() in {"", "none", "null", "unset", "(未设置)"}:
+                return None
+            return normalized
+        return value
+
+    if _normalize(expected) != _normalize(actual):
+        errors.append(f"{section}.{field}: state={expected!r} sidecar={actual!r}")
+
+
+def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState | None = None) -> tuple[bool, list[str]]:
+    """Compare canonical state summaries against SESSION-STATE sidecar summaries."""
+    if state is None:
+        state = load_state(workdir)
+    if state is None:
+        return False, ["state file does not exist"]
+
+    session_path = Path(workdir) / "SESSION-STATE.md"
+    sidecar_runtime = get_session_runtime_profile(str(session_path))
+    sidecar_planning = get_session_planning_summary(str(session_path))
+    sidecar_research = get_session_research_summary(str(session_path))
+    sidecar_thinking = get_session_thinking_summary(str(session_path))
+    sidecar_review = get_session_review_summary(str(session_path))
+
+    state_runtime = get_runtime_profile_summary(state)
+    state_planning = _build_planning_summary(workdir, state)
+    state_research = _build_research_summary_from_state(workdir, state)
+    state_thinking = _build_thinking_summary_from_state(workdir, state)
+    state_review = get_review_summary(workdir, state)
+
+    errors: list[str] = []
+    current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
+
+    runtime_fields = [
+        "skill_policy",
+        "use_skill",
+        "skill_activation_level",
+        "tokens_expected",
+        "profile_source",
+        "complexity",
+        "complexity_confidence",
+    ]
+    planning_fields = [
+        "plan_source",
+        "planning_mode",
+        "plan_task_count",
+        "completed_task_count",
+        "in_progress_task_count",
+        "blocked_task_count",
+        "ready_task_count",
+        "parallel_candidate_group_count",
+        "parallel_ready_task_count",
+        "conflict_group_count",
+        "worktree_recommended",
+        "worktree_reason",
+        "plan_digest",
+    ]
+    research_fields = [
+        "research_found",
+        "research_source",
+        "research_path",
+        "key_terms",
+        "search_engine",
+        "sources_count",
+        "used_real_search",
+        "degraded_mode",
+        "degraded_reason",
+        "search_error",
+        "evidence_status",
+    ]
+    thinking_fields = [
+        "workflow_label",
+        "workflow",
+        "thinking_mode",
+        "thinking_methods",
+        "major_contradiction",
+        "stage_judgment",
+        "local_attack_point",
+        "recommendation",
+        "memory_hints_count",
+    ]
+    review_fields = [
+        "review_found",
+        "review_source",
+        "review_status",
+        "stage_1_status",
+        "stage_2_status",
+        "risk_level",
+        "verdict",
+        "degraded_mode",
+        "files_reviewed",
+    ]
+
+    for field in runtime_fields:
+        _compare_field(errors, "runtime_profile", field, state_runtime.get(field), sidecar_runtime.get(field))
+    for field in planning_fields:
+        _compare_field(errors, "planning_summary", field, state_planning.get(field), sidecar_planning.get(field))
+    if not (current_phase in {"IDLE", "PLANNING"} and not _is_meaningful_research_summary(state_research)):
+        for field in research_fields:
+            _compare_field(errors, "research_summary", field, state_research.get(field), sidecar_research.get(field))
+    for field in thinking_fields:
+        _compare_field(errors, "thinking_summary", field, state_thinking.get(field), sidecar_thinking.get(field))
+    for field in review_fields:
+        _compare_field(errors, "review_summary", field, state_review.get(field), sidecar_review.get(field))
+
+    return len(errors) == 0, errors
 
 
 # ============================================================================
@@ -1049,7 +1176,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Unified State Management")
     parser.add_argument("--workdir", default=".", help="workspace directory")
-    parser.add_argument("--op", choices=["init", "load", "save", "validate", "snapshot", "list-trajectories"], required=True)
+    parser.add_argument("--op", choices=["init", "load", "save", "validate", "compare-sidecar", "snapshot", "list-trajectories"], required=True)
     parser.add_argument("--prompt", help="user prompt for init")
     parser.add_argument("--task-id", help="optional task id for init")
     parser.add_argument("--trigger-type", default="FULL_WORKFLOW", help="trigger type")
@@ -1085,6 +1212,11 @@ def main():
     if args.op == "validate":
         is_valid, errors = validate_workflow_state(args.workdir)
         print(json.dumps({"valid": is_valid, "errors": errors}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.op == "compare-sidecar":
+        is_aligned, errors = compare_state_sidecar_consistency(args.workdir)
+        print(json.dumps({"aligned": is_aligned, "errors": errors}, ensure_ascii=False, indent=2))
         return 0
 
     if args.op == "snapshot":

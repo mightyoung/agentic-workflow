@@ -1515,13 +1515,24 @@ def initialize_workflow(
         skill_activation_level=runtime_profile["skill_activation_level"],
         tokens_expected=runtime_profile["tokens_expected"],
         profile_source=runtime_profile["profile_source"],
+        complexity=runtime_profile["complexity"],
+        complexity_confidence=runtime_profile["complexity_confidence"],
     )
     planning_summary = get_planning_summary(str(workdir), state)
     research_summary = get_research_summary(str(workdir), state)
-    thinking_summary: dict[str, Any] | None = None
+    thinking_summary = get_thinking_summary(workdir, state)
+    review_summary = get_review_summary(workdir, state)
     memory_ops.update_planning_summary(
         str(session_path),
         planning_summary,
+    )
+    memory_ops.update_review_summary(
+        str(session_path),
+        review_summary,
+    )
+    memory_ops.update_thinking_summary(
+        str(session_path),
+        thinking_summary,
     )
     progress_file = workdir_path / "progress.md"
     progress_content = _render_progress_content(
@@ -1578,6 +1589,21 @@ def initialize_workflow(
         if contract_path is not None:
             register_artifact(workdir, "contract", str(contract_path), current_phase, "system",
                             metadata={"deliverable": "contract", "phase": current_phase})
+
+        planning_summary = get_planning_summary(str(workdir), state)
+        memory_ops.update_planning_summary(
+            str(session_path),
+            planning_summary,
+        )
+        progress_content = _render_progress_content(
+            current_phase,
+            runtime_profile,
+            planning_summary,
+            state,
+            research_summary,
+            thinking_summary if current_phase == "THINKING" else None,
+        )
+        safe_write_text_locked(progress_file, progress_content)
 
     # Register session state artifact
     register_artifact(workdir, ArtifactType.SESSION, str(session_path), current_phase, "system")
@@ -1765,6 +1791,8 @@ def advance_workflow(
             skill_activation_level=int(runtime_profile.get("skill_activation_level", 0)),
             tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
             profile_source=str(runtime_profile.get("profile_source", "router")),
+            complexity=str(runtime_profile.get("complexity", state.metadata.get("complexity", "M")) if state.metadata else "M"),
+            complexity_confidence=runtime_profile.get("complexity_confidence"),
         )
     memory_ops.update_planning_summary(
         str(session_path),
@@ -2991,6 +3019,8 @@ def handle_workflow_failure(
                 skill_activation_level=escalated_activation_level,
                 tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
                 profile_source=str(runtime_profile.get("profile_source", "router")),
+                complexity=str(runtime_profile.get("complexity", state.metadata.get("complexity", "M")) if state.metadata else "M"),
+                complexity_confidence=runtime_profile.get("complexity_confidence"),
             )
             if state.session_id in _active_loggers:
                 logger = _active_loggers[state.session_id]
@@ -3144,6 +3174,8 @@ def handle_workflow_failure(
                     skill_activation_level=debug_activation_level,
                     tokens_expected=int(runtime_profile.get("tokens_expected", 0)),
                     profile_source=str(runtime_profile.get("profile_source", "router")),
+                    complexity=str(runtime_profile.get("complexity", state.metadata.get("complexity", "M")) if state.metadata else "M"),
+                    complexity_confidence=runtime_profile.get("complexity_confidence"),
                 )
 
             state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")

@@ -28,6 +28,18 @@ from safe_io import safe_append_jsonl, safe_write_text_locked
 DEFAULT_SESSION_STATE = "SESSION-STATE.md"
 
 
+def _display_value(value: Any, default: str = "(未设置)") -> Any:
+    """Normalize placeholder-like values for markdown output."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        normalized = value.strip()
+        if normalized.lower() in {"", "none", "null", "unset"}:
+            return default
+        return normalized
+    return value
+
+
 def _validate_path(path: str) -> bool:
     """验证路径安全（防止路径遍历攻击）"""
     try:
@@ -72,6 +84,8 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **skill_activation_level**: (未设置)
 - **tokens_expected**: (未设置)
 - **profile_source**: (未设置)
+- **complexity**: (未设置)
+- **complexity_confidence**: (未设置)
 
 ## 计划摘要
 - **plan_source**: (未设置)
@@ -120,6 +134,7 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **use_skill**: (未设置)
 - **skill_activation_level**: (未设置)
 - **complexity**: (未设置)
+- **complexity_confidence**: (未设置)
 - **planning_planning_mode**: (未设置)
 - **planning_plan_source**: (未设置)
 - **planning_plan_task_count**: 0
@@ -357,6 +372,8 @@ def update_runtime_profile(
     skill_activation_level: int,
     tokens_expected: int,
     profile_source: str,
+    complexity: str | None = None,
+    complexity_confidence: float | None = None,
 ) -> bool:
     """更新运行时画像到 SESSION-STATE.md。"""
     if not ensure_session_state_exists(path) and not os.path.exists(path):
@@ -372,9 +389,11 @@ def update_runtime_profile(
         f"- **skill_activation_level**: {skill_activation_level}\n"
         f"- **tokens_expected**: {tokens_expected}\n"
         f"- **profile_source**: {profile_source}\n"
+        f"- **complexity**: {complexity if complexity is not None else '(未设置)'}\n"
+        f"- **complexity_confidence**: {complexity_confidence if complexity_confidence is not None else '(未设置)'}\n"
     )
 
-    pattern = r"## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?"
+    pattern = r"## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*complexity_confidence\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -486,6 +505,63 @@ def get_planning_summary(path: str) -> dict[str, Any]:
         "worktree_recommended": _as_bool(groups[10]),
         "worktree_reason": str(groups[11]).strip(),
         "plan_digest": str(groups[12]).strip(),
+    }
+
+
+def get_runtime_profile(path: str) -> dict[str, Any]:
+    """从 SESSION-STATE.md 读取运行时画像。"""
+    if not os.path.exists(path):
+        return {}
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = (
+        r"## Skill 策略\n"
+        r"(?:- \*\*skill_policy\*\*: (.*)\n"
+        r"- \*\*use_skill\*\*: (.*)\n"
+        r"- \*\*skill_activation_level\*\*: (.*)\n"
+        r"- \*\*tokens_expected\*\*: (.*)\n"
+        r"- \*\*profile_source\*\*: (.*)\n"
+        r"- \*\*complexity\*\*: (.*)\n"
+        r"- \*\*complexity_confidence\*\*: (.*)\n)?"
+    )
+    match = re.search(pattern, content)
+    if not match:
+        return {}
+
+    groups = match.groups()
+    if not groups or len(groups) < 7 or groups[0] is None:
+        return {}
+
+    def _as_int(value: str | None) -> int | None:
+        try:
+            return int(str(value).strip())
+        except Exception:
+            return None
+
+    def _as_bool(value: str | None) -> bool | None:
+        lowered = str(value).strip().lower()
+        if lowered in {"true", "1", "yes", "y"}:
+            return True
+        if lowered in {"false", "0", "no", "n"}:
+            return False
+        return None
+
+    def _as_float(value: str | None) -> float | None:
+        try:
+            return float(str(value).strip())
+        except Exception:
+            return None
+
+    return {
+        "skill_policy": str(groups[0]).strip(),
+        "use_skill": _as_bool(groups[1]),
+        "skill_activation_level": _as_int(groups[2]),
+        "tokens_expected": _as_int(groups[3]),
+        "profile_source": str(groups[4]).strip(),
+        "complexity": str(groups[5]).strip(),
+        "complexity_confidence": _as_float(groups[6]),
     }
 
 
@@ -724,6 +800,7 @@ def update_resume_summary(
         f"- **use_skill**: {runtime_profile.get('use_skill', '(未设置)')}\n"
         f"- **skill_activation_level**: {runtime_profile.get('skill_activation_level', '(未设置)')}\n"
         f"- **complexity**: {runtime_profile.get('complexity', '(未设置)')}\n"
+        f"- **complexity_confidence**: {runtime_profile.get('complexity_confidence', '(未设置)')}\n"
         f"- **research_found**: {research_summary.get('research_found', False)}\n"
         f"- **research_source**: {research_summary.get('research_source', '(未设置)')}\n"
         f"- **research_path**: {research_summary.get('research_path', '(未设置)')}\n"
@@ -746,8 +823,8 @@ def update_resume_summary(
         f"- **review_status**: {review_summary.get('review_status', '(未设置)')}\n"
         f"- **stage_1_status**: {review_summary.get('stage_1_status', '(未设置)')}\n"
         f"- **stage_2_status**: {review_summary.get('stage_2_status', '(未设置)')}\n"
-        f"- **risk_level**: {review_summary.get('risk_level', '(未设置)')}\n"
-        f"- **verdict**: {review_summary.get('verdict', '(未设置)')}\n"
+        f"- **risk_level**: {_display_value(review_summary.get('risk_level'))}\n"
+        f"- **verdict**: {_display_value(review_summary.get('verdict'))}\n"
         f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
         f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
         f"- **thinking_workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
@@ -795,8 +872,8 @@ def update_review_summary(
         f"- **review_status**: {review_summary.get('review_status', '(未设置)')}\n"
         f"- **stage_1_status**: {review_summary.get('stage_1_status', '(未设置)')}\n"
         f"- **stage_2_status**: {review_summary.get('stage_2_status', '(未设置)')}\n"
-        f"- **risk_level**: {review_summary.get('risk_level', '(未设置)')}\n"
-        f"- **verdict**: {review_summary.get('verdict', '(未设置)')}\n"
+        f"- **risk_level**: {_display_value(review_summary.get('risk_level'))}\n"
+        f"- **verdict**: {_display_value(review_summary.get('verdict'))}\n"
         f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
         f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
     )

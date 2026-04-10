@@ -177,6 +177,7 @@ Every run must record:
 - skill evolution proposal reference when benchmark evidence produces one
 - proposal verification reference and decision (`approve|revise|reject`)
 - default block policy: `reject` and `revise` both block run initialization unless explicitly overridden
+- structured ledger output in `results_v2.jsonl` for machine-readable audit
 - keep or discard decision
 
 ## Required Baseline Before Any Mutation

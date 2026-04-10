@@ -29,6 +29,7 @@ The runner will:
 - generate a reviewable skill proposal artifact under `knowledge/skill_proposals/`
 - verify the proposal via `scripts/proposal_verifier.py`
 - record both proposal and verification artifact paths in the ledger
+- append a structured JSONL record to `results_v2.jsonl` alongside the TSV ledger
 
 Default gate policy:
 - `reject`: abort run initialization and record `discard`

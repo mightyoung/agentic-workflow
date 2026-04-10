@@ -79,6 +79,8 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(state.phase.get("current"), "PLANNING")
 
         snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        is_valid, errors = unified_state.validate_workflow_state(self.temp_dir)
+        self.assertTrue(is_valid, errors)
         self.assertEqual(snapshot["planning_summary"]["plan_source"], "tasks.md")
         self.assertGreaterEqual(snapshot["planning_summary"]["plan_task_count"], 1)
         self.assertIn("plan_digest", snapshot["planning_summary"])
@@ -333,6 +335,31 @@ class TestWorkflowEngine(unittest.TestCase):
         is_valid, errors = unified_state.validate_workflow_state(self.temp_dir)
         self.assertFalse(is_valid)
         self.assertTrue(any("NOT_A_PHASE" in e for e in errors))
+
+    def test_validate_runtime_state_detects_sidecar_drift(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        session_path = Path(self.temp_dir) / "SESSION-STATE.md"
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+
+        # Introduce a sidecar drift without touching canonical state.
+        from memory_ops import update_runtime_profile  # noqa: E402
+
+        update_runtime_profile(
+            str(session_path),
+            skill_policy="conditional_enable",
+            use_skill=True,
+            skill_activation_level=25,
+            tokens_expected=512,
+            profile_source="manual-drift",
+            complexity="S",
+            complexity_confidence=0.1,
+        )
+
+        is_valid, errors = unified_state.validate_workflow_state(self.temp_dir)
+        self.assertFalse(is_valid)
+        self.assertTrue(any("runtime_profile" in e for e in errors))
+        self.assertTrue(any("skill_policy" in e for e in errors))
 
     def test_parse_task_plan_and_recommend_next_tasks(self):
         plan_path = Path(self.temp_dir) / "task_plan.md"
