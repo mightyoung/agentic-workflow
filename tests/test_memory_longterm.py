@@ -290,6 +290,24 @@ class TestMemoryWriteGate:
         assert gate["should_persist"] is True
         assert gate["reason"].startswith("summary_")
 
+    def test_pending_review_summary_is_rejected(self):
+        gate = memory_write_gate(
+            "Task: review summary Trigger: review_status=pending Mistake: missing files Fix: inspect files Signal: files_reviewed=0",
+            kind="summary",
+            evidence_status="pending",
+        )
+        assert gate["should_persist"] is False
+        assert gate["reason"] == "insufficient_signal"
+
+    def test_degraded_research_summary_can_be_accepted(self):
+        gate = memory_write_gate(
+            "Task: research summary Trigger: evidence_status=degraded Mistake: weak source Fix: reuse verified findings Signal: benchmark_evidence=tests/bench/foo.json",
+            kind="summary",
+            evidence_status="degraded",
+        )
+        assert gate["should_persist"] is True
+        assert gate["reason"] == "summary_degraded"
+
 
 class TestRecordSummaryExperience:
     def test_summary_experience_recorded_for_verified_review(self, tmp_path):

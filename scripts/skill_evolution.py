@@ -48,6 +48,7 @@ def load_benchmark(reference: str) -> tuple[dict[str, Any], str, bool]:
 
 
 def build_proposal(benchmark: dict[str, Any], source_ref: str, evidence_available: bool) -> dict[str, Any]:
+    experiment_info = benchmark.get("experiment_info", {}) if isinstance(benchmark, dict) else {}
     overall = benchmark.get("overall_summary", {}) if isinstance(benchmark, dict) else {}
     module_policies = benchmark.get("module_policies", []) if isinstance(benchmark, dict) else []
     interpretation_notes = benchmark.get("interpretation_notes", []) if isinstance(benchmark, dict) else []
@@ -120,6 +121,7 @@ def build_proposal(benchmark: dict[str, Any], source_ref: str, evidence_availabl
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_reference": source_ref,
         "evidence_available": evidence_available,
+        "benchmark_version": experiment_info.get("benchmark_version", "unknown"),
         "benchmark_summary": {
             "overall_improvement_pct": overall.get("overall_improvement_pct"),
             "avg_quality_improvement_pct": overall.get("avg_quality_improvement_pct"),
@@ -146,6 +148,7 @@ def render_markdown(proposal: dict[str, Any]) -> str:
     lines.append(f"- Generated: {proposal['generated_at']}")
     lines.append(f"- Source: {proposal['source_reference']}")
     lines.append(f"- Evidence Available: {proposal['evidence_available']}")
+    lines.append(f"- Benchmark Version: {proposal.get('benchmark_version', 'unknown')}")
     lines.append("")
     lines.append("## Benchmark Summary")
     summary = proposal.get("benchmark_summary", {})

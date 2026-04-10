@@ -21,6 +21,9 @@ def _sample_benchmark() -> dict:
             "completion_rate_without_skill": 0.0,
             "task_count": 13,
         },
+        "experiment_info": {
+            "benchmark_version": "6.3",
+        },
         "interpretation_notes": [
             "time deltas within +/-1% are noise",
             "50% baseline remains default",
@@ -39,6 +42,7 @@ def test_build_proposal_contains_core_actions():
     assert "DEBUGGING" in actions
     assert actions["EXECUTING"]["action"].startswith("retain_default_enable")
     assert proposal["benchmark_summary"]["task_count"] == 13
+    assert proposal["benchmark_version"] == "6.3"
 
 
 def test_write_proposal_artifacts(tmp_path):
@@ -51,7 +55,15 @@ def test_write_proposal_artifacts(tmp_path):
 
     markdown = artifact.markdown_path.read_text(encoding="utf-8")
     assert "Skill Evolution Proposal" in markdown
+    assert "Benchmark Version: 6.3" in markdown
     assert "EXECUTING" in markdown
     payload = json.loads(artifact.json_path.read_text(encoding="utf-8"))
     assert payload["evidence_available"] is True
     assert payload["benchmark_summary"]["overall_improvement_pct"] == 62.9
+
+
+def test_write_proposal_artifacts_reference_only(tmp_path):
+    artifact = write_proposal_artifacts("missing-benchmark.json", output_dir=tmp_path / "proposals")
+    payload = json.loads(artifact.json_path.read_text(encoding="utf-8"))
+    assert payload["evidence_available"] is False
+    assert payload["benchmark_version"] == "unknown"

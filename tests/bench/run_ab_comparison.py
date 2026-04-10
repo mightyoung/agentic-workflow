@@ -31,6 +31,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
+BENCHMARK_VERSION = "6.3"
+
+
 class TaskDifficulty(Enum):
     """任务难度级别"""
     EASY = "easy"
@@ -2137,6 +2140,7 @@ All criteria met.
             "experiment_info": {
                 "date": datetime.now().isoformat(),
                 "total_tasks": total,
+                "benchmark_version": BENCHMARK_VERSION,
                 "skill_version": "6.3",
                 "evaluation_dims": ["efficiency", "quality", "tokens", "completion"],
                 "scope": "exploratory_ab_benchmark",
@@ -2221,6 +2225,7 @@ All criteria met.
 > 不应直接外推为真实生产负载下的最终结论。
 
 **实验日期**: {experiment_info['date']}
+**Benchmark 版本**: {experiment_info.get('benchmark_version', 'unset')}
 **Skill 版本**: {experiment_info['skill_version']}
 **任务总数**: {experiment_info['total_tasks']}
 **评估维度**: {', '.join(experiment_info['evaluation_dims'])}
