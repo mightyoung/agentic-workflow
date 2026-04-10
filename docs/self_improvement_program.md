@@ -176,6 +176,7 @@ Every run must record:
 - benchmark evidence reference when the run is motivated by benchmark data
 - skill evolution proposal reference when benchmark evidence produces one
 - proposal verification reference and decision (`approve|revise|reject`)
+- default block policy: `reject` and `revise` both block run initialization unless explicitly overridden
 - keep or discard decision
 
 ## Required Baseline Before Any Mutation

@@ -21,6 +21,10 @@ def _proposal(*, evidence_available: bool = True, benchmark_version: str = "6.3"
         "benchmark_version": benchmark_version,
         "benchmark_summary": {
             "task_count": 13,
+            "completion_rate_with_skill": 100.0,
+            "completion_rate_without_skill": 20.0,
+            "avg_quality_improvement_pct": 55.0,
+            "avg_token_improvement_pct": -80.0,
         },
         "interpretation_notes": [],
         "module_policies": [],
@@ -55,6 +59,15 @@ def test_verify_proposal_reject_on_version_mismatch():
     result = verify_proposal(_proposal(benchmark_version="6.2"), proposal_path="proposal.json", benchmark=_benchmark("6.3"))
     assert result["decision"] == "reject"
     assert any(check["name"] == "benchmark_reference" and check["status"] == "reject" for check in result["checks"])
+
+
+def test_verify_proposal_revise_on_threshold_violation():
+    proposal = _proposal()
+    proposal["benchmark_summary"]["task_count"] = 3
+    proposal["benchmark_summary"]["avg_quality_improvement_pct"] = 2.0
+    result = verify_proposal(proposal, proposal_path="proposal.json", benchmark=_benchmark("6.3"))
+    assert result["decision"] == "revise"
+    assert any(check["name"] == "benchmark_task_count" and check["status"] == "revise" for check in result["checks"])
 
 
 def test_write_verification_artifacts(tmp_path):

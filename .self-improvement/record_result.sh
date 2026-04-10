@@ -6,7 +6,7 @@
 #   record_result.sh --run-id <id> --hypothesis <text> --files <paths> \
 #       --checks <summary> --status <keep|discard|rollback|stabilization> \
 #       [--benchmark-evidence <ref>] [--skill-proposal <ref>] \
-#       [--proposal-verification <ref>] [--notes <text>]
+#       [--proposal-verification <ref>] [--proposal-decision <decision>] [--notes <text>]
 #
 #   Shorthand:
 #   record_result.sh <hypothesis> <files> <status> [notes]
@@ -18,6 +18,7 @@
 #       --benchmark-evidence "tests/bench/ab_experiment_results/ab_experiment_20260408_223414.json" \
 #       --skill-proposal "knowledge/skill_proposals/...md" \
 #       --proposal-verification "knowledge/skill_proposals/verifications/...json" \
+#       --proposal-decision "approve" \
 #       --notes "review targeting improved"
 
 set -e
@@ -30,7 +31,7 @@ usage() {
     echo "Usage: record_result.sh [--run-id <id>] --hypothesis <text> --files <paths>"
     echo "       --checks <summary> --status <keep|discard|rollback|stabilization>"
     echo "       [--benchmark-evidence <ref>] [--skill-proposal <ref>]"
-    echo "       [--proposal-verification <ref>] [--notes <text>]"
+    echo "       [--proposal-verification <ref>] [--proposal-decision <decision>] [--notes <text>]"
     echo ""
     echo "   Shorthand: record_result.sh <hypothesis> <files> <status> [notes]"
     echo ""
@@ -47,6 +48,7 @@ STATUS=""
 BENCHMARK_EVIDENCE=""
 SKILL_PROPOSAL=""
 PROPOSAL_VERIFICATION=""
+PROPOSAL_DECISION=""
 NOTES=""
 
 if [[ "$#" -eq 0 ]]; then
@@ -77,6 +79,8 @@ if [[ "$1" == "--"* ]]; then
                 SKILL_PROPOSAL="$2"; shift 2;;
             --proposal-verification)
                 PROPOSAL_VERIFICATION="$2"; shift 2;;
+            --proposal-decision)
+                PROPOSAL_DECISION="$2"; shift 2;;
             --notes)
                 NOTES="$2"; shift 2;;
             --*)
@@ -119,7 +123,7 @@ if [[ -z "$RUN_ID" ]]; then
 fi
 
 # Use Python helper for locked TSV append (cross-platform fcntl)
-python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$NOTES" << 'PYEOF'
+python3 - "$LEDGER" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$PROPOSAL_DECISION" "$NOTES" << 'PYEOF'
 import sys
 import fcntl
 import os
@@ -133,7 +137,8 @@ status = sys.argv[6]
 benchmark_evidence = sys.argv[7]
 skill_proposal = sys.argv[8]
 proposal_verification = sys.argv[9]
-notes = sys.argv[10]
+proposal_decision = sys.argv[10]
+notes = sys.argv[11]
 
 # TSV-safe cleaning: replace tabs and newlines with spaces
 def tsv_clean(value):
@@ -146,6 +151,7 @@ notes = tsv_clean(notes)
 benchmark_evidence = tsv_clean(benchmark_evidence)
 skill_proposal = tsv_clean(skill_proposal)
 proposal_verification = tsv_clean(proposal_verification)
+proposal_decision = tsv_clean(proposal_decision)
 
 if benchmark_evidence:
     notes = f"benchmark_evidence={benchmark_evidence}" + (f" | {notes}" if notes else "")
@@ -153,6 +159,8 @@ if skill_proposal:
     notes = f"skill_proposal={skill_proposal}" + (f" | {notes}" if notes else "")
 if proposal_verification:
     notes = f"proposal_verification={proposal_verification}" + (f" | {notes}" if notes else "")
+if proposal_decision:
+    notes = f"proposal_decision={proposal_decision}" + (f" | {notes}" if notes else "")
 
 lock_path = ledger_path + '.lock'
 

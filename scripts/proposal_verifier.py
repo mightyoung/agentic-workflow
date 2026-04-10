@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Any
 
 
 DEFAULT_OUTPUT_DIR = Path("knowledge/skill_proposals/verifications")
+DEFAULT_CONFIG_PATH = Path("configs/proposal_verifier.toml")
 
 
 @dataclass(frozen=True)
@@ -36,13 +38,40 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def load_config(path: str | Path | None = None) -> dict[str, Any]:
+    """Load verifier threshold config, falling back to sane defaults."""
+    defaults = {
+        "min_task_count": 8,
+        "min_completion_gap_pp": 1.0,
+        "min_quality_improvement_pct": 10.0,
+        "max_token_cost_increase_pct": 220.0,
+    }
+    cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
+    if not cfg_path.exists():
+        return defaults
+    try:
+        data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError):
+        return defaults
+    policy = data.get("policy", {}) if isinstance(data, dict) else {}
+    if not isinstance(policy, dict):
+        return defaults
+    merged = defaults.copy()
+    for key in defaults:
+        if key in policy:
+            merged[key] = policy[key]
+    return merged
+
+
 def verify_proposal(
     proposal: dict[str, Any],
     *,
     proposal_path: str,
     benchmark: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+    config = config or load_config()
 
     def add_check(name: str, status: str, detail: str) -> None:
         checks.append({"name": name, "status": status, "detail": detail})
@@ -108,10 +137,47 @@ def verify_proposal(
 
     summary = proposal.get("benchmark_summary", {})
     task_count = _safe_int(summary.get("task_count"))
-    if task_count > 0:
+    min_task_count = _safe_int(config.get("min_task_count"), 8)
+    if task_count >= min_task_count:
         add_check("benchmark_task_count", "pass", f"task_count={task_count}")
     else:
-        add_check("benchmark_task_count", "revise", "task_count is missing or zero")
+        add_check("benchmark_task_count", "revise", f"task_count={task_count}, expected >= {min_task_count}")
+
+    completion_with = float(summary.get("completion_rate_with_skill") or 0.0)
+    completion_without = float(summary.get("completion_rate_without_skill") or 0.0)
+    completion_gap = completion_with - completion_without
+    min_completion_gap_pp = float(config.get("min_completion_gap_pp", 1.0))
+    if completion_gap >= min_completion_gap_pp:
+        add_check("completion_gap_pp", "pass", f"completion_gap_pp={completion_gap:.2f}")
+    else:
+        add_check(
+            "completion_gap_pp",
+            "revise",
+            f"completion_gap_pp={completion_gap:.2f}, expected >= {min_completion_gap_pp:.2f}",
+        )
+
+    quality_imp = float(summary.get("avg_quality_improvement_pct") or 0.0)
+    min_quality_imp = float(config.get("min_quality_improvement_pct", 10.0))
+    if quality_imp >= min_quality_imp:
+        add_check("quality_improvement_pct", "pass", f"avg_quality_improvement_pct={quality_imp:.2f}")
+    else:
+        add_check(
+            "quality_improvement_pct",
+            "revise",
+            f"avg_quality_improvement_pct={quality_imp:.2f}, expected >= {min_quality_imp:.2f}",
+        )
+
+    token_imp = float(summary.get("avg_token_improvement_pct") or 0.0)
+    token_cost_increase = max(0.0, -token_imp)
+    max_token_cost = float(config.get("max_token_cost_increase_pct", 220.0))
+    if token_cost_increase <= max_token_cost:
+        add_check("token_cost_increase_pct", "pass", f"token_cost_increase_pct={token_cost_increase:.2f}")
+    else:
+        add_check(
+            "token_cost_increase_pct",
+            "revise",
+            f"token_cost_increase_pct={token_cost_increase:.2f}, limit={max_token_cost:.2f}",
+        )
 
     if benchmark is not None:
         expected_version = str(
@@ -143,6 +209,7 @@ def verify_proposal(
         "proposal_path": proposal_path,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "decision": decision,
+        "policy_config": config,
         "checks": checks,
     }
 
@@ -171,6 +238,7 @@ def write_verification_artifacts(
     *,
     benchmark_path: str | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    config_path: str | Path | None = None,
 ) -> VerificationArtifact:
     proposal_file = Path(proposal_path)
     if not proposal_file.exists():
@@ -178,7 +246,12 @@ def write_verification_artifacts(
 
     proposal = _load_json(proposal_file)
     benchmark = _load_json(Path(benchmark_path)) if benchmark_path else None
-    verification = verify_proposal(proposal, proposal_path=str(proposal_file), benchmark=benchmark)
+    verification = verify_proposal(
+        proposal,
+        proposal_path=str(proposal_file),
+        benchmark=benchmark,
+        config=load_config(config_path),
+    )
 
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
@@ -205,6 +278,11 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Optional benchmark JSON reference for version consistency checks",
     )
+    parser.add_argument(
+        "--config",
+        default=str(DEFAULT_CONFIG_PATH),
+        help="Verifier policy config (TOML)",
+    )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for verification artifacts")
     args = parser.parse_args(argv)
 
@@ -212,6 +290,7 @@ def main(argv: list[str] | None = None) -> int:
         args.proposal,
         benchmark_path=args.benchmark or None,
         output_dir=args.output_dir,
+        config_path=args.config,
     )
     print(json.dumps({"decision": artifact.decision, "verification_path": str(artifact.json_path)}, ensure_ascii=False))
     return 0

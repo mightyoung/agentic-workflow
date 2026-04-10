@@ -1,0 +1,13 @@
+[policy]
+# Minimum benchmark sample size required to consider proposal evidence stable.
+min_task_count = 8
+
+# Minimum completion-rate improvement in percentage points.
+min_completion_gap_pp = 1.0
+
+# Minimum average quality improvement percentage.
+min_quality_improvement_pct = 10.0
+
+# Maximum tolerated token-cost increase percentage.
+# token_cost_increase_pct = max(0, -avg_token_improvement_pct)
+max_token_cost_increase_pct = 220.0

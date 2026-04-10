@@ -28,12 +28,13 @@ PROPOSAL_DECISION=""
 usage() {
     echo "Self-Improvement Runner"
     echo ""
-    echo "Usage: $0 --hypothesis <text> [--zone B|A|C] [--allow-dirty]"
+    echo "Usage: $0 --hypothesis <text> [--zone B|A|C] [--allow-dirty] [--allow-revise]"
     echo ""
     echo "Options:"
     echo "  --hypothesis <text>  What this improvement run tries to achieve (required)"
     echo "  --zone <A|B|C>       Which zone to target (default: B - Guided Mutable Surface)"
     echo "  --allow-dirty        Allow dirty tree (only for exploratory work)"
+    echo "  --allow-revise       Continue when proposal verifier returns revise"
     echo "  BENCHMARK_EVIDENCE   Optional benchmark report path/reference to attach"
     echo "  --help, -h           Show this help"
     echo ""
@@ -47,6 +48,7 @@ usage() {
 HYPOTHESIS=""
 ZONE="B"
 ALLOW_DIRTY=0
+ALLOW_REVISE=0
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -56,6 +58,8 @@ while [[ "$#" -gt 0 ]]; do
             ZONE="$2"; shift 2;;
         --allow-dirty)
             ALLOW_DIRTY=1; shift;;
+        --allow-revise)
+            ALLOW_REVISE=1; shift;;
         --help|-h)
             usage;;
         *)
@@ -165,18 +169,23 @@ if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
         PROPOSAL_VERIFICATION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("verification_path",""))' "$verifier_output")
         echo "  Verification decision: $PROPOSAL_DECISION"
         [[ -n "$PROPOSAL_VERIFICATION" ]] && echo "  Verification: $PROPOSAL_VERIFICATION"
-        if [[ "$PROPOSAL_DECISION" == "reject" ]]; then
-            echo "  Proposal verification rejected. Aborting run initialization."
+        if [[ "$PROPOSAL_DECISION" == "reject" ]] || [[ "$PROPOSAL_DECISION" == "revise" && $ALLOW_REVISE -eq 0 ]]; then
+            if [[ "$PROPOSAL_DECISION" == "reject" ]]; then
+                echo "  Proposal verification rejected. Aborting run initialization."
+            else
+                echo "  Proposal verification returned revise. Use --allow-revise to continue."
+            fi
             "$RECORD_HELPER" \
                 --run-id "$run_id" \
                 --hypothesis "$HYPOTHESIS" \
                 --files "proposal verification rejected" \
-                --checks "proposal_verifier=reject" \
+                --checks "proposal_verifier=$PROPOSAL_DECISION" \
                 --status "discard" \
                 "${BENCHMARK_ARGS[@]}" \
                 --skill-proposal "$SKILL_PROPOSAL" \
                 --proposal-verification "$PROPOSAL_VERIFICATION" \
-                --notes "Proposal rejected by verifier gate"
+                --proposal-decision "$PROPOSAL_DECISION" \
+                --notes "Proposal blocked by verifier gate"
             exit 1
         fi
     fi
@@ -211,6 +220,9 @@ fi
 if [[ -n "$PROPOSAL_DECISION" ]]; then
     notes_text="proposal_decision=$PROPOSAL_DECISION | ${notes_text}"
 fi
+if [[ $ALLOW_REVISE -eq 1 && "$PROPOSAL_DECISION" == "revise" ]]; then
+    notes_text="manual_override=true | ${notes_text}"
+fi
 "$RECORD_HELPER" \
     --run-id "$run_id" \
     --hypothesis "$HYPOTHESIS" \
@@ -220,6 +232,7 @@ fi
     "${BENCHMARK_ARGS[@]}" \
     --skill-proposal "$SKILL_PROPOSAL" \
     --proposal-verification "$PROPOSAL_VERIFICATION" \
+    --proposal-decision "$PROPOSAL_DECISION" \
     --notes "$notes_text"
 
 echo ""

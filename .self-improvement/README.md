@@ -30,7 +30,10 @@ The runner will:
 - verify the proposal via `scripts/proposal_verifier.py`
 - record both proposal and verification artifact paths in the ledger
 
-If the verifier decision is `reject`, run initialization is aborted and the run is recorded as `discard`.
+Default gate policy:
+- `reject`: abort run initialization and record `discard`
+- `revise`: also abort by default; pass `--allow-revise` only when you intentionally accept manual override
+- `approve`: continue run initialization
 
 ## Principles
 

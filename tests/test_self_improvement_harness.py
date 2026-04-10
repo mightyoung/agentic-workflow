@@ -274,6 +274,8 @@ class TestRecordResultLedger:
                 str(proposal),
                 "--proposal-verification",
                 str(verification),
+                "--proposal-decision",
+                "approve",
                 "--notes",
                 "integration smoke",
             ],
@@ -286,6 +288,7 @@ class TestRecordResultLedger:
         ledger_text = (local_dir / "results.tsv").read_text(encoding="utf-8")
         assert "skill_proposal=" in ledger_text
         assert "proposal_verification=" in ledger_text
+        assert "proposal_decision=approve" in ledger_text
         assert "benchmark_evidence=" in ledger_text
 
     def test_ledger_handles_special_characters(self, tmp_path):
