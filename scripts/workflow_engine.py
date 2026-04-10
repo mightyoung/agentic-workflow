@@ -288,6 +288,81 @@ def _generate_and_register_summary(
     return str(summary_path)
 
 
+def _derive_phase_contract_fields(
+    task_title: str,
+    task_desc: str,
+    plan_tasks: list[dict[str, Any]],
+    workdir: str,
+) -> dict[str, Any]:
+    """Derive machine-readable contract fields from planning output."""
+    goals: list[str] = []
+    acceptance_criteria: list[str] = []
+    verification_methods: list[str] = []
+    owned_files: list[str] = []
+    dependencies: list[str] = []
+    impact_files: list[str] = []
+
+    for task in plan_tasks:
+        task_id = str(task.get("id", "")).strip()
+        title = str(task.get("title", "")).strip()
+        if title:
+            goals.append(title)
+            acceptance_criteria.append(f"Complete {task_id or 'task'}: {title}")
+        verification = str(task.get("verification", "")).strip()
+        if verification:
+            verification_methods.append(verification)
+        task_owned_files = task.get("owned_files", [])
+        if isinstance(task_owned_files, list):
+            for file_path in task_owned_files:
+                file_path = str(file_path).strip()
+                if file_path:
+                    owned_files.append(file_path)
+                    impact_files.append(file_path)
+        task_dependencies = task.get("dependencies", [])
+        if isinstance(task_dependencies, list):
+            for dep in task_dependencies:
+                dep = str(dep).strip()
+                if dep:
+                    dependencies.append(dep)
+
+    if not goals:
+        goals = [task_title.strip() or task_desc.strip() or "Deliver the requested task"]
+
+    if not acceptance_criteria:
+        acceptance_criteria = [
+            "All planned tasks are completed or explicitly deferred with rationale",
+            "All verification methods pass",
+            "All impacted files are aligned with the implementation",
+        ]
+
+    if not verification_methods:
+        verification_methods = ["Run the project test suite", "Review the implementation against the plan"]
+
+    if not owned_files:
+        owned_files = []
+
+    if not impact_files:
+        impact_files = list(dict.fromkeys(owned_files))
+
+    if not dependencies:
+        dependencies = []
+
+    rollback_note = (
+        "Revert the files listed in owned_files or impact_files and rerun the listed verification methods."
+    )
+
+    return {
+        "goals": list(dict.fromkeys(goals)),
+        "acceptance_criteria": list(dict.fromkeys(acceptance_criteria)),
+        "verification_methods": list(dict.fromkeys(verification_methods)),
+        "owned_files": list(dict.fromkeys(owned_files)),
+        "impact_files": list(dict.fromkeys(impact_files or owned_files)),
+        "dependencies": list(dict.fromkeys(dependencies)),
+        "rollback_note": rollback_note,
+        "status": "active",
+    }
+
+
 def _create_plan_from_template(task_name: str, workdir: str) -> Path | None:
     destination = Path(workdir) / "task_plan.md"
     if destination.exists():
@@ -1589,6 +1664,10 @@ def initialize_workflow(
         if contract_path is not None:
             register_artifact(workdir, "contract", str(contract_path), current_phase, "system",
                             metadata={"deliverable": "contract", "phase": current_phase})
+
+        plan_tasks, _plan_source = load_planning_tasks(workdir)
+        contract_fields = _derive_phase_contract_fields(task_title, task_desc, plan_tasks, workdir)
+        update_contract_json(workdir, **contract_fields)
 
         planning_summary = get_planning_summary(str(workdir), state)
         memory_ops.update_planning_summary(

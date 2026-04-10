@@ -65,7 +65,7 @@ def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path
 
     # Create machine-readable JSON contract (authoritative)
     json_contract: dict[str, Any] = {
-        "version": "1.0",
+        "version": "1.1",
         "task": task_name,
         "description": task_desc,
         "created": datetime.now().isoformat(),
@@ -74,6 +74,10 @@ def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path
         "verification_methods": [],
         "verification_results": {},  # method -> "passed" | "failed" | "not_run"
         "owned_files": [],
+        "acceptance_criteria": [],
+        "impact_files": [],
+        "dependencies": [],
+        "rollback_note": "",
         "review_evidence": None,  # path to review artifact if completed
         "failure_threshold": {
             "hard_failure": [],
@@ -98,6 +102,10 @@ def _create_phase_contract(task_name: str, task_desc: str, workdir: str) -> Path
 
 - [ ] Goal 1: (to be filled by planner)
 
+## Acceptance Criteria
+
+- (to be filled by planner)
+
 ## Verification Methods
 
 How will we know the goals are achieved?
@@ -111,6 +119,20 @@ How will we know the goals are achieved?
 Files to be produced or modified:
 
 - `src/` (list specific files if known)
+
+## Impact Files
+
+Files that will be directly affected:
+
+- `src/`
+
+## Dependencies
+
+- (to be filled by planner)
+
+## Rollback Note
+
+- (to be filled by planner)
 
 ## Failure Threshold
 
@@ -160,6 +182,10 @@ def parse_phase_contract(workdir: str = ".") -> dict[str, Any]:
                 "goals": json_content.get("goals", []),
                 "verification_methods": json_content.get("verification_methods", []),
                 "owned_files": json_content.get("owned_files", []),
+                "acceptance_criteria": json_content.get("acceptance_criteria", []),
+                "impact_files": json_content.get("impact_files", []),
+                "dependencies": json_content.get("dependencies", []),
+                "rollback_note": json_content.get("rollback_note", ""),
                 "failure_threshold": json_content.get("failure_threshold", {}),
                 "review_contract": json_content.get("review_contract", {}),
                 "status": json_content.get("status", "unknown"),
@@ -178,6 +204,10 @@ def parse_phase_contract(workdir: str = ".") -> dict[str, Any]:
         "goals": [],
         "verification_methods": [],
         "owned_files": [],
+        "acceptance_criteria": [],
+        "impact_files": [],
+        "dependencies": [],
+        "rollback_note": "",
         "failure_threshold": {},
         "review_contract": {},
     }
@@ -203,6 +233,20 @@ def parse_phase_contract(workdir: str = ".") -> dict[str, Any]:
             file_path = line.replace("-", "").strip().replace("`", "")
             if file_path:
                 result["owned_files"].append(file_path)
+        elif current_section == "acceptance_criteria" and line.startswith("-"):
+            result["acceptance_criteria"].append(line.replace("-", "").strip())
+        elif current_section == "impact_files" and line.startswith("-"):
+            file_path = line.replace("-", "").strip().replace("`", "")
+            if file_path:
+                result["impact_files"].append(file_path)
+        elif current_section == "dependencies" and line.startswith("-"):
+            dep = line.replace("-", "").strip()
+            if dep and "(to be filled" not in dep.lower():
+                result["dependencies"].append(dep)
+        elif current_section == "rollback_note" and line.startswith("-"):
+            note = line.replace("-", "").strip()
+            if note:
+                result["rollback_note"] = note
         elif current_section == "verification_methods" and re.match(r"^\d+\.", line):
             # Parse verification method
             method = re.sub(r"^\d+\.\s*\*\*.*?\*\*:\s*", "", line)
@@ -231,7 +275,7 @@ def update_contract_json(workdir: str = ".", **kwargs) -> bool:
         contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
         # Update fields
         for key, value in kwargs.items():
-            if key in ("goals", "verification_methods", "owned_files", "status"):
+            if key in ("goals", "verification_methods", "owned_files", "acceptance_criteria", "impact_files", "dependencies", "rollback_note", "status"):
                 contract[key] = value
         # Write back
         safe_write_text_locked(json_contract_path, json_lib.dumps(contract, indent=2, ensure_ascii=False))
@@ -298,6 +342,18 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         if not has_real_goals:
             return False, "Contract goals are placeholders - fill in actual goals"
 
+    # Check 2b: acceptance criteria should be present for code tasks
+    acceptance_criteria = contract.get("acceptance_criteria", [])
+    if not acceptance_criteria:
+        return False, "Contract acceptance_criteria are missing - fill in measurable acceptance criteria"
+    if acceptance_criteria:
+        has_real_acceptance = any(
+            not any(p.lower() in str(a).lower() for p in PLACEHOLDER_PATTERNS)
+            for a in acceptance_criteria
+        )
+        if not has_real_acceptance:
+            return False, "Contract acceptance_criteria are placeholders - fill in actual acceptance criteria"
+
     # Check 3: If goal_status exists, at least one goal should be fulfilled
     goal_status = contract.get("goal_status", {})
     if goal_status:
@@ -321,6 +377,14 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
             # Some owned files should match actual changes
             pass  # Currently permissive
 
+    # Check 4b: impact_files should be present and non-placeholder
+    impact_files = contract.get("impact_files", [])
+    if not impact_files:
+        return False, "Contract impact_files are missing - list affected files"
+    if impact_files:
+        if not any(str(f).strip() and str(f).strip().lower() not in {"(未设置)", "unset", "none"} for f in impact_files):
+            return False, "Contract impact_files are placeholders"
+
     # Check 5: verification_methods should not be placeholders
     verification_methods = contract.get("verification_methods", [])
     if verification_methods:
@@ -330,6 +394,11 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         )
         if not has_real_verification:
             return False, "Contract verification_methods are placeholders"
+
+    # Check 5b: rollback note should be present for code tasks
+    rollback_note = str(contract.get("rollback_note", "")).strip()
+    if not rollback_note or any(p.lower() in rollback_note.lower() for p in PLACEHOLDER_PATTERNS):
+        return False, "Contract rollback_note is missing or placeholder"
 
     # Check 6: If verification_results exist, at least one should be passed
     verification_results = contract.get("verification_results", {})

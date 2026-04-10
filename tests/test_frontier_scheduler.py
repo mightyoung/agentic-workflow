@@ -668,6 +668,10 @@ class TestTeamRunIntegration(unittest.TestCase):
             "goals": [],
             "verification_methods": [],
             "owned_files": [],
+            "acceptance_criteria": ["All planned tasks are completed"],
+            "impact_files": ["src/app.py"],
+            "dependencies": [],
+            "rollback_note": "Revert src/app.py and rerun tests.",
         }))
 
         # Set quality_gates_passed=True to skip quality gate check
@@ -706,6 +710,10 @@ class TestTeamRunIntegration(unittest.TestCase):
             "goals": ["Goal 1: (to be filled by planner)"],
             "verification_methods": [],
             "owned_files": [],
+            "acceptance_criteria": ["All planned tasks are completed"],
+            "impact_files": ["src/app.py"],
+            "dependencies": [],
+            "rollback_note": "Revert src/app.py and rerun tests.",
         }))
 
         from workflow_engine import load_state, validate_contract_gate
