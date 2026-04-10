@@ -1,10 +1,10 @@
 # Agentic Workflow | 统一智能体工作流
 
-> 融合 10+ 世界顶级 Skills 精髓的 AI 开发工作流
+> 当前主线：v6.3 单一权威运行时（workflow_engine + unified_state）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/mightyoung/agentic-workflow)](https://github.com/mightyoung/agentic-workflow)
-[![Version](https://img.shields.io/badge/Version-5.7.1-blue.svg)](SKILL.md)
+[![Version](https://img.shields.io/badge/Version-6.3.0-blue.svg)](SKILL.md)
 
 ---
 
@@ -25,7 +25,7 @@
 
 ## 什么是 Agentic Workflow？
 
-Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**，融合了 10+ 个世界级 Skills 的精髓（v5.4 版本）。它为处理复杂开发任务提供了系统化方法，从思考规划到执行调试。
+Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**。当前主线以 `workflow_engine.py + unified_state.py` 为唯一权威运行时，围绕 `ROUTER -> PLANNING -> EXECUTING -> REVIEWING/DEBUGGING -> COMPLETE` 提供可恢复、可审计、可验证的执行闭环。
 
 ### 核心原则
 
@@ -100,6 +100,10 @@ Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**，融合了 10+
 - 多 agent 编排目前是基础能力，不是全自治 swarm runtime。
 
 ---
+
+## 历史版本归档（v4-v5）
+
+> 以下章节是历史演进记录，属于归档参考，不代表当前 v6.3 默认行为。当前默认执行流程、机制和策略以上文“当前执行流程/当前核心机制/当前优劣势”为准。
 
 ## v4.13 新特性
 

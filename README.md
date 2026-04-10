@@ -2,6 +2,8 @@
 
 > Unified AI Development Workflow Skill - 统一智能体工作流
 
+Chinese version: [README_CN.md](README_CN.md)
+
 ## What is This?
 
 Agentic Workflow is a **skill-based workflow system** that provides systematic approaches to handling development tasks. It uses a phase-based architecture where different skills handle different aspects of the development lifecycle.
@@ -334,13 +336,13 @@ docs/
 ## Validation
 
 ```bash
-# Full test suite (302 tests)
+# Full test suite
 python3 -m pytest tests/ -q
 
-# Core workflow tests (69 tests - includes failure handling)
+# Core workflow tests (includes failure handling)
 python3 -m pytest tests/test_workflow_engine.py tests/test_e2e_business.py tests/test_workflow_chain.py tests/test_task_decomposer.py tests/test_artifact_registry.py tests/test_trajectory.py tests/test_failure_handling.py -q
 
-# Quality gate tests (19 tests)
+# Quality gate tests
 python3 -m pytest tests/test_quality_gate.py -v
 
 # Validate unified state
