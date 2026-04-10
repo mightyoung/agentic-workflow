@@ -30,6 +30,8 @@ from memory_longterm import (  # noqa: E402, I001
     generate_weekly_report,
     read_task_history,
     record_reflection_experience,
+    record_summary_experience,
+    memory_write_gate,
     search_index,
     search_memory,
 )
@@ -271,6 +273,42 @@ class TestSearchMemoryIntent:
 
         results = search_memory("AssertionError", filepath=str(memory_md), intent="debug")
         assert any("Debug auth flow" in r for r in results)
+
+
+class TestMemoryWriteGate:
+    def test_placeholder_summary_is_rejected(self):
+        gate = memory_write_gate("(未设置)", kind="summary", evidence_status="verified")
+        assert gate["should_persist"] is False
+        assert gate["reason"] == "placeholder_or_empty"
+
+    def test_verified_summary_with_signal_is_accepted(self):
+        gate = memory_write_gate(
+            "Task: review summary Trigger: review_status=verified Mistake: no files Fix: keep file list explicit Signal: files_reviewed=3",
+            kind="summary",
+            evidence_status="verified",
+        )
+        assert gate["should_persist"] is True
+        assert gate["reason"].startswith("summary_")
+
+
+class TestRecordSummaryExperience:
+    def test_summary_experience_recorded_for_verified_review(self, tmp_path):
+        memory_md = tmp_path / "MEMORY.md"
+        ok = record_summary_experience(
+            summary_kind="review",
+            summary={
+                "review_status": "verified",
+                "files_reviewed": 3,
+                "verdict": "pass",
+            },
+            filepath=str(memory_md),
+            confidence=0.8,
+        )
+
+        assert ok is True
+        content = memory_md.read_text(encoding="utf-8")
+        assert "review summary" in content.lower()
+        assert "files_reviewed=3" in content or '"files_reviewed": 3' in content
 
 
 class TestTaskHistory(unittest.TestCase):

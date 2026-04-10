@@ -30,6 +30,7 @@ import subprocess
 import sys
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 # Allow `python3 scripts/memory_longterm.py` from project root
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -45,6 +46,30 @@ except ImportError:
 
 # MAGMA-inspired temporal decay (λ=0.95 per day → 30d: ×0.21, 90d: ×0.01)
 TEMPORAL_DECAY_LAMBDA: float = 0.95
+
+PLACEHOLDER_MEMORY_PATTERNS = (
+    "(未设置)",
+    "unset",
+    "placeholder",
+    "tbd",
+    "todo",
+    "to be filled",
+    "to be determined",
+)
+
+SUMMARY_SIGNAL_PATTERNS = (
+    "trigger:",
+    "signal:",
+    "fix:",
+    "mistake:",
+    "root cause",
+    "evidence_status",
+    "quality_gate_failed",
+    "file:line",
+    "benchmark_evidence",
+    "verified",
+    "degraded",
+)
 
 
 def _effective_confidence(base: float, timestamp_str: str, decay: float = TEMPORAL_DECAY_LAMBDA) -> float:
@@ -66,6 +91,58 @@ def _effective_confidence(base: float, timestamp_str: str, decay: float = TEMPOR
         return base * (decay ** days_old)
     except (ValueError, TypeError):
         return base
+
+
+def memory_write_gate(
+    text: str,
+    *,
+    confidence: float = 0.5,
+    kind: str = "experience",
+    evidence_status: str | None = None,
+) -> dict[str, Any]:
+    """Decide whether a memory entry is worth promoting to long-term memory."""
+    normalized = " ".join(str(text).replace("\n", " ").replace("\t", " ").split()).strip()
+    lowered = normalized.lower()
+    placeholder_hit = any(pattern in lowered for pattern in PLACEHOLDER_MEMORY_PATTERNS)
+    signal_hits = [pattern for pattern in SUMMARY_SIGNAL_PATTERNS if pattern in lowered]
+    signal_count = len(signal_hits)
+
+    if not normalized or placeholder_hit:
+        return {
+            "should_persist": False,
+            "signal_level": "low",
+            "reason": "placeholder_or_empty",
+            "signal_count": signal_count,
+        }
+
+    should_persist = False
+    reason = "insufficient_signal"
+
+    if kind == "reflection":
+        if signal_count >= 2:
+            should_persist = True
+            reason = "reflection_signal"
+    elif kind == "summary":
+        if evidence_status in {"verified", "degraded"} and signal_count >= 1:
+            should_persist = True
+            reason = f"summary_{evidence_status}"
+    elif signal_count >= 2:
+        should_persist = True
+        reason = "strong_signal"
+    elif confidence >= 0.75 and signal_count >= 1:
+        should_persist = True
+        reason = "high_confidence_signal"
+    elif len(normalized) >= 120 and signal_count >= 1:
+        should_persist = True
+        reason = "long_signal"
+
+    return {
+        "should_persist": should_persist,
+        "signal_level": "high" if should_persist else "low",
+        "reason": reason,
+        "signal_count": signal_count,
+        "matched_signals": signal_hits,
+    }
 
 # 默认长期记忆文件
 DEFAULT_MEMORY_FILE = "MEMORY.md"
@@ -281,6 +358,9 @@ def add_experience(
     scope: str = "project",
     project_id: str | None = None,
     tags: list[str] | None = None,
+    apply_gate: bool = False,
+    gate_kind: str = "experience",
+    evidence_status: str | None = None,
 ) -> bool:
     """添加核心经验（同时写入 MEMORY.md 和 .memory_index.jsonl）。
 
@@ -292,6 +372,17 @@ def add_experience(
         scope: "project"（当前项目）| "global"（跨项目）
         project_id: git remote hash；None 时自动检测
     """
+    if apply_gate:
+        gate = memory_write_gate(
+            experience,
+            confidence=confidence,
+            kind=gate_kind,
+            evidence_status=evidence_status,
+        )
+        if not gate["should_persist"]:
+            print(f"已跳过低信号长期记忆: {gate['reason']}")
+            return False
+
     ensure_memory_exists(filepath)
 
     with open(filepath, encoding='utf-8') as f:
@@ -374,6 +465,90 @@ def record_reflection_experience(
         scope=scope,
         project_id=project_id,
         tags=merged_tags,
+        apply_gate=True,
+        gate_kind="reflection",
+    )
+
+
+def record_summary_experience(
+    *,
+    summary_kind: str,
+    summary: dict[str, Any],
+    filepath: str = DEFAULT_MEMORY_FILE,
+    index_file: str = MEMORY_INDEX_FILE,
+    confidence: float = 0.65,
+    scope: str = "project",
+    project_id: str | None = None,
+    tags: list[str] | None = None,
+) -> bool:
+    """Promote a high-signal phase summary into long-term memory."""
+    summary_kind = summary_kind.strip().lower()
+    evidence_status = str(summary.get("evidence_status", "")).strip() if isinstance(summary, dict) else ""
+    if not evidence_status and summary_kind == "review" and isinstance(summary, dict):
+        review_status = str(summary.get("review_status", "")).strip().lower()
+        verdict = str(summary.get("verdict", "")).strip().lower()
+        if review_status in {"verified", "pass", "passed"} or verdict in {"verified", "pass", "passed"}:
+            evidence_status = "verified"
+
+    if summary_kind == "research":
+        text = (
+            f"Task: research summary "
+            f"Trigger: evidence_status={evidence_status or 'unset'} "
+            f"Mistake: duplicate research or weak evidence "
+            f"Fix: reuse verified findings and avoid redundant search "
+            f"Signal: sources={summary.get('sources_count', 0)} | "
+            f"key_terms={summary.get('key_terms', 'unset')}"
+        )
+    elif summary_kind == "thinking":
+        text = (
+            f"Task: thinking summary "
+            f"Trigger: mode={summary.get('thinking_mode', 'unset')} "
+            f"Mistake: skipping contradiction analysis "
+            f"Fix: keep the dominant contradiction and local attack point visible "
+            f"Signal: stage={summary.get('stage_judgment', 'unset')} | "
+            f"attack={summary.get('local_attack_point', 'unset')}"
+        )
+    elif summary_kind == "review":
+        text = (
+            f"Task: review summary "
+            f"Trigger: review_status={summary.get('review_status', 'unset')} "
+            f"Mistake: review without reviewed files "
+            f"Fix: keep two-stage review and file list explicit "
+            f"Signal: files_reviewed={summary.get('files_reviewed', 0)} | "
+            f"verdict={summary.get('verdict', 'unset')}"
+        )
+    elif summary_kind == "planning":
+        text = (
+            f"Task: planning summary "
+            f"Trigger: planning_mode={summary.get('planning_mode', 'unset')} "
+            f"Mistake: over-heavy planning context "
+            f"Fix: reuse canonical plan digest and keep lightweight planning lean "
+            f"Signal: plan_source={summary.get('plan_source', 'unset')} | "
+            f"worktree={summary.get('worktree_recommended', False)}"
+        )
+    else:
+        text = (
+            f"Task: {summary_kind} summary "
+            f"Trigger: summary promotion "
+            f"Mistake: over-recomputing high-signal phase output "
+            f"Fix: reuse the structured summary as memory "
+            f"Signal: summary_kind={summary_kind}"
+        )
+
+    merged_tags = [summary_kind, "summary"]
+    if tags:
+        merged_tags.extend(tags)
+    return add_experience(
+        text,
+        filepath=filepath,
+        index_file=index_file,
+        confidence=confidence,
+        scope=scope,
+        project_id=project_id,
+        tags=merged_tags,
+        apply_gate=True,
+        gate_kind="summary",
+        evidence_status=evidence_status or None,
     )
 
 
@@ -551,7 +726,7 @@ def refine_from_daily_logs(days: int = 7, memory_dir: str = "memory",
     ensure_memory_exists(output_file)
     for lesson in set(lessons):  # 去重
         if lesson:
-            add_experience(f"[提炼] {lesson}", output_file)
+            add_experience(f"[提炼] {lesson}", output_file, apply_gate=True, gate_kind="daily_log")
 
     print(f"已从 {days} 天的日志中提炼 {len(set(lessons))} 条经验到长期记忆")
     return True

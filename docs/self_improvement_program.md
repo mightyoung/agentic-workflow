@@ -174,6 +174,7 @@ Every run must record:
 - hard-gate result
 - soft observations
 - benchmark evidence reference when the run is motivated by benchmark data
+- skill evolution proposal reference when benchmark evidence produces one
 - keep or discard decision
 
 ## Required Baseline Before Any Mutation

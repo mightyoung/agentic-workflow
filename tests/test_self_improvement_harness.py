@@ -11,6 +11,7 @@ Covers:
 import fcntl
 import os
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -235,6 +236,52 @@ class TestRecordResultLedger:
         for line in lines[1:]:
             fields = line.split('\t')
             assert len(fields) == 6, f"Corrupted TSV line: {line}"
+
+    def test_record_result_includes_skill_proposal(self, tmp_path):
+        """benchmark evidence + skill proposal should be encoded in notes."""
+        repo_root = Path(__file__).parent.parent
+        script_src = repo_root / ".self-improvement" / "record_result.sh"
+        helper_src = repo_root / ".self-improvement" / "_record_helper.py"
+        local_dir = tmp_path / "self_improvement"
+        local_dir.mkdir()
+        (local_dir / "record_result.sh").write_text(script_src.read_text(encoding="utf-8"), encoding="utf-8")
+        if helper_src.exists():
+            (local_dir / "_record_helper.py").write_text(helper_src.read_text(encoding="utf-8"), encoding="utf-8")
+
+        script = local_dir / "record_result.sh"
+        proposal = tmp_path / "proposal.md"
+        proposal.write_text("# proposal", encoding="utf-8")
+
+        result = subprocess.run(
+            [
+                "bash",
+                str(script),
+                "--run-id",
+                "run-test-001",
+                "--hypothesis",
+                "tighten memory gate",
+                "--files",
+                "scripts/memory_longterm.py",
+                "--checks",
+                "10/10 gates",
+                "--status",
+                "keep",
+                "--benchmark-evidence",
+                "tests/bench/sample.json",
+                "--skill-proposal",
+                str(proposal),
+                "--notes",
+                "integration smoke",
+            ],
+            cwd=local_dir,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        ledger_text = (local_dir / "results.tsv").read_text(encoding="utf-8")
+        assert "skill_proposal=" in ledger_text
+        assert "benchmark_evidence=" in ledger_text
 
     def test_ledger_handles_special_characters(self, tmp_path):
         """TSV cleaner properly escapes tabs and newlines"""

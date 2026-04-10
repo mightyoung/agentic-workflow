@@ -23,7 +23,7 @@ After the run, record outcome:
 run_id=<timestamp> hypothesis=<what> files_changed=<paths> checks_passed=<summary> status=<keep|discard|rollback> notes=<details>
 ```
 
-If the run is driven by benchmark evidence, include a `benchmark_evidence=<path-or-id>` prefix in `notes` or export `BENCHMARK_EVIDENCE=<path-or-id>` before calling `self_improve.sh`.
+If the run is driven by benchmark evidence, include a `benchmark_evidence=<path-or-id>` prefix in `notes` or export `BENCHMARK_EVIDENCE=<path-or-id>` before calling `self_improve.sh`. The runner will also generate a reviewable skill proposal artifact under `knowledge/skill_proposals/` and record its path in the ledger when evidence is available.
 
 ## Principles
 

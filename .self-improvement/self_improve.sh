@@ -21,6 +21,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LEDGER="$SCRIPT_DIR/results.tsv"
 RECORD_HELPER="$SCRIPT_DIR/record_result.sh"
 BENCHMARK_EVIDENCE="${BENCHMARK_EVIDENCE:-}"
+SKILL_PROPOSAL=""
 
 usage() {
     echo "Self-Improvement Runner"
@@ -147,6 +148,13 @@ echo "[3/4] Baseline passed - ready for improvement"
 echo ""
 echo "=== Baseline PASSED - Ready for improvement ==="
 echo ""
+if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
+    echo "[3/4] Generating skill evolution proposal from benchmark evidence..."
+    SKILL_PROPOSAL=$(python3 "$PROJECT_ROOT/scripts/skill_evolution.py" --benchmark "$BENCHMARK_EVIDENCE" --output-dir "$PROJECT_ROOT/knowledge/skill_proposals")
+    echo "  Proposal: $SKILL_PROPOSAL"
+    echo ""
+fi
+
 echo "Run ID: $run_id"
 echo "Branch: $new_branch"
 echo ""
@@ -165,6 +173,13 @@ echo ""
 # Step 4: Pre-record the run start in ledger
 echo "[4/4] Recording run start..."
 files_placeholder="(no changes yet)"
+notes_text="Zone $ZONE improvement - branch: $new_branch"
+if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
+    notes_text="benchmark_evidence=$BENCHMARK_EVIDENCE | ${notes_text}"
+fi
+if [[ -n "$SKILL_PROPOSAL" ]]; then
+    notes_text="skill_proposal=$SKILL_PROPOSAL | ${notes_text}"
+fi
 "$RECORD_HELPER" \
     --run-id "$run_id" \
     --hypothesis "$HYPOTHESIS" \
@@ -172,7 +187,7 @@ files_placeholder="(no changes yet)"
     --checks "10/10 baseline gates passed" \
     --status "in_progress" \
     "${BENCHMARK_ARGS[@]}" \
-    --notes "Zone $ZONE improvement - branch: $new_branch"
+    --notes "$notes_text"
 
 echo ""
 echo "Run initialized: $run_id"
