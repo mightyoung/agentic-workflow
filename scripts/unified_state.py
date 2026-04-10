@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from memory_ops import get_thinking_summary as get_session_thinking_summary
+from memory_ops import get_research_summary as get_session_research_summary
 from safe_io import safe_write_json_locked
 from state_schema import (
     Decision,
@@ -322,6 +323,67 @@ def get_planning_summary(workdir: str, state: WorkflowState | None = None) -> di
     return _build_planning_summary(workdir, state)
 
 
+def get_research_summary(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Extract a compact summary of the latest research findings artifact."""
+    session_state_path = Path(workdir) / "SESSION-STATE.md"
+    summary = get_session_research_summary(str(session_state_path))
+    if _is_meaningful_research_summary(summary):
+        return summary
+
+    research_artifacts = get_artifacts(workdir, ArtifactType.FINDINGS, phase="RESEARCH")
+    latest_artifact = research_artifacts[-1] if research_artifacts else None
+    metadata = latest_artifact.get("metadata", {}) if isinstance(latest_artifact, dict) else {}
+    findings_path = latest_artifact.get("path") if isinstance(latest_artifact, dict) else None
+    if latest_artifact:
+        return {
+            "research_found": True,
+            "research_source": "artifact_registry",
+            "research_path": findings_path,
+            "key_terms": metadata.get("key_terms"),
+            "search_engine": metadata.get("search_engine"),
+            "sources_count": metadata.get("sources_count", 0),
+            "used_real_search": metadata.get("used_real_search", False),
+            "degraded_mode": metadata.get("degraded_mode", False),
+            "degraded_reason": metadata.get("degraded_reason"),
+            "search_error": metadata.get("search_error"),
+            "evidence_status": "verified" if metadata.get("used_real_search") and metadata.get("sources_count", 0) else "degraded",
+        }
+
+    if state is None:
+        state = load_state(workdir)
+    if state is None:
+        return {}
+
+    current_phase = state.phase.get("current") if state.phase else "IDLE"
+    if current_phase in {"COMPLETE", "failed", "aborted", "IDLE"} or not state.task:
+        return {}
+
+    try:
+        from findings_paths import findings_latest_path
+
+        findings_path = findings_latest_path(workdir)
+        if findings_path.exists():
+            content = findings_path.read_text(encoding="utf-8", errors="ignore")
+            degraded_mode = "degraded" in content.lower()
+            return {
+                "research_found": True,
+                "research_source": "findings_latest",
+                "research_path": str(findings_path),
+                "key_terms": state.task.title if state.task else "",
+                "search_engine": None,
+                "sources_count": 0,
+                "used_real_search": not degraded_mode,
+                "degraded_mode": degraded_mode,
+                "degraded_reason": "derived from findings_latest",
+                "search_error": None,
+                "evidence_status": "degraded" if degraded_mode else "verified",
+            }
+    except Exception:
+        return {}
+
+    return {}
+
+
 def _build_planning_summary(workdir: str, state: WorkflowState | None) -> dict[str, Any]:
     """Build the canonical planning summary from live plan/frontier state."""
     phase = state.phase.get("current", "IDLE") if state and state.phase else "IDLE"
@@ -483,6 +545,22 @@ def _is_meaningful_thinking_summary(summary: dict[str, Any] | None) -> bool:
     if major_contradiction in {"", "(未设置)", "unset"}:
         return False
     if local_attack_point in {"", "(未设置)", "unset"}:
+        return False
+    return True
+
+
+def _is_meaningful_research_summary(summary: dict[str, Any] | None) -> bool:
+    """Return True only for a research summary with actual content."""
+    if not summary:
+        return False
+    research_source = str(summary.get("research_source", "")).strip()
+    research_path = str(summary.get("research_path", "")).strip()
+    key_terms = str(summary.get("key_terms", "")).strip()
+    if research_source in {"", "(未设置)", "unset"}:
+        return False
+    if research_path in {"", "(未设置)", "unset"}:
+        return False
+    if key_terms in {"", "(未设置)", "unset"}:
         return False
     return True
 
@@ -907,6 +985,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
             "errors": ["state file does not exist"],
             "runtime_profile_summary": get_runtime_profile_summary(None),
             "planning_summary": get_planning_summary(workdir, None),
+            "research_summary": get_research_summary(workdir, None),
             "thinking_summary": get_thinking_summary(workdir, None),
             "review_summary": get_review_summary(workdir, None),
             "failure_event_summary": get_failure_event_summary(None),
@@ -925,6 +1004,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "allowed_transitions": get_allowed_transitions(state.phase.get("current", "IDLE")),
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
+        "research_summary": get_research_summary(workdir, state),
         "thinking_summary": get_thinking_summary(workdir, state),
         "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),

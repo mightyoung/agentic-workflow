@@ -88,6 +88,19 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **worktree_reason**: (未设置)
 - **plan_digest**: (未设置)
 
+## RESEARCH摘要
+- **research_found**: (未设置)
+- **research_source**: (未设置)
+- **research_path**: (未设置)
+- **key_terms**: (未设置)
+- **search_engine**: (未设置)
+- **sources_count**: 0
+- **used_real_search**: (未设置)
+- **degraded_mode**: (未设置)
+- **degraded_reason**: (未设置)
+- **search_error**: (未设置)
+- **evidence_status**: (未设置)
+
 ## THINKING摘要
 - **workflow_label**: (未设置)
 - **workflow**: (未设置)
@@ -628,12 +641,61 @@ def get_review_summary(path: str) -> dict[str, Any]:
     }
 
 
+def get_research_summary(path: str) -> dict[str, Any]:
+    """从 SESSION-STATE.md 读取 RESEARCH 摘要。"""
+    if not os.path.exists(path):
+        return {}
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = (
+        r"## RESEARCH摘要\n"
+        r"(?:- \*\*research_found\*\*: (.*)\n"
+        r"- \*\*research_source\*\*: (.*)\n"
+        r"- \*\*research_path\*\*: (.*)\n"
+        r"- \*\*key_terms\*\*: (.*)\n"
+        r"- \*\*search_engine\*\*: (.*)\n"
+        r"- \*\*sources_count\*\*: (\d+)\n"
+        r"- \*\*used_real_search\*\*: (.*)\n"
+        r"- \*\*degraded_mode\*\*: (.*)\n"
+        r"- \*\*degraded_reason\*\*: (.*)\n"
+        r"- \*\*search_error\*\*: (.*)\n"
+        r"- \*\*evidence_status\*\*: (.*)\n)?"
+    )
+    match = re.search(pattern, content)
+    if not match:
+        return {}
+
+    groups = match.groups()
+    if not groups or len(groups) < 11 or groups[0] is None:
+        return {}
+
+    def _as_bool(value: str | None) -> bool:
+        return str(value).strip().lower() in {"true", "1", "yes", "y"}
+
+    return {
+        "research_found": _as_bool(groups[0]),
+        "research_source": str(groups[1]).strip(),
+        "research_path": str(groups[2]).strip(),
+        "key_terms": str(groups[3]).strip(),
+        "search_engine": str(groups[4]).strip(),
+        "sources_count": int(groups[5]),
+        "used_real_search": _as_bool(groups[6]),
+        "degraded_mode": _as_bool(groups[7]),
+        "degraded_reason": str(groups[8]).strip() if groups[8] else None,
+        "search_error": str(groups[9]).strip() if groups[9] else None,
+        "evidence_status": str(groups[10]).strip(),
+    }
+
+
 def update_resume_summary(
     path: str,
     resume_from: str,
     next_phase: str | None,
     original_session_id: str,
     runtime_profile: dict[str, Any] | None = None,
+    research_summary: dict[str, Any] | None = None,
     planning_summary: dict[str, Any] | None = None,
     review_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
@@ -647,6 +709,7 @@ def update_resume_summary(
         content = f.read()
 
     runtime_profile = runtime_profile or {}
+    research_summary = research_summary or {}
     planning_summary = planning_summary or {}
     review_summary = review_summary or {}
     thinking_summary = thinking_summary or {}
@@ -661,6 +724,17 @@ def update_resume_summary(
         f"- **use_skill**: {runtime_profile.get('use_skill', '(未设置)')}\n"
         f"- **skill_activation_level**: {runtime_profile.get('skill_activation_level', '(未设置)')}\n"
         f"- **complexity**: {runtime_profile.get('complexity', '(未设置)')}\n"
+        f"- **research_found**: {research_summary.get('research_found', False)}\n"
+        f"- **research_source**: {research_summary.get('research_source', '(未设置)')}\n"
+        f"- **research_path**: {research_summary.get('research_path', '(未设置)')}\n"
+        f"- **key_terms**: {research_summary.get('key_terms', '(未设置)')}\n"
+        f"- **search_engine**: {research_summary.get('search_engine', '(未设置)')}\n"
+        f"- **sources_count**: {research_summary.get('sources_count', 0)}\n"
+        f"- **used_real_search**: {research_summary.get('used_real_search', '(未设置)')}\n"
+        f"- **degraded_mode**: {research_summary.get('degraded_mode', False)}\n"
+        f"- **degraded_reason**: {research_summary.get('degraded_reason', '(未设置)')}\n"
+        f"- **search_error**: {research_summary.get('search_error', '(未设置)')}\n"
+        f"- **evidence_status**: {research_summary.get('evidence_status', '(未设置)')}\n"
         f"- **planning_plan_source**: {planning_summary.get('plan_source', '(未设置)')}\n"
         f"- **planning_planning_mode**: {planning_summary.get('planning_mode', '(未设置)')}\n"
         f"- **planning_plan_task_count**: {planning_summary.get('plan_task_count', 0)}\n"
@@ -688,7 +762,7 @@ def update_resume_summary(
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*research_found\*\*: .*\n- \*\*research_source\*\*: .*\n- \*\*research_path\*\*: .*\n- \*\*key_terms\*\*: .*\n- \*\*search_engine\*\*: .*\n- \*\*sources_count\*\*: .*\n- \*\*used_real_search\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*degraded_reason\*\*: .*\n- \*\*search_error\*\*: .*\n- \*\*evidence_status\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -732,6 +806,60 @@ def update_review_summary(
         content = re.sub(pattern, section, content, count=1)
     else:
         insert_after = r"(\## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?)"
+        if re.search(insert_after, content):
+            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
+        else:
+            content += "\n" + section + "\n"
+
+    safe_write_text_locked(path, content)
+    return True
+
+
+def update_research_summary(
+    path: str,
+    research_summary: dict[str, Any] | None,
+) -> bool:
+    """更新研究摘要到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    research_summary = research_summary or {}
+    section = (
+        "## RESEARCH摘要\n"
+        f"- **research_found**: {research_summary.get('research_found', False)}\n"
+        f"- **research_source**: {research_summary.get('research_source', '(未设置)')}\n"
+        f"- **research_path**: {research_summary.get('research_path', '(未设置)')}\n"
+        f"- **key_terms**: {research_summary.get('key_terms', '(未设置)')}\n"
+        f"- **search_engine**: {research_summary.get('search_engine', '(未设置)')}\n"
+        f"- **sources_count**: {research_summary.get('sources_count', 0)}\n"
+        f"- **used_real_search**: {research_summary.get('used_real_search', False)}\n"
+        f"- **degraded_mode**: {research_summary.get('degraded_mode', False)}\n"
+        f"- **degraded_reason**: {research_summary.get('degraded_reason', '(未设置)')}\n"
+        f"- **search_error**: {research_summary.get('search_error', '(未设置)')}\n"
+        f"- **evidence_status**: {research_summary.get('evidence_status', '(未设置)')}\n"
+    )
+
+    pattern = (
+        r"## RESEARCH摘要\n"
+        r"(?:- \*\*research_found\*\*: .*\n"
+        r"- \*\*research_source\*\*: .*\n"
+        r"- \*\*research_path\*\*: .*\n"
+        r"- \*\*key_terms\*\*: .*\n"
+        r"- \*\*search_engine\*\*: .*\n"
+        r"- \*\*sources_count\*\*: .*\n"
+        r"- \*\*used_real_search\*\*: .*\n"
+        r"- \*\*degraded_mode\*\*: .*\n"
+        r"- \*\*degraded_reason\*\*: .*\n"
+        r"- \*\*search_error\*\*: .*\n"
+        r"- \*\*evidence_status\*\*: .*\n)?"
+    )
+    if re.search(pattern, content):
+        content = re.sub(pattern, section, content, count=1)
+    else:
+        insert_after = r"(\## 计划摘要\n(?:- \*\*plan_source\*\*: .*\n- \*\*planning_mode\*\*: .*\n- \*\*plan_task_count\*\*: .*\n- \*\*completed_task_count\*\*: .*\n- \*\*in_progress_task_count\*\*: .*\n- \*\*blocked_task_count\*\*: .*\n- \*\*ready_task_count\*\*: .*\n- \*\*parallel_candidate_group_count\*\*: .*\n- \*\*parallel_ready_task_count\*\*: .*\n- \*\*conflict_group_count\*\*: .*\n- \*\*worktree_recommended\*\*: .*\n- \*\*worktree_reason\*\*: .*\n- \*\*plan_digest\*\*: .*\n)?)"
         if re.search(insert_after, content):
             content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
         else:

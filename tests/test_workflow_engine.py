@@ -518,6 +518,15 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertTrue(latest_file.exists())
         self.assertFalse(list(Path(self.temp_dir).glob("findings_*.md")))
 
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        research_summary = snapshot["research_summary"]
+        self.assertTrue(research_summary["research_found"])
+        self.assertEqual(research_summary["research_source"], "findings_session")
+        self.assertEqual(research_summary["search_engine"], "duckduckgo")
+        self.assertEqual(research_summary["sources_count"], 1)
+        self.assertTrue(research_summary["used_real_search"])
+        self.assertEqual(research_summary["evidence_status"], "verified")
+
     def test_research_no_results_generates_explicit_degraded_report(self):
         workflow_engine.initialize_workflow("帮我搜索最佳实践", workdir=self.temp_dir)
         state = unified_state.load_state(self.temp_dir)
@@ -547,6 +556,15 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("No verifiable external sources", content)
         self.assertIn("degraded", content.lower())
         self.assertGreater(len(content.strip()), 100)
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        research_summary = snapshot["research_summary"]
+        self.assertTrue(research_summary["research_found"])
+        self.assertEqual(research_summary["research_source"], "findings_session")
+        self.assertEqual(research_summary["sources_count"], 0)
+        self.assertFalse(research_summary["used_real_search"])
+        self.assertTrue(research_summary["degraded_mode"])
+        self.assertEqual(research_summary["evidence_status"], "degraded")
 
 
 class TestQualityGateCompletionBlock(unittest.TestCase):

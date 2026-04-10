@@ -519,6 +519,7 @@ def _build_resume_summary(
     original_trajectory: dict[str, Any],
     resume_from: str,
     next_phase: str | None,
+    research_summary: dict[str, Any] | None = None,
     planning_summary: dict[str, Any] | None = None,
     review_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
@@ -540,6 +541,7 @@ def _build_resume_summary(
 
     latest_error = errored_phases[-1] if errored_phases else None
     runtime_profile = original_trajectory.get("runtime_profile", {})
+    research_summary = research_summary or {}
     planning_summary = planning_summary or {}
     review_summary = review_summary or {}
     thinking_summary = thinking_summary or {}
@@ -551,6 +553,7 @@ def _build_resume_summary(
         "resume_from": resume_from,
         "next_phase": next_phase,
         "runtime_profile": runtime_profile,
+        "research_summary": research_summary,
         "planning_summary": planning_summary,
         "review_summary": review_summary,
         "thinking_summary": thinking_summary,
@@ -671,29 +674,34 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         return None
 
     thinking_summary: dict[str, Any] = {}
+    research_summary: dict[str, Any] = {}
     planning_summary: dict[str, Any] = {}
     review_summary: dict[str, Any] = {}
     try:
-        from memory_ops import get_planning_summary, get_review_summary
+        from memory_ops import get_planning_summary, get_research_summary, get_review_summary
         from unified_state import get_thinking_summary as get_state_thinking_summary, load_state
 
         session_state = str(Path(workdir) / "SESSION-STATE.md")
         planning_summary = get_planning_summary(session_state)
+        research_summary = get_research_summary(session_state)
         review_summary = get_review_summary(session_state)
         thinking_summary = get_state_thinking_summary(workdir, load_state(workdir))
     except Exception:
         thinking_summary = {}
+        research_summary = {}
         planning_summary = {}
         review_summary = {}
 
     if not planning_summary:
         try:
-            from unified_state import get_planning_summary as get_state_planning_summary, load_state
+            from unified_state import get_planning_summary as get_state_planning_summary, get_research_summary as get_state_research_summary, load_state
 
             planning_state = load_state(workdir)
             planning_summary = get_state_planning_summary(workdir, planning_state)
+            research_summary = get_state_research_summary(workdir, planning_state)
         except Exception:
             planning_summary = {}
+            research_summary = {}
 
     if not review_summary:
         try:
@@ -703,6 +711,15 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
             review_summary = get_state_review_summary(workdir, review_state)
         except Exception:
             review_summary = {}
+
+    if not research_summary:
+        try:
+            from unified_state import get_research_summary as get_state_research_summary, load_state
+
+            research_state = load_state(workdir)
+            research_summary = get_state_research_summary(workdir, research_state)
+        except Exception:
+            research_summary = {}
 
     # 获取当前活跃phase
     original_phase = original_trajectory.get("current_phase", "IDLE")
@@ -719,6 +736,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
                 original_trajectory,
                 original_phase,
                 next_phase,
+                research_summary=research_summary,
                 planning_summary=planning_summary,
                 review_summary=review_summary,
                 thinking_summary=thinking_summary,
@@ -768,6 +786,7 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         original_trajectory,
         resume_from,
         next_phase,
+        research_summary=research_summary,
         planning_summary=planning_summary,
         review_summary=review_summary,
         thinking_summary=thinking_summary,

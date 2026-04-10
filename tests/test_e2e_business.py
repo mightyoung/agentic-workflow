@@ -533,6 +533,10 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
                     "Real search should identify the search engine")
             self.assertEqual(findings_artifacts[0].get("phase"), "RESEARCH",
                 "Findings artifact should belong to RESEARCH phase")
+        research_summary = snapshot.get("research_summary", {})
+        self.assertTrue(research_summary.get("research_found", False))
+        self.assertEqual(research_summary.get("research_source"), "findings_session")
+        self.assertIn(research_summary.get("evidence_status"), ["verified", "degraded"])
         # Verify findings content structure and semantic relevance to prompt
         has_valid_content = self._check_artifact_content("findings", prompt)
         self.assertTrue(has_valid_content,

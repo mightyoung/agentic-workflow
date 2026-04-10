@@ -61,6 +61,7 @@ from unified_state import (
     get_allowed_transitions,
     get_failure_event_summary,
     get_planning_summary,
+    get_research_summary,
     get_thinking_summary,
     get_review_summary,
     get_runtime_profile_summary,
@@ -1839,6 +1840,19 @@ def advance_workflow(
             }
             if degraded_reason:
                 metadata["degraded_reason"] = degraded_reason
+            research_summary = {
+                "research_found": True,
+                "research_source": "findings_session",
+                "research_path": str(findings_path),
+                "key_terms": key_terms_str,
+                "search_engine": search_response.search_engine,
+                "sources_count": search_response.total_results,
+                "used_real_search": True,
+                "degraded_mode": search_response.search_engine == "duckduckgo",
+                "degraded_reason": degraded_reason,
+                "search_error": None,
+                "evidence_status": "verified" if search_response.total_results > 0 else "degraded",
+            }
         else:
             # Search failed or returned no usable results.
             # Emit an explicit degraded report instead of pretending we found evidence.
@@ -1892,10 +1906,25 @@ def advance_workflow(
                 "degraded_mode": True,
                 "degraded_reason": search_note,
             }
+            research_summary = {
+                "research_found": True,
+                "research_source": "findings_session",
+                "research_path": str(findings_path),
+                "key_terms": key_terms_str,
+                "search_engine": search_response.search_engine,
+                "sources_count": 0,
+                "used_real_search": False,
+                "degraded_mode": True,
+                "degraded_reason": search_note,
+                "search_error": search_note,
+                "evidence_status": "degraded",
+            }
 
         safe_write_text_locked(findings_path, findings_content)
         safe_write_text_locked(findings_latest, findings_content)
         register_artifact(workdir, ArtifactType.FINDINGS, str(findings_path), "RESEARCH", "system", metadata=metadata)
+        session_state_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
+        memory_ops.update_research_summary(str(session_state_path), research_summary)
 
     if current_phase == "REVIEWING" and phase != "REVIEWING":
         # Generating review when leaving REVIEWING phase (completing review work)
@@ -2638,6 +2667,7 @@ def resume_workflow(
     new_session_id = result["session_id"]
     next_phase = result["next_phase"]
     resume_summary = result.get("resume_summary", {})
+    research_summary = resume_summary.get("research_summary", {})
     planning_summary = resume_summary.get("planning_summary", {})
     review_summary = resume_summary.get("review_summary", {})
     thinking_summary = resume_summary.get("thinking_summary", {})
@@ -2648,9 +2678,12 @@ def resume_workflow(
         runtime_profile_summary = get_runtime_profile_summary(state)
         failure_event_summary = get_failure_event_summary(state)
         state_planning_summary = get_planning_summary(workdir, state)
+        state_research_summary = get_research_summary(workdir, state)
         state_review_summary = get_review_summary(workdir, state)
         if not planning_summary or planning_summary.get("plan_source") in {None, "", "none"}:
             planning_summary = state_planning_summary
+        if not research_summary or research_summary.get("research_source") in {None, "", "none"}:
+            research_summary = state_research_summary
         if not review_summary or review_summary.get("review_source") in {None, "", "none"}:
             review_summary = state_review_summary
         # 记录恢复决策
@@ -2668,6 +2701,7 @@ def resume_workflow(
                 "next_phase": next_phase,
                 "resume_summary": resume_summary,
                 "runtime_profile_summary": runtime_profile_summary,
+                "research_summary": research_summary,
                 "planning_summary": planning_summary,
                 "review_summary": review_summary,
                 "thinking_summary": thinking_summary,
@@ -2685,6 +2719,7 @@ def resume_workflow(
     else:
         runtime_profile_summary = {}
         failure_event_summary = {}
+        research_summary = research_summary or get_research_summary(workdir, None)
         planning_summary = planning_summary or get_planning_summary(workdir, None)
         review_summary = review_summary or get_review_summary(workdir, None)
 
@@ -2695,6 +2730,7 @@ def resume_workflow(
         next_phase=next_phase,
         original_session_id=session_id,
         runtime_profile=runtime_profile_summary,
+        research_summary=research_summary,
         planning_summary=planning_summary,
         review_summary=review_summary,
         thinking_summary=thinking_summary,
@@ -2724,6 +2760,7 @@ def resume_workflow(
         "next_phase": next_phase,
         "resume_summary": resume_summary,
         "runtime_profile_summary": runtime_profile_summary,
+        "research_summary": research_summary,
         "planning_summary": planning_summary,
         "review_summary": review_summary,
         "thinking_summary": thinking_summary,
@@ -3279,6 +3316,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "plan_source": plan_source,
             "next_plan_tasks": next_tasks,
             "planning_summary": get_planning_summary(workdir, None),
+            "research_summary": get_research_summary(workdir, None),
             "thinking_summary": get_thinking_summary(workdir, None),
             "review_summary": get_review_summary(workdir, None),
             "runtime_profile_summary": get_runtime_profile_summary(None),
@@ -3326,6 +3364,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "task": task,
         "runtime_profile_summary": runtime_profile_summary,
         "planning_summary": planning_summary,
+        "research_summary": get_research_summary(workdir, state),
         "thinking_summary": get_thinking_summary(workdir, state),
         "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),

@@ -257,6 +257,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["resume_from"], "EXECUTING")
         self.assertEqual(result["resume_summary"]["original_session_id"], original_session_id)
         self.assertEqual(result["resume_summary"]["phase_count"], 1)
+        self.assertIn("research_summary", result["resume_summary"])
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
         self.assertEqual(result["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(result["resume_summary"]["review_summary"]["review_source"], "review_latest")

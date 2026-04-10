@@ -32,6 +32,7 @@ from memory_ops import get_thinking_summary as get_session_thinking_summary
 from unified_state import (
     get_failure_event_summary,
     get_planning_summary,
+    get_research_summary,
     get_review_summary,
     get_runtime_profile_summary,
     get_thinking_summary as get_state_thinking_summary,
@@ -244,6 +245,7 @@ def conditional_checkpoint(
         "phase": current_phase,
         "runtime_profile_summary": get_runtime_profile_summary(state),
         "planning_summary": get_planning_summary(workdir, state),
+        "research_summary": get_research_summary(workdir, state),
         "thinking_summary": thinking_summary,
         "review_summary": get_review_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
@@ -336,6 +338,17 @@ def conditional_checkpoint(
 - Worktree recommended: {checkpoint_data['planning_summary'].get('worktree_recommended', False)}
 - Worktree reason: {checkpoint_data['planning_summary'].get('worktree_reason') or 'unset'}
 - Plan digest: {checkpoint_data['planning_summary'].get('plan_digest') or 'unset'}
+
+## RESEARCH Summary
+- Research found: {checkpoint_data['research_summary'].get('research_found', False)}
+- Research source: {checkpoint_data['research_summary'].get('research_source') or 'unset'}
+- Research path: {checkpoint_data['research_summary'].get('research_path') or 'unset'}
+- Key terms: {checkpoint_data['research_summary'].get('key_terms') or 'unset'}
+- Search engine: {checkpoint_data['research_summary'].get('search_engine') or 'unset'}
+- Sources count: {checkpoint_data['research_summary'].get('sources_count', 0)}
+- Used real search: {checkpoint_data['research_summary'].get('used_real_search', False)}
+- Degraded mode: {checkpoint_data['research_summary'].get('degraded_mode', False)}
+- Evidence status: {checkpoint_data['research_summary'].get('evidence_status') or 'unset'}
 
 ## THINKING Summary
 - Workflow label: {thinking_summary.get('workflow_label') or 'unset'}
