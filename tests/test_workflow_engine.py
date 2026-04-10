@@ -215,6 +215,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertIn("目标完整性", thinking_summary["major_contradiction"])
         self.assertIn("最小可验证", thinking_summary["local_attack_point"])
         self.assertIn("战略", thinking_summary["stage_judgment"])
+        self.assertIn("sources:0", thinking_summary["research_inputs"])
+        self.assertIsInstance(thinking_summary["reasoning_trace_id"], str)
+        self.assertEqual(len(thinking_summary["reasoning_trace_id"]), 12)
+        self.assertIn(thinking_summary["confidence_level"], ["low", "medium", "high"])
         self.assertEqual(snapshot["thinking_summary"]["workflow_label"], "新项目启动")
         self.assertEqual(snapshot["thinking_summary"]["thinking_mode"], "investigation_first")
         self.assertEqual(
@@ -553,6 +557,11 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(research_summary["sources_count"], 1)
         self.assertTrue(research_summary["used_real_search"])
         self.assertEqual(research_summary["evidence_status"], "verified")
+        self.assertEqual(research_summary["evidence_tier"], "secondary_verified")
+        self.assertAlmostEqual(research_summary["source_confidence"], 0.75)
+        self.assertIn("search_results", research_summary["source_types"])
+        self.assertEqual(research_summary["coverage_scope"], "normal")
+        self.assertEqual(research_summary["freshness"], "current")
         self.assertEqual(
             snapshot["context_for_next_phase"]["research_summary"]["research_source"],
             "findings_session",
@@ -596,6 +605,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertFalse(research_summary["used_real_search"])
         self.assertTrue(research_summary["degraded_mode"])
         self.assertEqual(research_summary["evidence_status"], "degraded")
+        self.assertEqual(research_summary["evidence_tier"], "degraded")
+        self.assertAlmostEqual(research_summary["source_confidence"], 0.25)
+        self.assertEqual(research_summary["coverage_scope"], "narrow")
+        self.assertEqual(research_summary["freshness"], "stale")
         self.assertEqual(
             snapshot["context_for_next_phase"]["research_summary"]["evidence_status"],
             "degraded",
@@ -1013,6 +1026,9 @@ class TestNewPhases(unittest.TestCase):
             ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"],
         )
         self.assertIn("目标完整性", result["thinking_summary"]["major_contradiction"])
+        self.assertIn("sources:0", result["thinking_summary"]["research_inputs"])
+        self.assertIsInstance(result["thinking_summary"]["reasoning_trace_id"], str)
+        self.assertEqual(len(result["thinking_summary"]["reasoning_trace_id"]), 12)
 
         state = unified_state.load_state(self.temp_dir)
         self.assertIsNotNone(state)
@@ -1068,6 +1084,9 @@ class TestNewPhases(unittest.TestCase):
         )
         self.assertEqual(result["thinking_summary"]["major_contradiction"], "事实 vs 假设")
         self.assertEqual(result["thinking_summary"]["stage_judgment"], "战术速决")
+        self.assertIn("sources:0", result["thinking_summary"]["research_inputs"])
+        self.assertIsInstance(result["thinking_summary"]["reasoning_trace_id"], str)
+        self.assertEqual(len(result["thinking_summary"]["reasoning_trace_id"]), 12)
 
         resumed_trajectory = load_trajectory(self.temp_dir, result["new_session_id"])
         self.assertIsNotNone(resumed_trajectory)

@@ -592,12 +592,20 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     if not complexity and task_text:
         complexity, _ = router.estimate_complexity(task_text)
 
+    research_summary = get_research_summary(workdir, state)
+    try:
+        contract_summary = parse_phase_contract(workdir)
+    except Exception:
+        contract_summary = {}
+
     if current_phase in ("PLANNING", "THINKING"):
         memory_intent = "plan"
     elif current_phase == "REVIEWING":
         memory_intent = "review"
     elif current_phase in ("DEBUGGING", "REFINING"):
         memory_intent = "debug"
+
+    thinking_summary: dict[str, Any] = {}
 
     try:
         from memory_longterm import search_memory
@@ -660,8 +668,6 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
             # Experience ledger is best-effort - don't fail the workflow
             pass
 
-    thinking_summary: dict[str, Any] = {}
-
     if current_phase == "RESEARCH":
         # RESEARCH produces findings — THINKING should read them
         findings = findings_session_path(workdir_path, session_id)
@@ -695,7 +701,14 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
 
     elif current_phase == "THINKING":
         # THINKING produces analysis — PLANNING should use conclusions
-        thinking_summary = build_thinking_summary(task_text, complexity or "M", memory_hints, experience_check)
+        thinking_summary = build_thinking_summary(
+            task_text,
+            complexity or "M",
+            memory_hints,
+            experience_check,
+            research_summary=research_summary,
+            contract_summary=contract_summary,
+        )
         thinking_methods = thinking_summary.get("thinking_methods", [])
         methods_text = " → ".join(thinking_methods) if thinking_methods else "调查研究 → 矛盾分析 → 群众路线 → 持久战略"
         summary = (
@@ -706,7 +719,6 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
             f"局部攻坚点: {thinking_summary.get('local_attack_point', '先找最小可验证切口')}。"
         )
 
-    research_summary = get_research_summary(workdir, state)
     if research_summary:
         research_note = (
             f"Research evidence status: {research_summary.get('evidence_status', 'unset')}; "
@@ -1674,6 +1686,13 @@ def initialize_workflow(
             str(session_path),
             planning_summary,
         )
+        from unified_state import _build_thinking_summary_from_state
+
+        thinking_summary = _build_thinking_summary_from_state(workdir, state)
+        memory_ops.update_thinking_summary(
+            str(session_path),
+            thinking_summary,
+        )
         progress_content = _render_progress_content(
             current_phase,
             runtime_profile,
@@ -1846,7 +1865,16 @@ def advance_workflow(
         if phase == "THINKING":
             task_desc = state.task.description if state.task else (state.task.title if state.task else "")
             runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
-            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+            try:
+                contract_summary = parse_phase_contract(workdir)
+            except Exception:
+                contract_summary = {}
+            thinking_summary = build_thinking_summary(
+                task_desc,
+                runtime_complexity,
+                research_summary=research_summary,
+                contract_summary=contract_summary,
+            )
         progress_content = _render_progress_content(
             phase,
             runtime_profile,
@@ -1881,7 +1909,16 @@ def advance_workflow(
         if thinking_summary is None:
             task_desc = state.task.description if state.task else (state.task.title if state.task else "")
             runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
-            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+            try:
+                contract_summary = parse_phase_contract(workdir)
+            except Exception:
+                contract_summary = {}
+            thinking_summary = build_thinking_summary(
+                task_desc,
+                runtime_complexity,
+                research_summary=get_research_summary(workdir, state),
+                contract_summary=contract_summary,
+            )
         memory_ops.update_thinking_summary(
             str(session_path),
             thinking_summary,

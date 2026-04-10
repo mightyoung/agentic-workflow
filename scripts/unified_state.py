@@ -334,7 +334,7 @@ def get_research_summary(workdir: str, state: WorkflowState | None = None) -> di
     session_state_path = Path(workdir) / "SESSION-STATE.md"
     summary = get_session_research_summary(str(session_state_path))
     if _is_meaningful_research_summary(summary):
-        return summary
+        return _enrich_research_summary(summary)
 
     return _build_research_summary_from_state(workdir, state)
 
@@ -346,7 +346,7 @@ def _build_research_summary_from_state(workdir: str, state: WorkflowState | None
     metadata = latest_artifact.get("metadata", {}) if isinstance(latest_artifact, dict) else {}
     findings_path = latest_artifact.get("path") if isinstance(latest_artifact, dict) else None
     if latest_artifact:
-        return {
+        summary = {
             "research_found": True,
             "research_source": "artifact_registry",
             "research_path": findings_path,
@@ -359,6 +359,7 @@ def _build_research_summary_from_state(workdir: str, state: WorkflowState | None
             "search_error": metadata.get("search_error"),
             "evidence_status": "verified" if metadata.get("used_real_search") and metadata.get("sources_count", 0) else "degraded",
         }
+        return _enrich_research_summary(summary)
 
     if state is None:
         state = load_state(workdir)
@@ -376,7 +377,7 @@ def _build_research_summary_from_state(workdir: str, state: WorkflowState | None
         if findings_path.exists():
             content = findings_path.read_text(encoding="utf-8", errors="ignore")
             degraded_mode = "degraded" in content.lower()
-            return {
+            return _enrich_research_summary({
                 "research_found": True,
                 "research_source": "findings_latest",
                 "research_path": str(findings_path),
@@ -388,11 +389,74 @@ def _build_research_summary_from_state(workdir: str, state: WorkflowState | None
                 "degraded_reason": "derived from findings_latest",
                 "search_error": None,
                 "evidence_status": "degraded" if degraded_mode else "verified",
-            }
+            })
     except Exception:
         return {}
 
     return {}
+
+
+def _enrich_research_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Add evidence-grading metadata to a research summary."""
+    if not summary:
+        return {}
+
+    enriched = dict(summary)
+    evidence_status = str(enriched.get("evidence_status", "")).strip().lower()
+    sources_count = int(enriched.get("sources_count", 0) or 0)
+    used_real_search = bool(enriched.get("used_real_search", False))
+    degraded_mode = bool(enriched.get("degraded_mode", False))
+
+    if not evidence_status or evidence_status in {"unset", "none", "(未设置)"}:
+        if used_real_search and sources_count >= 1:
+            evidence_status = "verified"
+        elif degraded_mode or sources_count > 0:
+            evidence_status = "degraded"
+        else:
+            evidence_status = "missing"
+    enriched["evidence_status"] = evidence_status
+
+    if evidence_status == "verified" and used_real_search and sources_count >= 2:
+        evidence_tier = "primary_verified"
+        source_confidence = 0.9
+    elif evidence_status == "verified":
+        evidence_tier = "secondary_verified"
+        source_confidence = 0.75
+    elif evidence_status == "degraded" and sources_count > 0:
+        evidence_tier = "heuristic"
+        source_confidence = 0.45
+    elif evidence_status == "degraded":
+        evidence_tier = "degraded"
+        source_confidence = 0.25
+    else:
+        evidence_tier = "missing"
+        source_confidence = 0.0
+
+    source_types = enriched.get("source_types")
+    if not isinstance(source_types, list):
+        source_types = []
+    if enriched.get("research_source"):
+        source_types.append(str(enriched["research_source"]))
+    if enriched.get("search_engine"):
+        source_types.append(f"search:{enriched['search_engine']}")
+    if used_real_search:
+        source_types.append("search_results")
+    if enriched.get("research_path"):
+        source_types.append("artifact")
+
+    coverage_scope = "broad" if used_real_search and sources_count >= 3 else "normal" if sources_count >= 1 else "narrow"
+    freshness = "current" if evidence_status == "verified" else "stale" if evidence_status == "degraded" else "unknown"
+
+    enriched.update(
+        {
+            "evidence_tier": evidence_tier,
+            "source_confidence": round(float(source_confidence), 2),
+            "source_types": list(dict.fromkeys([str(item) for item in source_types if str(item).strip()])),
+            "coverage_scope": coverage_scope,
+            "freshness": freshness,
+        }
+    )
+    return enriched
 
 
 def _build_planning_summary(workdir: str, state: WorkflowState | None) -> dict[str, Any]:
@@ -537,11 +601,24 @@ def _build_thinking_summary_from_state(workdir: str, state: WorkflowState | None
         from runtime_profile import build_thinking_summary
 
         runtime_profile = get_runtime_profile_summary(state)
+        research_summary = get_research_summary(workdir, state)
         task_desc = state.task.description or state.task.title or ""
         complexity = runtime_profile.get("complexity")
         if not complexity and state.metadata:
             complexity = state.metadata.get("complexity")
-        summary = build_thinking_summary(task_desc, str(complexity or "M"))
+        contract_summary: dict[str, Any] = {}
+        try:
+            from workflow_engine import parse_phase_contract
+
+            contract_summary = parse_phase_contract(workdir)
+        except Exception:
+            contract_summary = {}
+        summary = build_thinking_summary(
+            task_desc,
+            str(complexity or "M"),
+            research_summary=research_summary,
+            contract_summary=contract_summary,
+        )
         if not summary.get("thinking_methods"):
             summary["thinking_methods"] = ["调查研究", "矛盾分析", "集中力量", "实践认知", "批评自我批评"]
         return summary
@@ -808,6 +885,11 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
         "degraded_reason",
         "search_error",
         "evidence_status",
+        "evidence_tier",
+        "source_confidence",
+        "source_types",
+        "coverage_scope",
+        "freshness",
     ]
     thinking_fields = [
         "workflow_label",
@@ -819,6 +901,11 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
         "local_attack_point",
         "recommendation",
         "memory_hints_count",
+        "research_inputs",
+        "memory_inputs",
+        "contract_inputs",
+        "reasoning_trace_id",
+        "confidence_level",
     ]
     review_fields = [
         "review_found",

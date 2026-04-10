@@ -8,6 +8,7 @@ heuristics so the authoritative runtime and middleware prototype do not drift.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 MINIMAL_CORE = """## 原则
@@ -283,12 +284,16 @@ def build_thinking_summary(
     complexity: str,
     memory_hints: list[str] | None = None,
     experience_check: dict[str, Any] | None = None,
+    research_summary: dict[str, Any] | None = None,
+    contract_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a qiushi-inspired THINKING summary for the next phase context."""
     text = (task_text or "").strip()
     text_lower = text.lower()
     memory_hints = memory_hints or []
     experience_check = experience_check or {}
+    research_summary = research_summary or {}
+    contract_summary = contract_summary or {}
     complexity = (complexity or "").upper()
 
     is_new_project = _contains_any(text_lower, THINKING_NEW_PROJECT_HINTS)
@@ -354,6 +359,53 @@ def build_thinking_summary(
     else:
         thinking_mode = "lightweight"
 
+    research_inputs: list[str] = []
+    research_source = str(research_summary.get("research_source", "")).strip()
+    if research_source and research_source not in {"(未设置)", "unset", "none"}:
+        research_inputs.append(research_source)
+    evidence_status = str(research_summary.get("evidence_status", "")).strip()
+    if evidence_status:
+        research_inputs.append(f"evidence:{evidence_status}")
+    search_engine = str(research_summary.get("search_engine", "")).strip()
+    if search_engine:
+        research_inputs.append(f"engine:{search_engine}")
+    sources_count = research_summary.get("sources_count", 0)
+    research_inputs.append(f"sources:{int(sources_count or 0)}")
+
+    memory_inputs = [str(hint).strip()[:120] for hint in memory_hints if str(hint).strip()][:3]
+
+    contract_inputs: list[str] = []
+    for key in ("goals", "acceptance_criteria", "impact_files", "dependencies", "verification_methods"):
+        value = contract_summary.get(key, [])
+        if isinstance(value, list):
+            entries = [str(item).strip() for item in value if str(item).strip()]
+            if entries:
+                contract_inputs.append(f"{key}:{len(entries)}")
+                contract_inputs.extend(entries[:2])
+        elif isinstance(value, str) and value.strip():
+            contract_inputs.append(f"{key}:{value.strip()}")
+
+    if contract_summary.get("status"):
+        contract_inputs.append(f"status:{str(contract_summary.get('status')).strip()}")
+
+    confidence_level = "low"
+    if evidence_status == "verified" and memory_inputs and contract_inputs:
+        confidence_level = "high"
+    elif evidence_status in {"verified", "degraded"} or memory_inputs or contract_inputs or experience_check.get("has_relevant_experience"):
+        confidence_level = "medium"
+
+    trace_basis = "|".join(
+        [
+            text,
+            complexity,
+            thinking_mode,
+            evidence_status or "unset",
+            str(len(memory_inputs)),
+            str(len(contract_inputs)),
+        ]
+    )
+    reasoning_trace_id = hashlib.sha1(trace_basis.encode("utf-8", errors="ignore")).hexdigest()[:12]
+
     return {
         "workflow": workflow,
         "workflow_label": workflow_label,
@@ -366,6 +418,11 @@ def build_thinking_summary(
         "local_attack_point": local_attack_point,
         "recommendation": recommendation,
         "memory_hints_count": len(memory_hints),
+        "research_inputs": research_inputs,
+        "memory_inputs": memory_inputs,
+        "contract_inputs": contract_inputs,
+        "reasoning_trace_id": reasoning_trace_id,
+        "confidence_level": confidence_level,
     }
 
 

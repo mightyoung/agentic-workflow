@@ -40,6 +40,129 @@ def _display_value(value: Any, default: str = "(未设置)") -> Any:
     return value
 
 
+def _enrich_research_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Fill evidence-grading fields for research summaries."""
+    if not summary:
+        return {}
+    enriched = dict(summary)
+    evidence_status = str(enriched.get("evidence_status", "")).strip().lower()
+    sources_count = int(enriched.get("sources_count", 0) or 0)
+    used_real_search = bool(enriched.get("used_real_search", False))
+    degraded_mode = bool(enriched.get("degraded_mode", False))
+
+    if not evidence_status or evidence_status in {"unset", "none", "(未设置)"}:
+        if used_real_search and sources_count >= 1:
+            evidence_status = "verified"
+        elif degraded_mode or sources_count > 0:
+            evidence_status = "degraded"
+        else:
+            evidence_status = "missing"
+    enriched["evidence_status"] = evidence_status
+
+    if evidence_status == "verified" and used_real_search and sources_count >= 2:
+        evidence_tier = "primary_verified"
+        source_confidence = 0.9
+    elif evidence_status == "verified":
+        evidence_tier = "secondary_verified"
+        source_confidence = 0.75
+    elif evidence_status == "degraded" and sources_count > 0:
+        evidence_tier = "heuristic"
+        source_confidence = 0.45
+    elif evidence_status == "degraded":
+        evidence_tier = "degraded"
+        source_confidence = 0.25
+    else:
+        evidence_tier = "missing"
+        source_confidence = 0.0
+
+    source_types = enriched.get("source_types")
+    if not isinstance(source_types, list):
+        source_types = []
+    source_types = [
+        str(item).strip()
+        for item in source_types
+        if str(item).strip() and str(item).strip().lower() not in {"(未设置)", "unset", "none"}
+    ]
+    if enriched.get("research_source"):
+        source_types.append(str(enriched["research_source"]))
+    if enriched.get("search_engine"):
+        source_types.append(f"search:{enriched['search_engine']}")
+    if used_real_search:
+        source_types.append("search_results")
+    if enriched.get("research_path"):
+        source_types.append("artifact")
+
+    enriched.update(
+        {
+            "evidence_tier": evidence_tier,
+            "source_confidence": round(float(source_confidence), 2),
+            "source_types": list(dict.fromkeys([str(item) for item in source_types if str(item).strip()])),
+            "coverage_scope": "broad" if used_real_search and sources_count >= 3 else "normal" if sources_count >= 1 else "narrow",
+            "freshness": "current" if evidence_status == "verified" else "stale" if evidence_status == "degraded" else "unknown",
+        }
+    )
+    return enriched
+
+
+def _enrich_thinking_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Fill input-binding fields for THINKING summaries."""
+    if not summary:
+        return {}
+
+    enriched = dict(summary)
+    workflow_label = str(enriched.get("workflow_label", "")).strip()
+    thinking_mode = str(enriched.get("thinking_mode", "")).strip()
+    major_contradiction = str(enriched.get("major_contradiction", "")).strip()
+    stage_judgment = str(enriched.get("stage_judgment", "")).strip()
+    local_attack_point = str(enriched.get("local_attack_point", "")).strip()
+    memory_hints_count = int(enriched.get("memory_hints_count", 0) or 0)
+    def _normalize_items(values: Any) -> list[str]:
+        if not isinstance(values, list):
+            return []
+        items: list[str] = []
+        for item in values:
+            text = str(item).strip()
+            if text and text.lower() not in {"(未设置)", "unset", "none"}:
+                items.append(text)
+        return items
+
+    research_inputs = _normalize_items(enriched.get("research_inputs"))
+    memory_inputs = _normalize_items(enriched.get("memory_inputs"))
+    contract_inputs = _normalize_items(enriched.get("contract_inputs"))
+    if not research_inputs:
+        research_inputs = ["sources:0"]
+
+    if not enriched.get("reasoning_trace_id"):
+        import hashlib
+
+        basis = "|".join(
+            [
+                workflow_label,
+                thinking_mode,
+                major_contradiction,
+                stage_judgment,
+                local_attack_point,
+                str(memory_hints_count),
+                str(len(research_inputs)),
+                str(len(contract_inputs)),
+            ]
+        )
+        enriched["reasoning_trace_id"] = hashlib.sha1(basis.encode("utf-8", errors="ignore")).hexdigest()[:12]
+
+    if not enriched.get("confidence_level") or str(enriched.get("confidence_level", "")).strip() in {"(未设置)", "unset"}:
+        if memory_hints_count >= 2 and (research_inputs or contract_inputs):
+            enriched["confidence_level"] = "high"
+        elif memory_hints_count >= 1 or research_inputs or contract_inputs:
+            enriched["confidence_level"] = "medium"
+        else:
+            enriched["confidence_level"] = "low"
+
+    enriched["research_inputs"] = research_inputs
+    enriched["memory_inputs"] = memory_inputs
+    enriched["contract_inputs"] = contract_inputs
+    return enriched
+
+
 def _validate_path(path: str) -> bool:
     """验证路径安全（防止路径遍历攻击）"""
     try:
@@ -114,6 +237,11 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **degraded_reason**: (未设置)
 - **search_error**: (未设置)
 - **evidence_status**: (未设置)
+- **evidence_tier**: (未设置)
+- **source_confidence**: (未设置)
+- **source_types**: (未设置)
+- **coverage_scope**: (未设置)
+- **freshness**: (未设置)
 
 ## THINKING摘要
 - **workflow_label**: (未设置)
@@ -125,6 +253,11 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **local_attack_point**: (未设置)
 - **recommendation**: (未设置)
 - **memory_hints_count**: 0
+- **research_inputs**: (未设置)
+- **memory_inputs**: (未设置)
+- **contract_inputs**: (未设置)
+- **reasoning_trace_id**: (未设置)
+- **confidence_level**: (未设置)
 
 ## 恢复摘要
 - **original_session_id**: (未设置)
@@ -576,7 +709,7 @@ def update_thinking_summary(
     with open(path, encoding="utf-8") as f:
         content = f.read()
 
-    thinking_summary = thinking_summary or {}
+    thinking_summary = _enrich_thinking_summary(thinking_summary or {})
     thinking_mode = str(thinking_summary.get("thinking_mode", "")).strip()
     if not thinking_mode or thinking_mode in {"(未设置)", "unset"}:
         workflow = str(thinking_summary.get("workflow", "")).strip()
@@ -614,9 +747,14 @@ def update_thinking_summary(
         f"- **local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
         f"- **recommendation**: {thinking_summary.get('recommendation', '(未设置)')}\n"
         f"- **memory_hints_count**: {thinking_summary.get('memory_hints_count', 0)}\n"
+        f"- **research_inputs**: {' | '.join(thinking_summary.get('research_inputs', [])) if thinking_summary.get('research_inputs') else '(未设置)'}\n"
+        f"- **memory_inputs**: {' | '.join(thinking_summary.get('memory_inputs', [])) if thinking_summary.get('memory_inputs') else '(未设置)'}\n"
+        f"- **contract_inputs**: {' | '.join(thinking_summary.get('contract_inputs', [])) if thinking_summary.get('contract_inputs') else '(未设置)'}\n"
+        f"- **reasoning_trace_id**: {thinking_summary.get('reasoning_trace_id', '(未设置)')}\n"
+        f"- **confidence_level**: {thinking_summary.get('confidence_level', '(未设置)')}\n"
     )
 
-    pattern = r"## THINKING摘要\n(?:- \*\*workflow_label\*\*: .*\n- \*\*workflow\*\*: .*\n- \*\*thinking_mode\*\*: .*\n- \*\*thinking_methods\*\*: .*\n- \*\*major_contradiction\*\*: .*\n- \*\*stage_judgment\*\*: .*\n- \*\*local_attack_point\*\*: .*\n- \*\*recommendation\*\*: .*\n- \*\*memory_hints_count\*\*: .*\n)?"
+    pattern = r"## THINKING摘要\n(?:- \*\*workflow_label\*\*: .*\n- \*\*workflow\*\*: .*\n- \*\*thinking_mode\*\*: .*\n- \*\*thinking_methods\*\*: .*\n- \*\*major_contradiction\*\*: .*\n- \*\*stage_judgment\*\*: .*\n- \*\*local_attack_point\*\*: .*\n- \*\*recommendation\*\*: .*\n- \*\*memory_hints_count\*\*: .*\n- \*\*research_inputs\*\*: .*\n- \*\*memory_inputs\*\*: .*\n- \*\*contract_inputs\*\*: .*\n- \*\*reasoning_trace_id\*\*: .*\n- \*\*confidence_level\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -648,19 +786,24 @@ def get_thinking_summary(path: str) -> dict[str, Any]:
         r"- \*\*stage_judgment\*\*: (.*)\n"
         r"- \*\*local_attack_point\*\*: (.*)\n"
         r"- \*\*recommendation\*\*: (.*)\n"
-        r"- \*\*memory_hints_count\*\*: (\d+)\n)?"
+        r"- \*\*memory_hints_count\*\*: (\d+)\n"
+        r"- \*\*research_inputs\*\*: (.*)\n"
+        r"- \*\*memory_inputs\*\*: (.*)\n"
+        r"- \*\*contract_inputs\*\*: (.*)\n"
+        r"- \*\*reasoning_trace_id\*\*: (.*)\n"
+        r"- \*\*confidence_level\*\*: (.*)\n)?"
     )
     match = re.search(pattern, content)
     if not match:
         return {}
 
     groups = match.groups()
-    if not groups or len(groups) < 9 or groups[0] is None:
+    if not groups or len(groups) < 14 or groups[0] is None:
         return {}
 
     methods_text = str(groups[3]).strip()
     thinking_methods = [part.strip() for part in methods_text.split("|") if part.strip()]
-    return {
+    return _enrich_thinking_summary({
         "workflow_label": groups[0].strip(),
         "workflow": groups[1].strip(),
         "thinking_mode": groups[2].strip(),
@@ -670,7 +813,12 @@ def get_thinking_summary(path: str) -> dict[str, Any]:
         "local_attack_point": groups[6].strip(),
         "recommendation": groups[7].strip(),
         "memory_hints_count": int(groups[8]),
-    }
+        "research_inputs": [part.strip() for part in str(groups[9]).split("|") if part.strip()] if groups[9] else [],
+        "memory_inputs": [part.strip() for part in str(groups[10]).split("|") if part.strip()] if groups[10] else [],
+        "contract_inputs": [part.strip() for part in str(groups[11]).split("|") if part.strip()] if groups[11] else [],
+        "reasoning_trace_id": str(groups[12]).strip(),
+        "confidence_level": str(groups[13]).strip(),
+    })
 
 
 def get_review_summary(path: str) -> dict[str, Any]:
@@ -737,20 +885,32 @@ def get_research_summary(path: str) -> dict[str, Any]:
         r"- \*\*degraded_mode\*\*: (.*)\n"
         r"- \*\*degraded_reason\*\*: (.*)\n"
         r"- \*\*search_error\*\*: (.*)\n"
-        r"- \*\*evidence_status\*\*: (.*)\n)?"
+        r"- \*\*evidence_status\*\*: (.*)\n"
+        r"- \*\*evidence_tier\*\*: (.*)\n"
+        r"- \*\*source_confidence\*\*: (.*)\n"
+        r"- \*\*source_types\*\*: (.*)\n"
+        r"- \*\*coverage_scope\*\*: (.*)\n"
+        r"- \*\*freshness\*\*: (.*)\n)?"
     )
     match = re.search(pattern, content)
     if not match:
         return {}
 
     groups = match.groups()
-    if not groups or len(groups) < 11 or groups[0] is None:
+    if not groups or len(groups) < 16 or groups[0] is None:
         return {}
 
     def _as_bool(value: str | None) -> bool:
         return str(value).strip().lower() in {"true", "1", "yes", "y"}
 
-    return {
+    source_confidence_value: float | None = None
+    if groups[12]:
+        try:
+            source_confidence_value = float(str(groups[12]).strip())
+        except ValueError:
+            source_confidence_value = None
+    source_types = [part.strip() for part in str(groups[13]).split("|") if part.strip()] if groups[13] else []
+    return _enrich_research_summary({
         "research_found": _as_bool(groups[0]),
         "research_source": str(groups[1]).strip(),
         "research_path": str(groups[2]).strip(),
@@ -762,7 +922,12 @@ def get_research_summary(path: str) -> dict[str, Any]:
         "degraded_reason": str(groups[8]).strip() if groups[8] else None,
         "search_error": str(groups[9]).strip() if groups[9] else None,
         "evidence_status": str(groups[10]).strip(),
-    }
+        "evidence_tier": str(groups[11]).strip(),
+        "source_confidence": source_confidence_value,
+        "source_types": source_types,
+        "coverage_scope": str(groups[14]).strip(),
+        "freshness": str(groups[15]).strip(),
+    })
 
 
 def update_resume_summary(
@@ -785,10 +950,10 @@ def update_resume_summary(
         content = f.read()
 
     runtime_profile = runtime_profile or {}
-    research_summary = research_summary or {}
+    research_summary = _enrich_research_summary(research_summary or {})
     planning_summary = planning_summary or {}
     review_summary = review_summary or {}
-    thinking_summary = thinking_summary or {}
+    thinking_summary = _enrich_thinking_summary(thinking_summary or {})
     failure_event_summary = failure_event_summary or {}
 
     section = (
@@ -812,6 +977,11 @@ def update_resume_summary(
         f"- **degraded_reason**: {research_summary.get('degraded_reason', '(未设置)')}\n"
         f"- **search_error**: {research_summary.get('search_error', '(未设置)')}\n"
         f"- **evidence_status**: {research_summary.get('evidence_status', '(未设置)')}\n"
+        f"- **evidence_tier**: {research_summary.get('evidence_tier', '(未设置)')}\n"
+        f"- **source_confidence**: {research_summary.get('source_confidence', '(未设置)')}\n"
+        f"- **source_types**: {' | '.join(research_summary.get('source_types', [])) if research_summary.get('source_types') else '(未设置)'}\n"
+        f"- **coverage_scope**: {research_summary.get('coverage_scope', '(未设置)')}\n"
+        f"- **freshness**: {research_summary.get('freshness', '(未设置)')}\n"
         f"- **planning_plan_source**: {planning_summary.get('plan_source', '(未设置)')}\n"
         f"- **planning_planning_mode**: {planning_summary.get('planning_mode', '(未设置)')}\n"
         f"- **planning_plan_task_count**: {planning_summary.get('plan_task_count', 0)}\n"
@@ -835,11 +1005,17 @@ def update_resume_summary(
         f"- **thinking_local_attack_point**: {thinking_summary.get('local_attack_point', '(未设置)')}\n"
         f"- **thinking_recommendation**: {thinking_summary.get('recommendation', '(未设置)')}\n"
         f"- **thinking_memory_hints_count**: {thinking_summary.get('memory_hints_count', 0)}\n"
+        f"- **thinking_research_inputs**: {' | '.join(thinking_summary.get('research_inputs', [])) if thinking_summary.get('research_inputs') else '(未设置)'}\n"
+        f"- **thinking_memory_inputs**: {' | '.join(thinking_summary.get('memory_inputs', [])) if thinking_summary.get('memory_inputs') else '(未设置)'}\n"
+        f"- **thinking_contract_inputs**: {' | '.join(thinking_summary.get('contract_inputs', [])) if thinking_summary.get('contract_inputs') else '(未设置)'}\n"
+        f"- **thinking_reasoning_trace_id**: {thinking_summary.get('reasoning_trace_id', '(未设置)')}\n"
+        f"- **thinking_confidence_level**: {thinking_summary.get('confidence_level', '(未设置)')}\n"
         f"- **failure_event_count**: {failure_event_summary.get('failure_event_count', 0)}\n"
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
     pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*research_found\*\*: .*\n- \*\*research_source\*\*: .*\n- \*\*research_path\*\*: .*\n- \*\*key_terms\*\*: .*\n- \*\*search_engine\*\*: .*\n- \*\*sources_count\*\*: .*\n- \*\*used_real_search\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*degraded_reason\*\*: .*\n- \*\*search_error\*\*: .*\n- \*\*evidence_status\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
+    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*complexity_confidence\*\*: .*\n- \*\*research_found\*\*: .*\n- \*\*research_source\*\*: .*\n- \*\*research_path\*\*: .*\n- \*\*key_terms\*\*: .*\n- \*\*search_engine\*\*: .*\n- \*\*sources_count\*\*: .*\n- \*\*used_real_search\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*degraded_reason\*\*: .*\n- \*\*search_error\*\*: .*\n- \*\*evidence_status\*\*: .*\n- \*\*evidence_tier\*\*: .*\n- \*\*source_confidence\*\*: .*\n- \*\*source_types\*\*: .*\n- \*\*coverage_scope\*\*: .*\n- \*\*freshness\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*thinking_research_inputs\*\*: .*\n- \*\*thinking_memory_inputs\*\*: .*\n- \*\*thinking_contract_inputs\*\*: .*\n- \*\*thinking_reasoning_trace_id\*\*: .*\n- \*\*thinking_confidence_level\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
@@ -903,7 +1079,7 @@ def update_research_summary(
     with open(path, encoding="utf-8") as f:
         content = f.read()
 
-    research_summary = research_summary or {}
+    research_summary = _enrich_research_summary(research_summary or {})
     section = (
         "## RESEARCH摘要\n"
         f"- **research_found**: {research_summary.get('research_found', False)}\n"
@@ -917,6 +1093,11 @@ def update_research_summary(
         f"- **degraded_reason**: {research_summary.get('degraded_reason', '(未设置)')}\n"
         f"- **search_error**: {research_summary.get('search_error', '(未设置)')}\n"
         f"- **evidence_status**: {research_summary.get('evidence_status', '(未设置)')}\n"
+        f"- **evidence_tier**: {research_summary.get('evidence_tier', '(未设置)')}\n"
+        f"- **source_confidence**: {research_summary.get('source_confidence', '(未设置)')}\n"
+        f"- **source_types**: {' | '.join(research_summary.get('source_types', [])) if research_summary.get('source_types') else '(未设置)'}\n"
+        f"- **coverage_scope**: {research_summary.get('coverage_scope', '(未设置)')}\n"
+        f"- **freshness**: {research_summary.get('freshness', '(未设置)')}\n"
     )
 
     pattern = (
@@ -931,7 +1112,12 @@ def update_research_summary(
         r"- \*\*degraded_mode\*\*: .*\n"
         r"- \*\*degraded_reason\*\*: .*\n"
         r"- \*\*search_error\*\*: .*\n"
-        r"- \*\*evidence_status\*\*: .*\n)?"
+        r"- \*\*evidence_status\*\*: .*\n"
+        r"- \*\*evidence_tier\*\*: .*\n"
+        r"- \*\*source_confidence\*\*: .*\n"
+        r"- \*\*source_types\*\*: .*\n"
+        r"- \*\*coverage_scope\*\*: .*\n"
+        r"- \*\*freshness\*\*: .*\n)?"
     )
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)

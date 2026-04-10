@@ -304,7 +304,12 @@ def conditional_checkpoint(
             if not runtime_complexity and state.metadata:
                 runtime_complexity = state.metadata.get("complexity")
             runtime_complexity = str(runtime_complexity or "M")
-            thinking_summary = build_thinking_summary(task_desc, runtime_complexity)
+            thinking_summary = build_thinking_summary(
+                task_desc,
+                runtime_complexity,
+                research_summary=checkpoint_data["research_summary"],
+                contract_summary=contract_state,
+            )
         except Exception:
             thinking_summary = {}
 
@@ -349,6 +354,11 @@ def conditional_checkpoint(
 - Used real search: {checkpoint_data['research_summary'].get('used_real_search', False)}
 - Degraded mode: {checkpoint_data['research_summary'].get('degraded_mode', False)}
 - Evidence status: {checkpoint_data['research_summary'].get('evidence_status') or 'unset'}
+- Evidence tier: {checkpoint_data['research_summary'].get('evidence_tier') or 'unset'}
+- Source confidence: {checkpoint_data['research_summary'].get('source_confidence') if checkpoint_data['research_summary'].get('source_confidence') is not None else 'unset'}
+- Source types: {' | '.join(checkpoint_data['research_summary'].get('source_types', [])) if checkpoint_data['research_summary'].get('source_types') else 'unset'}
+- Coverage scope: {checkpoint_data['research_summary'].get('coverage_scope') or 'unset'}
+- Freshness: {checkpoint_data['research_summary'].get('freshness') or 'unset'}
 
 ## THINKING Summary
 - Workflow label: {thinking_summary.get('workflow_label') or 'unset'}
@@ -360,6 +370,11 @@ def conditional_checkpoint(
 - Local attack point: {thinking_summary.get('local_attack_point') or 'unset'}
 - Recommendation: {thinking_summary.get('recommendation') or 'unset'}
 - Memory hints count: {thinking_summary.get('memory_hints_count', 0)}
+- Research inputs: {' | '.join(thinking_summary.get('research_inputs', [])) if thinking_summary.get('research_inputs') else 'unset'}
+- Memory inputs: {' | '.join(thinking_summary.get('memory_inputs', [])) if thinking_summary.get('memory_inputs') else 'unset'}
+- Contract inputs: {' | '.join(thinking_summary.get('contract_inputs', [])) if thinking_summary.get('contract_inputs') else 'unset'}
+- Reasoning trace id: {thinking_summary.get('reasoning_trace_id') or 'unset'}
+- Confidence level: {thinking_summary.get('confidence_level') or 'unset'}
 
 ## Review Summary
 - Review found: {checkpoint_data['review_summary'].get('review_found', False)}
