@@ -82,8 +82,7 @@ REAL_TASKS = [
 
 请先写测试用例(使用pytest)，再实现功能。
 只输出Python代码，不需要解释。""",
-        "test_template": """import pytest
-{src_code}
+        "test_template": '''import pytest
 
 def test_simple_palindrome():
     assert is_palindrome("racecar") is True
@@ -103,7 +102,7 @@ def test_none_input():
 
 def test_case_insensitive():
     assert is_palindrome_case_insensitive("RaceCar") is True
-"""
+'''
     },
     {
         "id": "real_exec_02",
@@ -119,8 +118,7 @@ def test_case_insensitive():
 
 请先写测试用例(使用pytest)，再实现功能。
 只输出Python代码，不需要解释。""",
-        "test_template": """import pytest
-{src_code}
+        "test_template": '''import pytest
 
 def test_push_pop():
     s = Stack()
@@ -143,7 +141,7 @@ def test_is_empty():
     assert s.is_empty() is True
     s.push(1)
     assert s.is_empty() is False
-"""
+'''
     },
     {
         "id": "real_exec_03",
@@ -158,8 +156,7 @@ def test_is_empty():
 
 请先写测试用例(使用pytest)，再实现功能。
 只输出Python代码，不需要解释。""",
-        "test_template": """import pytest
-{src_code}
+        "test_template": '''import pytest
 
 def test_basic():
     cache = LRUCache(2)
@@ -183,7 +180,7 @@ def test_update():
     cache.put(2, "b")
     cache.put(1, "aa")  # 更新key=1
     assert cache.get(1) == "aa"
-"""
+'''
     },
     {
         "id": "real_debug_01",
@@ -205,8 +202,7 @@ print(sum_list([1, 2, 3]))  # 返回6
 问题：空列表应该返回0，但函数返回None。
 
 只输出修复后的完整Python代码，不需要解释。""",
-        "test_template": """import pytest
-{src_code}
+        "test_template": '''import pytest
 
 def test_empty_list():
     assert sum_list([]) == 0
@@ -219,7 +215,7 @@ def test_single_element():
 
 def test_negative_numbers():
     assert sum_list([-1, 1, -1]) == -1
-"""
+'''
     },
     {
         "id": "real_debug_02",
@@ -240,8 +236,7 @@ print(reverse_string(None))  # 崩溃！
 问题：None输入应该抛出TypeError，而不是崩溃。
 
 只输出修复后的完整Python代码，不需要解释。""",
-        "test_template": """import pytest
-{src_code}
+        "test_template": '''import pytest
 
 def test_normal():
     assert reverse_string("hello") == "olleh"
@@ -255,7 +250,7 @@ def test_single():
 def test_none_input():
     with pytest.raises(TypeError):
         reverse_string(None)
-"""
+'''
     },
 ]
 
@@ -284,10 +279,15 @@ def call_claude_subprocess(prompt: str, timeout: int = 60) -> tuple[str, float, 
                 output = result.stdout.strip()
                 if output.startswith('{'):
                     json_output = json.loads(output)
-                    if "text" in json_output:
+                    # 尝试多种可能的字段
+                    if "result" in json_output:
+                        return json_output["result"], duration, ""
+                    elif "text" in json_output:
                         return json_output["text"], duration, ""
                     elif "content" in json_output:
                         return json_output["content"], duration, ""
+                    elif "message" in json_output:
+                        return json_output["message"], duration, ""
             except json.JSONDecodeError:
                 pass
             # 如果不是JSON，返回原始输出
@@ -302,7 +302,7 @@ def call_claude_subprocess(prompt: str, timeout: int = 60) -> tuple[str, float, 
 
 
 def extract_code_from_response(response: str) -> str:
-    """从响应中提取Python代码"""
+    """从响应中提取Python代码 - 只提取函数定义"""
     lines = response.split('\n')
     code_lines = []
     in_code_block = False
@@ -311,15 +311,18 @@ def extract_code_from_response(response: str) -> str:
         if line.strip().startswith('```python'):
             in_code_block = True
             continue
-        elif line.strip().startswith('```'):
+        elif line.strip().startswith('```') and in_code_block:
             in_code_block = False
             continue
         if in_code_block:
+            # 跳过print语句和注释
+            stripped = line.strip()
+            if stripped.startswith('print(') or stripped.startswith('#'):
+                continue
             code_lines.append(line)
 
-    # 如果没有代码块，尝试直接提取
+    # 如果没有代码块，尝试直接提取函数定义
     if not code_lines:
-        # 尝试提取以def或class开头的行
         for line in lines:
             stripped = line.strip()
             if stripped.startswith('def ') or stripped.startswith('class '):
@@ -330,20 +333,31 @@ def extract_code_from_response(response: str) -> str:
 
 def run_tests_in_temp_dir(code: str, test_code: str) -> tuple[bool, str]:
     """在临时目录中运行测试"""
+    if not code or not code.strip():
+        return False, "No code generated"
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 写入源代码
+        # 写入源代码到单独文件
         src_path = Path(tmpdir) / "src.py"
         src_path.write_text(code)
 
         # 写入测试文件
         test_path = Path(tmpdir) / "test_src.py"
-        test_content = test_code.format(src_code=code)
+        # 在import之后添加导入语句
+        if "import pytest" in test_code:
+            parts = test_code.split("import pytest", 1)
+            test_content = parts[0] + "import pytest\nfrom src import *\n" + parts[1]
+        else:
+            test_content = "from src import *\n" + test_code
         test_path.write_text(test_content)
+
+        # 调试：打印生成的文件
+        print(f"      [调试] 生成的代码:\n{code[:300]}...")
 
         # 运行pytest
         try:
             result = subprocess.run(
-                ["python", "-m", "pytest", str(test_path), "-v", "--tb=short"],
+                ["python", "-m", "pytest", str(test_path), "-v", "--tb=long"],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -351,7 +365,12 @@ def run_tests_in_temp_dir(code: str, test_code: str) -> tuple[bool, str]:
             )
             passed = result.returncode == 0
             output = result.stdout + "\n" + result.stderr
-            return passed, output[:2000]  # 限制输出长度
+            # 只在失败时打印输出
+            if not passed:
+                print(f"      [调试] 测试输出:\n{output[:800]}...")
+            else:
+                print(f"      [调试] 测试通过!")
+            return passed, output[:2000]
         except subprocess.TimeoutExpired:
             return False, "Test timeout"
         except Exception as e:

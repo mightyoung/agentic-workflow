@@ -86,6 +86,9 @@ tests/*.json.backup
 *.json.backup
 tests/bench/ab_experiment_results/
 tests/benchmark_results.md
+tests/real_comparison_results/
+tests/simple_comparison_results/
+tests/complex_comparison_results/
 
 # Temporary files
 *.tmp
