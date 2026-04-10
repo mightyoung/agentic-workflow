@@ -35,6 +35,72 @@ Agentic Workflow 是一个**统一的 AI 开发工作流 Skill**，融合了 10+
 
 ---
 
+## 当前执行流程（v6.3 运行时）
+
+### 1）主流程路径
+
+`ROUTER -> (OFFICE-HOURS | EXPLORING | RESEARCH | THINKING | PLANNING | EXECUTING | REVIEWING | DEBUGGING | REFINING) -> COMPLETE`
+
+当前实际行为：
+- `ROUTER` 基于意图与复杂度选择入口阶段。
+- `PLANNING` 采用 file-first，按需生成 `.specs/<feature>/...`，XS/S 默认轻量计划。
+- `EXECUTING` 是默认高价值阶段（基线 50%，M+ 可升 75%）。
+- `REVIEWING` 采用双阶段审查（先规范一致性，再代码质量）。
+- `DEBUGGING` 先轻量排障，按失败信号升级档位。
+- `COMPLETE` 汇总摘要并完成收口。
+
+### 2）控制面与状态面
+
+- 单一权威状态：`.workflow_state.json`（`scripts/unified_state.py`）。
+- 人类可读侧边状态：`SESSION-STATE.md` + `progress.md`。
+- 可恢复链路：trajectory + checkpoint/handoff + `resume_summary`。
+- 工件注册：`.artifacts.json`（state/plan/findings/review/summary）。
+
+## 当前核心机制（v6.3）
+
+### Skill 策略与激活
+
+- phase 级策略：`default_enable | conditional_enable | defer | disable`。
+- 激活档位：`0/25/50/75/100`，按复杂度与失败信号动态调整。
+- 升级是“高信号触发”，不是对所有失败一刀切抬档。
+
+### 摘要骨干链
+
+跨运行时、快照、checkpoint、resume 的结构化摘要：
+- `planning_summary`
+- `research_summary`
+- `thinking_summary`
+- `review_summary`
+- `failure_event_summary`
+- `resume_summary`
+
+并且已经实现占位值识别与 state fallback，避免“空壳摘要”污染恢复链。
+
+### 评估与改进闭环
+
+- benchmark 线提供证据（`tests/bench/...`）。
+- self-improvement 线只执行受控改进，并记录 evidence/proposal。
+- skill 演化走 proposal 流程（`scripts/skill_evolution.py`），不是自动改写技能文档。
+- 长期记忆写入有门控（`memory_write_gate`），过滤低信号与占位内容。
+
+## 当前优劣势（v6.3）
+
+### 优势
+
+- 只有一套权威 runtime（`workflow_engine.py` + `unified_state.py`）。
+- snapshot/checkpoint/trajectory/resume 的可观测和可审计能力已打通。
+- 激活策略证据化，避免全局重型 skill 注入。
+- planning/review/debug 已结构化并有回归测试保护。
+
+### 局限
+
+- `PLANNING` 的 ROI 仍受任务粒度与提示词权重影响。
+- benchmark 与真实生产负载更接近了，但仍不完全等价。
+- 仍保留部分兼容面（如 `task_plan.md`、markdown sidecar）。
+- 多 agent 编排目前是基础能力，不是全自治 swarm runtime。
+
+---
+
 ## v4.13 新特性
 
 ### 1. YAGNI 检查 (v4.13)

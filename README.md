@@ -62,6 +62,69 @@ The actual executable surface:
 | `progress.md` | ✅ Active | Phase progress (markdown) |
 | `task_plan.md` | 🔄 Legacy | Compatibility projection only; new planning uses `.specs/<feature>/...` |
 
+## Execution Flow (Current Runtime)
+
+### 1) End-to-End Path
+
+`ROUTER -> (OFFICE-HOURS | EXPLORING | RESEARCH | THINKING | PLANNING | EXECUTING | REVIEWING | DEBUGGING | REFINING) -> COMPLETE`
+
+Key runtime behavior:
+- `ROUTER` chooses the entry phase from intent + complexity.
+- `PLANNING` builds file-first artifacts (`.specs/<feature>/...`) only when needed.
+- `EXECUTING` is the default high-value skill phase (50% baseline, 75% for M+).
+- `REVIEWING` runs two-stage checks: spec compliance first, then code quality.
+- `DEBUGGING` starts with light debugging and escalates by failure signals.
+- `COMPLETE` aggregates summaries and finalizes artifacts.
+
+### 2) Control Plane
+
+- Source of truth: `.workflow_state.json` via `scripts/unified_state.py`.
+- Human-readable sidecar: `SESSION-STATE.md` + `progress.md`.
+- Recovery chain: trajectory + checkpoint/handoff + `resume_summary`.
+- Artifact tracking: `.artifacts.json` (state, plan, findings, review, summaries).
+
+## Core Mechanisms
+
+### Skill Policy + Activation
+
+- Phase-level policy (`default_enable`, `conditional_enable`, `defer`, `disable`).
+- Activation levels (`0/25/50/75/100`) with complexity-aware defaults.
+- Failure-driven escalation only for high-signal events.
+
+### Summary Backbone
+
+- Structured summaries flow across runtime, snapshot, checkpoint, and resume:
+  - `planning_summary`
+  - `research_summary`
+  - `thinking_summary`
+  - `review_summary`
+  - `failure_event_summary`
+  - `resume_summary`
+- Placeholder-aware fallback avoids empty-shell summaries in non-terminal phases.
+
+### Research / Evaluation / Improvement Loop
+
+- Benchmark track produces explicit evidence (`tests/bench/...`).
+- Self-improvement track records benchmark evidence and proposal references.
+- Skill evolution is proposal-driven (`scripts/skill_evolution.py`), not auto-mutation.
+- Memory writes are gated (`memory_write_gate`) to filter low-signal/placeholder entries.
+
+## Strengths and Tradeoffs
+
+### Strengths
+
+- Single authoritative runtime (`workflow_engine.py` + `unified_state.py`).
+- Recovery is observable and auditable across snapshot/checkpoint/trajectory.
+- Skill activation is evidence-driven instead of globally always-on.
+- Planning/review/debug chains are structured, test-covered, and resumable.
+
+### Tradeoffs / Current Limits
+
+- Planning ROI remains sensitive to prompt weight and task granularity.
+- Benchmark and production workloads are closer than before, but not identical.
+- Some compatibility surfaces (`task_plan.md`, markdown sidecars) are still retained.
+- Multi-agent orchestration exists as foundations, not full autonomous swarm runtime.
+
 ## Quickstart
 
 ### Basic Workflow
