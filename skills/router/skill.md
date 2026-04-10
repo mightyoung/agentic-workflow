@@ -116,6 +116,20 @@ XS/S 则偏向短路径，避免无谓展开。
   其中 `ANALYZING` 常用于需求梳理前置，`EXPLORING` 常用于深层调查，
   `OFFICE_HOURS` 常用于产品咨询型问题，`SUBAGENT` 用于只要结果不要过程的输入
 
+#### 阶段关键词样例
+
+这些样例和 [`scripts/router.py`](/Users/muyi/Downloads/dev/agentic-workflow/scripts/router.py) 的 `ROUTE_KEYWORDS`
+对应，目的是帮助 agent 在输入含义接近时更准确地选择阶段：
+
+| 阶段 | 典型关键词样例 | 语义提示 |
+|------|----------------|---------|
+| `ANALYZING` | `分析需求`、`需求梳理`、`理解需求`、`analyze`、`analysis` | 需求拆解前置，先把问题定义清楚 |
+| `THINKING` | `谁最懂`、`专家`、`思路`、`怎么选`、`原理`、`底层逻辑` | 要先做判断/推理/权衡，而不是直接开干 |
+| `PLANNING` | `计划`、`规划`、`拆分`、`步骤`、`先后顺序`、`如何开始` | 已经有目标，需要把执行路径文件化 |
+| `EXPLORING` | `实验`、`想法`、`深层`、`本质`、`探索`、`根本原因` | 需要扩展调查面，找更深层线索 |
+| `OFFICE_HOURS` | `产品想法`、`需求不明确`、`咨询`、`拿不定主意`、`建议` | 更偏咨询/澄清/决策辅助，而不是立即实现 |
+| `SUBAGENT` | `给我结果就行`、`直接给我`、`不要过程`、`只要结果` | 只需结果，不需要展开过程说明 |
+
 ## Implemented Vs Planned
 
 以下能力当前没有在 [scripts/router.py](/Users/muyi/Downloads/dev/agentic-workflow/scripts/router.py) 中实现，不应视为已落地：
