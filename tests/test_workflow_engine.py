@@ -526,6 +526,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(research_summary["sources_count"], 1)
         self.assertTrue(research_summary["used_real_search"])
         self.assertEqual(research_summary["evidence_status"], "verified")
+        self.assertEqual(
+            snapshot["context_for_next_phase"]["research_summary"]["research_source"],
+            "findings_session",
+        )
 
     def test_research_no_results_generates_explicit_degraded_report(self):
         workflow_engine.initialize_workflow("帮我搜索最佳实践", workdir=self.temp_dir)
@@ -565,6 +569,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertFalse(research_summary["used_real_search"])
         self.assertTrue(research_summary["degraded_mode"])
         self.assertEqual(research_summary["evidence_status"], "degraded")
+        self.assertEqual(
+            snapshot["context_for_next_phase"]["research_summary"]["evidence_status"],
+            "degraded",
+        )
 
 
 class TestQualityGateCompletionBlock(unittest.TestCase):

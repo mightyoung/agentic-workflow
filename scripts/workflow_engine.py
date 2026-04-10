@@ -498,6 +498,7 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     memory_hints: list[str] = []
     memory_query = ""
     memory_intent = "auto"
+    research_summary: dict[str, Any] = {}
 
     try:
         state = load_state(workdir)
@@ -630,6 +631,18 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
             f"局部攻坚点: {thinking_summary.get('local_attack_point', '先找最小可验证切口')}。"
         )
 
+    research_summary = get_research_summary(workdir, state)
+    if research_summary:
+        research_note = (
+            f"Research evidence status: {research_summary.get('evidence_status', 'unset')}; "
+            f"sources={research_summary.get('sources_count', 0)}; "
+            f"engine={research_summary.get('search_engine') or 'unset'}."
+        )
+        if current_phase == "RESEARCH":
+            summary = f"{summary} {research_note}".strip() if summary else research_note
+        elif current_phase in {"PLANNING", "THINKING", "REVIEWING", "EXECUTING"}:
+            summary = f"{summary} {research_note}".strip() if summary else research_note
+
     if memory_hints and summary:
         summary += " Relevant long-term memory is available."
     elif memory_hints:
@@ -638,6 +651,7 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
     return {
         "files_to_read": files_to_read,
         "summary": summary,
+        "research_summary": research_summary,
         "thinking_summary": thinking_summary if current_phase == "THINKING" else {},
         "memory_query": memory_query,
         "memory_intent": memory_intent,
@@ -660,8 +674,10 @@ def _render_progress_content(
     runtime_profile: dict[str, Any],
     planning_summary: dict[str, Any],
     state: WorkflowState,
+    research_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
 ) -> str:
+    research_summary = research_summary or {}
     lines = [
         "# Progress",
         "",
@@ -681,6 +697,17 @@ def _render_progress_content(
         f"- planning_mode: {planning_summary.get('planning_mode', 'lightweight')}",
         f"- plan_digest: {planning_summary.get('plan_digest', 'unset')}",
         f"- worktree_recommended: {planning_summary.get('worktree_recommended', False)}",
+        "",
+        "## Research Summary",
+        f"- research_found: {research_summary.get('research_found', False)}",
+        f"- research_source: {research_summary.get('research_source', 'unset')}",
+        f"- research_path: {research_summary.get('research_path', 'unset')}",
+        f"- key_terms: {research_summary.get('key_terms', 'unset')}",
+        f"- search_engine: {research_summary.get('search_engine', 'unset')}",
+        f"- sources_count: {research_summary.get('sources_count', 0)}",
+        f"- used_real_search: {research_summary.get('used_real_search', False)}",
+        f"- degraded_mode: {research_summary.get('degraded_mode', False)}",
+        f"- evidence_status: {research_summary.get('evidence_status', 'unset')}",
         "",
         "## Session",
         f"- session_id: {state.session_id}",
@@ -1490,6 +1517,8 @@ def initialize_workflow(
         profile_source=runtime_profile["profile_source"],
     )
     planning_summary = get_planning_summary(str(workdir), state)
+    research_summary = get_research_summary(str(workdir), state)
+    thinking_summary: dict[str, Any] | None = None
     memory_ops.update_planning_summary(
         str(session_path),
         planning_summary,
@@ -1500,6 +1529,7 @@ def initialize_workflow(
         runtime_profile,
         planning_summary,
         state,
+        research_summary,
         thinking_summary if current_phase == "THINKING" else None,
     )
     safe_write_text_locked(progress_file, progress_content)
@@ -1707,6 +1737,7 @@ def advance_workflow(
     progress_file = Path(workdir) / "progress.md"
     if progress_file.exists():
         planning_summary = get_planning_summary(workdir, state)
+        research_summary = get_research_summary(workdir, state)
         if phase == "THINKING":
             task_desc = state.task.description if state.task else (state.task.title if state.task else "")
             runtime_complexity = str(runtime_profile.get("complexity") or (state.metadata.get("complexity") if state.metadata else "M"))
@@ -1716,6 +1747,7 @@ def advance_workflow(
             runtime_profile,
             planning_summary,
             state,
+            research_summary,
             thinking_summary,
         )
         safe_write_text_locked(progress_file, progress_content)

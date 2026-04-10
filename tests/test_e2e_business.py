@@ -537,6 +537,10 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         self.assertTrue(research_summary.get("research_found", False))
         self.assertEqual(research_summary.get("research_source"), "findings_session")
         self.assertIn(research_summary.get("evidence_status"), ["verified", "degraded"])
+        self.assertEqual(
+            snapshot.get("context_for_next_phase", {}).get("research_summary", {}).get("research_source"),
+            "findings_session",
+        )
         # Verify findings content structure and semantic relevance to prompt
         has_valid_content = self._check_artifact_content("findings", prompt)
         self.assertTrue(has_valid_content,
