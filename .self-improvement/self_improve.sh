@@ -22,6 +22,8 @@ LEDGER="$SCRIPT_DIR/results.tsv"
 RECORD_HELPER="$SCRIPT_DIR/record_result.sh"
 BENCHMARK_EVIDENCE="${BENCHMARK_EVIDENCE:-}"
 SKILL_PROPOSAL=""
+PROPOSAL_VERIFICATION=""
+PROPOSAL_DECISION=""
 
 usage() {
     echo "Self-Improvement Runner"
@@ -152,6 +154,32 @@ if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
     echo "[3/4] Generating skill evolution proposal from benchmark evidence..."
     SKILL_PROPOSAL=$(python3 "$PROJECT_ROOT/scripts/skill_evolution.py" --benchmark "$BENCHMARK_EVIDENCE" --output-dir "$PROJECT_ROOT/knowledge/skill_proposals")
     echo "  Proposal: $SKILL_PROPOSAL"
+    proposal_json="${SKILL_PROPOSAL%.md}.json"
+    if [[ -f "$proposal_json" ]]; then
+        echo "  Verifying proposal..."
+        verifier_output=$(python3 "$PROJECT_ROOT/scripts/proposal_verifier.py" \
+            --proposal "$proposal_json" \
+            --benchmark "$BENCHMARK_EVIDENCE" \
+            --output-dir "$PROJECT_ROOT/knowledge/skill_proposals/verifications")
+        PROPOSAL_DECISION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("decision","reject"))' "$verifier_output")
+        PROPOSAL_VERIFICATION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("verification_path",""))' "$verifier_output")
+        echo "  Verification decision: $PROPOSAL_DECISION"
+        [[ -n "$PROPOSAL_VERIFICATION" ]] && echo "  Verification: $PROPOSAL_VERIFICATION"
+        if [[ "$PROPOSAL_DECISION" == "reject" ]]; then
+            echo "  Proposal verification rejected. Aborting run initialization."
+            "$RECORD_HELPER" \
+                --run-id "$run_id" \
+                --hypothesis "$HYPOTHESIS" \
+                --files "proposal verification rejected" \
+                --checks "proposal_verifier=reject" \
+                --status "discard" \
+                "${BENCHMARK_ARGS[@]}" \
+                --skill-proposal "$SKILL_PROPOSAL" \
+                --proposal-verification "$PROPOSAL_VERIFICATION" \
+                --notes "Proposal rejected by verifier gate"
+            exit 1
+        fi
+    fi
     echo ""
 fi
 
@@ -180,6 +208,9 @@ fi
 if [[ -n "$SKILL_PROPOSAL" ]]; then
     notes_text="skill_proposal=$SKILL_PROPOSAL | ${notes_text}"
 fi
+if [[ -n "$PROPOSAL_DECISION" ]]; then
+    notes_text="proposal_decision=$PROPOSAL_DECISION | ${notes_text}"
+fi
 "$RECORD_HELPER" \
     --run-id "$run_id" \
     --hypothesis "$HYPOTHESIS" \
@@ -187,6 +218,8 @@ fi
     --checks "10/10 baseline gates passed" \
     --status "in_progress" \
     "${BENCHMARK_ARGS[@]}" \
+    --skill-proposal "$SKILL_PROPOSAL" \
+    --proposal-verification "$PROPOSAL_VERIFICATION" \
     --notes "$notes_text"
 
 echo ""

@@ -238,7 +238,7 @@ class TestRecordResultLedger:
             assert len(fields) == 6, f"Corrupted TSV line: {line}"
 
     def test_record_result_includes_skill_proposal(self, tmp_path):
-        """benchmark evidence + skill proposal should be encoded in notes."""
+        """benchmark evidence + skill proposal + verification should be encoded in notes."""
         repo_root = Path(__file__).parent.parent
         script_src = repo_root / ".self-improvement" / "record_result.sh"
         helper_src = repo_root / ".self-improvement" / "_record_helper.py"
@@ -251,6 +251,8 @@ class TestRecordResultLedger:
         script = local_dir / "record_result.sh"
         proposal = tmp_path / "proposal.md"
         proposal.write_text("# proposal", encoding="utf-8")
+        verification = tmp_path / "verification.json"
+        verification.write_text('{"decision":"approve"}', encoding="utf-8")
 
         result = subprocess.run(
             [
@@ -270,6 +272,8 @@ class TestRecordResultLedger:
                 "tests/bench/sample.json",
                 "--skill-proposal",
                 str(proposal),
+                "--proposal-verification",
+                str(verification),
                 "--notes",
                 "integration smoke",
             ],
@@ -281,6 +285,7 @@ class TestRecordResultLedger:
         assert result.returncode == 0, result.stderr
         ledger_text = (local_dir / "results.tsv").read_text(encoding="utf-8")
         assert "skill_proposal=" in ledger_text
+        assert "proposal_verification=" in ledger_text
         assert "benchmark_evidence=" in ledger_text
 
     def test_ledger_handles_special_characters(self, tmp_path):
