@@ -1583,6 +1583,13 @@ def initialize_workflow(
     workdir_path = Path(workdir)
     workdir_path.mkdir(parents=True, exist_ok=True)
 
+    # Clean up stale lock files from previous crashed sessions
+    try:
+        from safe_io import cleanup_stale_locks
+        cleanup_stale_locks(workdir_path)
+    except Exception:
+        pass  # Non-critical — never block initialization
+
     session_path = workdir_path / memory_ops.DEFAULT_SESSION_STATE
     tracker_path = workdir_path / task_tracker.DEFAULT_TRACKER_FILE
 

@@ -108,6 +108,27 @@ def add_experience(
     store["experiences"].append(experience)
     save_store(path, store)
 
+    # Cross-index into .memory_index.jsonl (canonical MAGMA memory layer)
+    # so experience_ledger and memory_graph_index can consume this record
+    try:
+        import os as _os
+        store_dir = _os.path.dirname(_os.path.abspath(path)) if path != DEFAULT_EXPERIENCE_FILE else "."
+        from safe_io import safe_append_jsonl
+        memory_record = {
+            "id": experience["id"],
+            "type": "experience_store",
+            "text": (
+                f"Task:{task_category} Signal:{'success' if success else 'failure'} "
+                f"Trigger:steps={steps} Fix:reward={reward_total:.2f} {description}"
+            ),
+            "created_at": experience["created_at"],
+            "task_category": task_category,
+            "success": success,
+        }
+        safe_append_jsonl(_os.path.join(store_dir, ".memory_index.jsonl"), memory_record)
+    except Exception:
+        pass  # Non-critical — never block experience recording
+
     print(f"添加经验: {experience['id']} [{task_category}] "
           f"reward={reward_total:.2f} success={success}")
     return True
