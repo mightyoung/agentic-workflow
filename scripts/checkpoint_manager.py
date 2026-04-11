@@ -30,6 +30,7 @@ from typing import Any
 from safe_io import safe_write_text_locked
 from memory_ops import get_thinking_summary as get_session_thinking_summary
 from unified_state import (
+    get_debug_summary,
     get_failure_event_summary,
     get_planning_summary,
     get_research_summary,
@@ -248,6 +249,7 @@ def conditional_checkpoint(
         "research_summary": get_research_summary(workdir, state),
         "thinking_summary": thinking_summary,
         "review_summary": get_review_summary(workdir, state),
+        "debug_summary": get_debug_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
         "task": state.task.to_dict() if state.task else None,
         "plan_tasks": plan_tasks,
@@ -295,6 +297,7 @@ def conditional_checkpoint(
     # Build handoff content
     runtime_profile_summary = get_runtime_profile_summary(state)
     failure_event_summary = get_failure_event_summary(state)
+    debug_summary = get_debug_summary(workdir, state)
     if not thinking_summary and current_phase == "THINKING" and state.task:
         try:
             from runtime_profile import build_thinking_summary
@@ -395,6 +398,20 @@ def conditional_checkpoint(
 - Escalation events: {failure_event_summary.get('escalation_event_count', 0)}
 - Latest failure type: {failure_event_summary.get('latest_failure_event', {}).get('error_type') if failure_event_summary.get('latest_failure_event') else 'unset'}
 - Latest escalation: {failure_event_summary.get('latest_escalation_event', {}).get('escalated_activation_level') if failure_event_summary.get('latest_escalation_event') else 'unset'}
+
+## DEBUG Summary
+- Debug found: {debug_summary.get('debug_found', False)}
+- Debug source: {debug_summary.get('debug_source') or 'unset'}
+- Strategy: {debug_summary.get('strategy') or 'unset'}
+- Error type: {debug_summary.get('error_type') or 'unset'}
+- Retry count: {debug_summary.get('retry_count', 0)}
+- Activation level: {debug_summary.get('activation_level', 0)}
+- Escalation reason: {debug_summary.get('escalation_reason') or 'unset'}
+- Root cause: {debug_summary.get('root_cause') or 'unset'}
+- Minimal fix: {debug_summary.get('minimal_fix') or 'unset'}
+- Regression check: {debug_summary.get('regression_check') or 'unset'}
+- Reflection path: {debug_summary.get('reflection_path') or 'unset'}
+- Quality gate failed: {debug_summary.get('quality_gate_failed', False)}
 
 ## Task
 {state.task.title if state.task else "Unknown task"}

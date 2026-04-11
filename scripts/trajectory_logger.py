@@ -522,6 +522,7 @@ def _build_resume_summary(
     research_summary: dict[str, Any] | None = None,
     planning_summary: dict[str, Any] | None = None,
     review_summary: dict[str, Any] | None = None,
+    debug_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """构建恢复摘要，写入恢复轨迹根节点。"""
@@ -544,6 +545,7 @@ def _build_resume_summary(
     research_summary = research_summary or {}
     planning_summary = planning_summary or {}
     review_summary = review_summary or {}
+    debug_summary = debug_summary or {}
     thinking_summary = thinking_summary or {}
     return {
         "original_session_id": original_session_id,
@@ -556,6 +558,7 @@ def _build_resume_summary(
         "research_summary": research_summary,
         "planning_summary": planning_summary,
         "review_summary": review_summary,
+        "debug_summary": debug_summary,
         "thinking_summary": thinking_summary,
         "phase_count": len(phases),
         "errored_phase_count": len(errored_phases),
@@ -677,20 +680,23 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
     research_summary: dict[str, Any] = {}
     planning_summary: dict[str, Any] = {}
     review_summary: dict[str, Any] = {}
+    debug_summary: dict[str, Any] = {}
     try:
         from memory_ops import get_planning_summary, get_research_summary, get_review_summary
-        from unified_state import get_thinking_summary as get_state_thinking_summary, load_state
+        from unified_state import get_debug_summary as get_state_debug_summary, get_thinking_summary as get_state_thinking_summary, load_state
 
         session_state = str(Path(workdir) / "SESSION-STATE.md")
         planning_summary = get_planning_summary(session_state)
         research_summary = get_research_summary(session_state)
         review_summary = get_review_summary(session_state)
+        debug_summary = get_state_debug_summary(workdir, load_state(workdir))
         thinking_summary = get_state_thinking_summary(workdir, load_state(workdir))
     except Exception:
         thinking_summary = {}
         research_summary = {}
         planning_summary = {}
         review_summary = {}
+        debug_summary = {}
 
     if not planning_summary:
         try:
@@ -721,6 +727,22 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         except Exception:
             research_summary = {}
 
+    if not debug_summary:
+        debug_summary = {
+            "debug_found": False,
+            "debug_source": "state_fallback",
+            "strategy": "debugging" if original_trajectory.get("current_phase") in {"EXECUTING", "REVIEWING", "DEBUGGING"} else "retry",
+            "error_type": "unknown",
+            "retry_count": 0,
+            "activation_level": 0,
+            "escalation_reason": None,
+            "root_cause": None,
+            "minimal_fix": "inspect the failure and retry with tighter scope",
+            "regression_check": "rerun affected tests and quality gate",
+            "reflection_path": None,
+            "quality_gate_failed": False,
+        }
+
     # 获取当前活跃phase
     original_phase = original_trajectory.get("current_phase", "IDLE")
 
@@ -739,8 +761,10 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
                 research_summary=research_summary,
                 planning_summary=planning_summary,
                 review_summary=review_summary,
+                debug_summary=debug_summary,
                 thinking_summary=thinking_summary,
             )
+            resume_summary["debug_summary"] = debug_summary
             return {
                 "session_id": f"r{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "run_id": f"R{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -789,8 +813,10 @@ def resume_from_point(workdir: str, session_id: str, resume_phase: str | None = 
         research_summary=research_summary,
         planning_summary=planning_summary,
         review_summary=review_summary,
+        debug_summary=debug_summary,
         thinking_summary=thinking_summary,
     )
+    resume_summary["debug_summary"] = debug_summary
 
     # 创建新的恢复trajectory
     new_session_id = f"r{ datetime.now().strftime('%Y%m%d%H%M%S')}"

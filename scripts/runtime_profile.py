@@ -259,13 +259,18 @@ def debugging_activation_level_for_context(
     failure history.
     """
     complexity = (complexity or "").upper()
-    if complexity in {"XS", "S"}:
-        return 0
 
     owned_files_count = max(0, int(owned_files_count or 0))
     diff_size = max(0, int(diff_size or 0))
     failure_count = max(0, int(failure_count or 0))
     is_local = _is_local_debugging_task(task_text)
+
+    if complexity in {"XS", "S"}:
+        if failure_count >= 2 or owned_files_count > 1 or diff_size > 2:
+            return 25
+        if is_local and owned_files_count <= 1 and diff_size <= 2 and failure_count == 0:
+            return 0
+        return 0
 
     if is_local and owned_files_count <= 1 and diff_size <= 2 and failure_count == 0:
         return 0

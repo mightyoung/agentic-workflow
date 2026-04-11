@@ -162,9 +162,31 @@ class TestFailureHandling(unittest.TestCase):
 
         state_path = Path(self.workdir) / ".workflow_state.json"
         state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        state_data["phase"]["current"] = "EXECUTING"
+        state_data["metadata"]["runtime_profile"]["complexity"] = "XS"
         state_data["task"]["owned_files"] = ["src/main.py"]
         state_data["file_changes"] = [{"path": "src/main.py", "action": "modify", "timestamp": "2026-04-08T00:00:00"}]
         state_data["task"]["description"] = "修复这个单文件 bug"
+        state_data["decisions"].append({
+            "timestamp": "2026-04-08T00:00:00",
+            "decision": "Retry attempt 1",
+            "reason": "retry after failure",
+            "metadata": {
+                "retry_count": 1,
+                "error": "test failure 1",
+                "error_type": "test_failure",
+            },
+        })
+        state_data["decisions"].append({
+            "timestamp": "2026-04-08T00:01:00",
+            "decision": "Retry attempt 2",
+            "reason": "retry after failure",
+            "metadata": {
+                "retry_count": 2,
+                "error": "test failure 2",
+                "error_type": "test_failure",
+            },
+        })
         state_path.write_text(json.dumps(state_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
         result = handle_workflow_failure(self.workdir, "需要调试这个单文件 bug", strategy="debugging")
@@ -173,8 +195,10 @@ class TestFailureHandling(unittest.TestCase):
         state = load_state(self.workdir)
         runtime_profile = state.metadata.get("runtime_profile", {})
         self.assertEqual(state.phase.get("current"), "DEBUGGING")
-        self.assertEqual(runtime_profile.get("skill_activation_level"), 0)
-        self.assertFalse(runtime_profile.get("use_skill"))
+        self.assertEqual(runtime_profile.get("skill_activation_level"), 25)
+        self.assertTrue(runtime_profile.get("use_skill"))
+        self.assertEqual(state.metadata.get("debug_summary", {}).get("debug_source"), "debugging")
+        self.assertEqual(state.metadata.get("debug_summary", {}).get("activation_level"), 25)
 
 
 class TestStateSchemaDecision(unittest.TestCase):

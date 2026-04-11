@@ -61,6 +61,7 @@ from unified_state import (
     create_initial_state,
     get_allowed_transitions,
     get_failure_event_summary,
+    get_debug_summary,
     get_planning_summary,
     get_research_summary,
     get_thinking_summary,
@@ -3020,6 +3021,7 @@ def resume_workflow(
     research_summary = resume_summary.get("research_summary", {})
     planning_summary = resume_summary.get("planning_summary", {})
     review_summary = resume_summary.get("review_summary", {})
+    debug_summary = resume_summary.get("debug_summary", {})
     thinking_summary = resume_summary.get("thinking_summary", {})
 
     # 更新 unified state - 这是关键同步步骤
@@ -3030,12 +3032,19 @@ def resume_workflow(
         state_planning_summary = get_planning_summary(workdir, state)
         state_research_summary = get_research_summary(workdir, state)
         state_review_summary = get_review_summary(workdir, state)
+        state_debug_summary = get_debug_summary(workdir, state)
         if not planning_summary or planning_summary.get("plan_source") in {None, "", "none"}:
             planning_summary = state_planning_summary
         if not research_summary or research_summary.get("research_source") in {None, "", "none"}:
             research_summary = state_research_summary
         if not review_summary or review_summary.get("review_source") in {None, "", "none"}:
             review_summary = state_review_summary
+        if not debug_summary or debug_summary.get("debug_source") in {None, "", "none"}:
+            debug_summary = state_debug_summary
+        resume_summary["debug_summary"] = debug_summary
+        if state.metadata is None:
+            state.metadata = {}
+        state.metadata["debug_summary"] = debug_summary
         # 记录恢复决策
         from datetime import datetime
 
@@ -3054,6 +3063,7 @@ def resume_workflow(
                 "research_summary": research_summary,
                 "planning_summary": planning_summary,
                 "review_summary": review_summary,
+                "debug_summary": debug_summary,
                 "thinking_summary": thinking_summary,
                 "failure_event_summary": failure_event_summary,
             },
@@ -3072,6 +3082,7 @@ def resume_workflow(
         research_summary = research_summary or get_research_summary(workdir, None)
         planning_summary = planning_summary or get_planning_summary(workdir, None)
         review_summary = review_summary or get_review_summary(workdir, None)
+        debug_summary = debug_summary or get_debug_summary(workdir, None)
 
     session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
     memory_ops.update_resume_summary(
@@ -3083,6 +3094,7 @@ def resume_workflow(
         research_summary=research_summary,
         planning_summary=planning_summary,
         review_summary=review_summary,
+        debug_summary=debug_summary,
         thinking_summary=thinking_summary,
         failure_event_summary=failure_event_summary,
     )
@@ -3113,6 +3125,7 @@ def resume_workflow(
         "research_summary": research_summary,
         "planning_summary": planning_summary,
         "review_summary": review_summary,
+        "debug_summary": debug_summary,
         "thinking_summary": thinking_summary,
         "failure_event_summary": failure_event_summary,
         "state_synced": True,
@@ -3331,6 +3344,8 @@ def handle_workflow_failure(
         retry_hint = ""
 
     reflection_artifact: dict[str, Any] = {}
+    debug_summary: dict[str, Any] = {}
+    session_path = Path(workdir) / memory_ops.DEFAULT_SESSION_STATE
 
     if strategy == "retry":
         # Get retry count and error history from decisions
@@ -3409,6 +3424,24 @@ def handle_workflow_failure(
                 result["quality_gate_details"] = quality_gate_details
             if reflection_artifact:
                 result.update(reflection_artifact)
+            debug_summary = _build_debug_summary(
+                strategy="retry",
+                error=error,
+                error_type=error_type,
+                confidence=confidence,
+                retry_count=new_retry_count,
+                activation_level=int(runtime_profile.get("skill_activation_level", 0)) if runtime_profile else 0,
+                retry_hint=retry_hint,
+                quality_gate_details=quality_gate_details,
+                reflection_artifact=reflection_artifact,
+                escalation_reason="retry",
+            )
+            if state.metadata is None:
+                state.metadata = {}
+            state.metadata["debug_summary"] = debug_summary
+            save_state(workdir, state)
+            memory_ops.update_debug_summary(str(session_path), debug_summary)
+            result["debug_summary"] = debug_summary
             return result
 
     if strategy == "debugging":
@@ -3467,6 +3500,20 @@ def handle_workflow_failure(
                     complexity=str(runtime_profile.get("complexity", state.metadata.get("complexity", "M")) if state.metadata else "M"),
                     complexity_confidence=runtime_profile.get("complexity_confidence"),
                 )
+                debug_summary = _build_debug_summary(
+                    strategy="debugging",
+                    error=error,
+                    error_type=error_type,
+                    confidence=confidence,
+                    retry_count=failure_count,
+                    activation_level=debug_activation_level,
+                    retry_hint=retry_hint,
+                    quality_gate_details=quality_gate_details,
+                    reflection_artifact=reflection_artifact,
+                    escalation_reason="debugging",
+                )
+                state.metadata["debug_summary"] = debug_summary
+                memory_ops.update_debug_summary(str(session_path), debug_summary)
 
             state = transition_phase(state, "DEBUGGING", reason=f"Failure: {error}")
             save_state(workdir, state)
@@ -3485,6 +3532,7 @@ def handle_workflow_failure(
                 "error_type": error_type,
                 "error_history": _get_error_history(state),
                 "reflection_recorded": bool(reflection_artifact),
+                "debug_summary": state.metadata.get("debug_summary", {}) if state.metadata else {},
                 **reflection_artifact,
             }
         else:
@@ -3492,6 +3540,7 @@ def handle_workflow_failure(
                 "success": False,
                 "error": f"Cannot transition from {current_phase} to DEBUGGING",
                 "reflection_recorded": bool(reflection_artifact),
+                "debug_summary": state.metadata.get("debug_summary", {}) if state.metadata else {},
                 **reflection_artifact,
             }
 
@@ -3506,6 +3555,22 @@ def handle_workflow_failure(
             strategy,
             quality_gate_details=quality_gate_details,
         )
+        debug_summary = _build_debug_summary(
+            strategy="abort",
+            error=error,
+            error_type=error_type,
+            confidence=confidence,
+            retry_count=retry_count,
+            activation_level=int(runtime_profile.get("skill_activation_level", 0)) if runtime_profile else 0,
+            retry_hint=retry_hint,
+            quality_gate_details=quality_gate_details,
+            reflection_artifact=reflection_artifact,
+            escalation_reason="abort",
+        )
+        if state.metadata is None:
+            state.metadata = {}
+        state.metadata["debug_summary"] = debug_summary
+        memory_ops.update_debug_summary(str(session_path), debug_summary)
         complete_workflow(workdir, "failed", error)
         return {
             "success": True,
@@ -3514,6 +3579,7 @@ def handle_workflow_failure(
             "error": error,
             "error_type": error_type,
             "reflection_recorded": bool(reflection_artifact),
+            "debug_summary": debug_summary,
             **reflection_artifact,
         }
 
@@ -3653,6 +3719,53 @@ Signal: {signal}
     }
 
 
+def _build_debug_summary(
+    *,
+    strategy: str,
+    error: str,
+    error_type: str,
+    confidence: float,
+    retry_count: int,
+    activation_level: int,
+    retry_hint: str,
+    quality_gate_details: dict[str, Any] | None,
+    reflection_artifact: dict[str, Any] | None,
+    escalation_reason: str | None,
+) -> dict[str, Any]:
+    """Build a structured debug summary for state and sidecar persistence."""
+    root_cause = retry_hint or error[:240]
+    if quality_gate_details and quality_gate_details.get("failed_checks"):
+        failed_checks = [str(item) for item in quality_gate_details.get("failed_checks", [])[:3] if str(item).strip()]
+        if failed_checks:
+            root_cause = " | ".join(failed_checks)
+
+    regression_check = "rerun affected tests and quality gate"
+    if quality_gate_details and quality_gate_details.get("gate_file"):
+        regression_check = f"rerun {quality_gate_details['gate_file']}"
+
+    minimal_fix = retry_hint or "inspect the failure and retry with tighter scope"
+    if error_type in {"syntax_error", "type_error"} and not retry_hint:
+        minimal_fix = "fix the syntax or typing issue, then rerun validation"
+    elif error_type == "quality_gate_failed" and not retry_hint:
+        minimal_fix = "address the failing gate checks, then rerun validation"
+
+    return {
+        "debug_found": True,
+        "debug_source": strategy,
+        "strategy": strategy,
+        "error_type": error_type,
+        "retry_count": retry_count,
+        "activation_level": activation_level,
+        "escalation_reason": escalation_reason,
+        "root_cause": root_cause,
+        "minimal_fix": minimal_fix,
+        "regression_check": regression_check,
+        "reflection_path": reflection_artifact.get("reflection_path") if reflection_artifact else None,
+        "quality_gate_failed": bool(quality_gate_details),
+        "confidence": confidence,
+    }
+
+
 def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
     state = load_state(workdir)
     tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
@@ -3673,6 +3786,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
             "research_summary": get_research_summary(workdir, None),
             "thinking_summary": get_thinking_summary(workdir, None),
             "review_summary": get_review_summary(workdir, None),
+            "debug_summary": get_debug_summary(workdir, None),
             "runtime_profile_summary": get_runtime_profile_summary(None),
             "failure_event_summary": get_failure_event_summary(None),
             "context_for_next_phase": {
@@ -3721,6 +3835,7 @@ def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
         "research_summary": get_research_summary(workdir, state),
         "thinking_summary": get_thinking_summary(workdir, state),
         "review_summary": get_review_summary(workdir, state),
+        "debug_summary": get_debug_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
         "recommended_next_phases": recommend_next_phases(current_phase, None),
         "plan_tasks": plan_tasks,

@@ -265,6 +265,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["review_summary"]["contract_files_count"], 0)
         self.assertEqual(result["resume_summary"]["review_summary"]["reviewed_targets_count"], 0)
         self.assertEqual(result["resume_summary"]["review_summary"]["matched_contract_files_count"], 0)
+        self.assertEqual(result["resume_summary"]["debug_summary"]["debug_source"], "state_fallback")
         self.assertEqual(result["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(result["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
         self.assertEqual(
@@ -282,6 +283,7 @@ class TestResumePoint(unittest.TestCase):
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["contract_files_count"], 0)
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["reviewed_targets_count"], 0)
         self.assertEqual(resumed_trajectory["resume_summary"]["review_summary"]["matched_contract_files_count"], 0)
+        self.assertEqual(resumed_trajectory["resume_summary"]["debug_summary"]["debug_source"], "state_fallback")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(resumed_trajectory["resume_summary"]["thinking_summary"]["thinking_mode"], "contradiction_analysis")
         self.assertEqual(

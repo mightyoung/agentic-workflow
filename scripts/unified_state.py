@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from memory_ops import get_planning_summary as get_session_planning_summary
+from memory_ops import get_debug_summary as get_session_debug_summary
 from memory_ops import get_research_summary as get_session_research_summary
 from memory_ops import get_review_summary as get_session_review_summary
 from memory_ops import get_runtime_profile as get_session_runtime_profile
@@ -802,6 +803,16 @@ def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict
     }
 
 
+def get_debug_summary(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Summarize the latest debug artifact or live debug state."""
+    session_state_path = Path(workdir) / "SESSION-STATE.md"
+    summary = get_session_debug_summary(str(session_state_path))
+    if _is_meaningful_debug_summary(summary):
+        return summary
+
+    return _build_debug_state_fallback(workdir, state)
+
+
 def _build_review_state_fallback(state: WorkflowState | None) -> dict[str, Any]:
     """Build a minimal review summary from live state when no review artifact exists."""
     if state is None or state.phase.get("current") != "REVIEWING":
@@ -833,6 +844,66 @@ def _build_review_state_fallback(state: WorkflowState | None) -> dict[str, Any]:
     }
 
 
+def _is_meaningful_debug_summary(summary: dict[str, Any] | None) -> bool:
+    """Return True only for a debug summary with actual content, not placeholders."""
+    if not summary:
+        return False
+    debug_source = str(summary.get("debug_source", "")).strip().lower()
+    root_cause = str(summary.get("root_cause", "")).strip()
+    minimal_fix = str(summary.get("minimal_fix", "")).strip()
+    reflection_path = str(summary.get("reflection_path", "")).strip()
+    if debug_source in {"", "(未设置)", "unset", "none"}:
+        return False
+    if debug_source == "state_fallback":
+        return True
+    return any(
+        value not in {"", "(未设置)", "unset", "none"}
+        for value in (root_cause, minimal_fix, reflection_path)
+    ) or bool(summary.get("debug_found"))
+
+
+def _build_debug_state_fallback(workdir: str, state: WorkflowState | None = None) -> dict[str, Any]:
+    """Build a minimal debug summary from live state when no debug artifact exists."""
+    if state is None:
+        state = load_state(workdir)
+    if state is None:
+        return {}
+
+    current_phase = state.phase.get("current") if state.phase else "IDLE"
+    if current_phase not in {"DEBUGGING", "REVIEWING", "EXECUTING"} or not state.task:
+        return {}
+
+    runtime_profile = get_runtime_profile_summary(state)
+    failure_summary = get_failure_event_summary(state)
+    latest_failure = failure_summary.get("latest_failure_event") or {}
+    latest_escalation = failure_summary.get("latest_escalation_event") or {}
+    error_type = str(latest_failure.get("error_type") or "unknown")
+    retry_count = int(latest_failure.get("retry_count") or 0)
+    activation_level = runtime_profile.get("skill_activation_level") or 0
+    strategy = "debugging" if current_phase == "DEBUGGING" else "retry"
+    root_cause = str(latest_failure.get("reason") or latest_failure.get("decision") or "").strip() or None
+    minimal_fix = "inspect the failure and rerun with tighter scope"
+    if error_type == "quality_gate_failed":
+        minimal_fix = "re-run the impacted test and quality gate"
+    elif error_type in {"syntax_error", "type_error"}:
+        minimal_fix = "fix the syntax or typing issue, then rerun validation"
+
+    return {
+        "debug_found": bool(failure_summary.get("failure_event_count", 0)),
+        "debug_source": "state_fallback",
+        "strategy": strategy,
+        "error_type": error_type,
+        "retry_count": retry_count,
+        "activation_level": activation_level,
+        "escalation_reason": latest_escalation.get("escalation_reason") or latest_failure.get("reason"),
+        "root_cause": root_cause,
+        "minimal_fix": minimal_fix,
+        "regression_check": "rerun affected tests and quality gate",
+        "reflection_path": None,
+        "quality_gate_failed": error_type == "quality_gate_failed",
+    }
+
+
 def _compare_field(errors: list[str], section: str, field: str, expected: Any, actual: Any) -> None:
     def _normalize(value: Any) -> Any:
         if isinstance(value, str):
@@ -859,12 +930,14 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
     sidecar_research = get_session_research_summary(str(session_path))
     sidecar_thinking = get_session_thinking_summary(str(session_path))
     sidecar_review = get_session_review_summary(str(session_path))
+    sidecar_debug = get_session_debug_summary(str(session_path))
 
     state_runtime = get_runtime_profile_summary(state)
     state_planning = _build_planning_summary(workdir, state)
     state_research = _build_research_summary_from_state(workdir, state)
     state_thinking = _build_thinking_summary_from_state(workdir, state)
     state_review = get_review_summary(workdir, state)
+    state_debug = get_debug_summary(workdir, state)
 
     errors: list[str] = []
     current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
@@ -942,6 +1015,20 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
         "reviewed_targets_count",
         "matched_contract_files_count",
     ]
+    debug_fields = [
+        "debug_found",
+        "debug_source",
+        "strategy",
+        "error_type",
+        "retry_count",
+        "activation_level",
+        "escalation_reason",
+        "root_cause",
+        "minimal_fix",
+        "regression_check",
+        "reflection_path",
+        "quality_gate_failed",
+    ]
 
     for field in runtime_fields:
         _compare_field(errors, "runtime_profile", field, state_runtime.get(field), sidecar_runtime.get(field))
@@ -959,6 +1046,10 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
     if current_phase == "REVIEWING" and state_has_review:
         for field in review_fields:
             _compare_field(errors, "review_summary", field, state_review.get(field), sidecar_review.get(field))
+    state_has_debug = _is_meaningful_debug_summary(state_debug)
+    if current_phase == "DEBUGGING" and state_has_debug:
+        for field in debug_fields:
+            _compare_field(errors, "debug_summary", field, state_debug.get(field), sidecar_debug.get(field))
 
     return len(errors) == 0, errors
 
@@ -1231,6 +1322,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
             "research_summary": get_research_summary(workdir, None),
             "thinking_summary": get_thinking_summary(workdir, None),
             "review_summary": get_review_summary(workdir, None),
+            "debug_summary": get_debug_summary(workdir, None),
             "failure_event_summary": get_failure_event_summary(None),
         }
 
@@ -1250,6 +1342,7 @@ def get_state_snapshot(workdir: str = ".") -> dict[str, Any]:
         "research_summary": get_research_summary(workdir, state),
         "thinking_summary": get_thinking_summary(workdir, state),
         "review_summary": get_review_summary(workdir, state),
+        "debug_summary": get_debug_summary(workdir, state),
         "failure_event_summary": get_failure_event_summary(state),
     }
 

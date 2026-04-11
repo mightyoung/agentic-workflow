@@ -1044,8 +1044,10 @@ class TestNewPhases(unittest.TestCase):
             100,
         )
         self.assertEqual(snapshot["runtime_profile_summary"]["complexity"], "M")
+        self.assertEqual(snapshot["debug_summary"]["debug_source"], "retry")
         unified_snapshot = unified_state.get_state_snapshot(self.temp_dir)
         self.assertEqual(unified_snapshot["failure_event_summary"]["escalation_event_count"], 1)
+        self.assertEqual(unified_snapshot["debug_summary"]["debug_source"], "retry")
 
     def test_handle_workflow_failure_does_not_escalate_on_generic_unknown_error(self):
         """Generic recoverable failures should not automatically increase activation."""

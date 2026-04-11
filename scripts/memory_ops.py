@@ -163,6 +163,35 @@ def _enrich_thinking_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
     return enriched
 
 
+def _replace_markdown_section(content: str, section: str) -> str:
+    """Replace or append a fenced markdown section identified by its first heading line."""
+    section_lines = section.rstrip("\n").splitlines()
+    if not section_lines:
+        return content
+
+    header = section_lines[0].strip()
+    lines = content.splitlines()
+
+    start_idx = None
+    for idx, line in enumerate(lines):
+        if line.strip() == header:
+            start_idx = idx
+            break
+
+    if start_idx is not None:
+        end_idx = start_idx + 1
+        while end_idx < len(lines) and not lines[end_idx].startswith("## "):
+            end_idx += 1
+        new_lines = lines[:start_idx] + section_lines + lines[end_idx:]
+    else:
+        new_lines = list(lines)
+        if new_lines and new_lines[-1].strip():
+            new_lines.append("")
+        new_lines.extend(section_lines)
+
+    return "\n".join(new_lines) + ("\n" if content.endswith("\n") or not content else "")
+
+
 def _validate_path(path: str) -> bool:
     """验证路径安全（防止路径遍历攻击）"""
     try:
@@ -292,6 +321,18 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **thinking_memory_hints_count**: 0
 - **failure_event_count**: 0
 - **escalation_event_count**: 0
+- **debug_found**: (未设置)
+- **debug_source**: (未设置)
+- **strategy**: (未设置)
+- **error_type**: (未设置)
+- **retry_count**: 0
+- **activation_level**: 0
+- **escalation_reason**: (未设置)
+- **root_cause**: (未设置)
+- **minimal_fix**: (未设置)
+- **regression_check**: (未设置)
+- **reflection_path**: (未设置)
+- **quality_gate_failed**: (未设置)
 
 ## 审查摘要
 - **review_found**: (未设置)
@@ -303,6 +344,24 @@ def ensure_session_state_exists(path: str = DEFAULT_SESSION_STATE) -> bool:
 - **verdict**: (未设置)
 - **degraded_mode**: (未设置)
 - **files_reviewed**: 0
+- **contract_alignment**: (未设置)
+- **contract_files_count**: 0
+- **reviewed_targets_count**: 0
+- **matched_contract_files_count**: 0
+
+## DEBUG摘要
+- **debug_found**: (未设置)
+- **debug_source**: (未设置)
+- **strategy**: (未设置)
+- **error_type**: (未设置)
+- **retry_count**: 0
+- **activation_level**: 0
+- **escalation_reason**: (未设置)
+- **root_cause**: (未设置)
+- **minimal_fix**: (未设置)
+- **regression_check**: (未设置)
+- **reflection_path**: (未设置)
+- **quality_gate_failed**: (未设置)
 
 ## 关键信息 (WAL协议收集)
 
@@ -948,6 +1007,7 @@ def update_resume_summary(
     research_summary: dict[str, Any] | None = None,
     planning_summary: dict[str, Any] | None = None,
     review_summary: dict[str, Any] | None = None,
+    debug_summary: dict[str, Any] | None = None,
     thinking_summary: dict[str, Any] | None = None,
     failure_event_summary: dict[str, Any] | None = None,
 ) -> bool:
@@ -962,6 +1022,7 @@ def update_resume_summary(
     research_summary = _enrich_research_summary(research_summary or {})
     planning_summary = planning_summary or {}
     review_summary = review_summary or {}
+    debug_summary = debug_summary or {}
     thinking_summary = _enrich_thinking_summary(thinking_summary or {})
     failure_event_summary = failure_event_summary or {}
 
@@ -1006,6 +1067,22 @@ def update_resume_summary(
         f"- **verdict**: {_display_value(review_summary.get('verdict'))}\n"
         f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
         f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
+        f"- **contract_alignment**: {_display_value(review_summary.get('contract_alignment'))}\n"
+        f"- **contract_files_count**: {review_summary.get('contract_files_count', 0)}\n"
+        f"- **reviewed_targets_count**: {review_summary.get('reviewed_targets_count', 0)}\n"
+        f"- **matched_contract_files_count**: {review_summary.get('matched_contract_files_count', 0)}\n"
+        f"- **debug_found**: {debug_summary.get('debug_found', False)}\n"
+        f"- **debug_source**: {debug_summary.get('debug_source', '(未设置)')}\n"
+        f"- **strategy**: {debug_summary.get('strategy', '(未设置)')}\n"
+        f"- **error_type**: {debug_summary.get('error_type', '(未设置)')}\n"
+        f"- **retry_count**: {debug_summary.get('retry_count', 0)}\n"
+        f"- **activation_level**: {debug_summary.get('activation_level', 0)}\n"
+        f"- **escalation_reason**: {debug_summary.get('escalation_reason', '(未设置)')}\n"
+        f"- **root_cause**: {_display_value(debug_summary.get('root_cause'))}\n"
+        f"- **minimal_fix**: {_display_value(debug_summary.get('minimal_fix'))}\n"
+        f"- **regression_check**: {_display_value(debug_summary.get('regression_check'))}\n"
+        f"- **reflection_path**: {_display_value(debug_summary.get('reflection_path'))}\n"
+        f"- **quality_gate_failed**: {debug_summary.get('quality_gate_failed', False)}\n"
         f"- **thinking_workflow_label**: {thinking_summary.get('workflow_label', '(未设置)')}\n"
         f"- **thinking_thinking_mode**: {thinking_summary.get('thinking_mode', '(未设置)')}\n"
         f"- **thinking_thinking_methods**: {' | '.join(thinking_summary.get('thinking_methods', [])) if thinking_summary.get('thinking_methods') else '(未设置)'}\n"
@@ -1023,16 +1100,7 @@ def update_resume_summary(
         f"- **escalation_event_count**: {failure_event_summary.get('escalation_event_count', 0)}\n"
     )
 
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*research_found\*\*: .*\n- \*\*research_source\*\*: .*\n- \*\*research_path\*\*: .*\n- \*\*key_terms\*\*: .*\n- \*\*search_engine\*\*: .*\n- \*\*sources_count\*\*: .*\n- \*\*used_real_search\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*degraded_reason\*\*: .*\n- \*\*search_error\*\*: .*\n- \*\*evidence_status\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
-    pattern = r"## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*complexity_confidence\*\*: .*\n- \*\*research_found\*\*: .*\n- \*\*research_source\*\*: .*\n- \*\*research_path\*\*: .*\n- \*\*key_terms\*\*: .*\n- \*\*search_engine\*\*: .*\n- \*\*sources_count\*\*: .*\n- \*\*used_real_search\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*degraded_reason\*\*: .*\n- \*\*search_error\*\*: .*\n- \*\*evidence_status\*\*: .*\n- \*\*evidence_tier\*\*: .*\n- \*\*source_confidence\*\*: .*\n- \*\*source_types\*\*: .*\n- \*\*coverage_scope\*\*: .*\n- \*\*freshness\*\*: .*\n- \*\*planning_plan_source\*\*: .*\n- \*\*planning_planning_mode\*\*: .*\n- \*\*planning_plan_task_count\*\*: .*\n- \*\*planning_ready_task_count\*\*: .*\n- \*\*planning_worktree_recommended\*\*: .*\n- \*\*planning_plan_digest\*\*: .*\n- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*thinking_workflow_label\*\*: .*\n- \*\*thinking_thinking_mode\*\*: .*\n- \*\*thinking_thinking_methods\*\*: .*\n- \*\*thinking_major_contradiction\*\*: .*\n- \*\*thinking_stage_judgment\*\*: .*\n- \*\*thinking_local_attack_point\*\*: .*\n- \*\*thinking_recommendation\*\*: .*\n- \*\*thinking_memory_hints_count\*\*: .*\n- \*\*thinking_research_inputs\*\*: .*\n- \*\*thinking_memory_inputs\*\*: .*\n- \*\*thinking_contract_inputs\*\*: .*\n- \*\*thinking_reasoning_trace_id\*\*: .*\n- \*\*thinking_confidence_level\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?"
-    if re.search(pattern, content):
-        content = re.sub(pattern, section, content, count=1)
-    else:
-        insert_after = r"(\## Skill 策略\n(?:- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*tokens_expected\*\*: .*\n- \*\*profile_source\*\*: .*\n)?)"
-        if re.search(insert_after, content):
-            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
-        else:
-            content += "\n" + section + "\n"
+    content = _replace_markdown_section(content, section)
 
     safe_write_text_locked(path, content)
     return True
@@ -1067,19 +1135,94 @@ def update_review_summary(
         f"- **matched_contract_files_count**: {review_summary.get('matched_contract_files_count', 0)}\n"
     )
 
-    pattern = r"## 审查摘要\n(?:- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n)?"
-    pattern = r"## 审查摘要\n(?:- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*contract_alignment\*\*: .*\n- \*\*contract_files_count\*\*: .*\n- \*\*reviewed_targets_count\*\*: .*\n- \*\*matched_contract_files_count\*\*: .*\n)?"
-    if re.search(pattern, content):
-        content = re.sub(pattern, section, content, count=1)
-    else:
-        insert_after = r"(\## 恢复摘要\n(?:- \*\*original_session_id\*\*: .*\n- \*\*resume_from\*\*: .*\n- \*\*next_phase\*\*: .*\n- \*\*skill_policy\*\*: .*\n- \*\*use_skill\*\*: .*\n- \*\*skill_activation_level\*\*: .*\n- \*\*complexity\*\*: .*\n- \*\*failure_event_count\*\*: .*\n- \*\*escalation_event_count\*\*: .*\n)?)"
-        if re.search(insert_after, content):
-            content = re.sub(insert_after, r"\1\n" + section + "\n", content, count=1)
-        else:
-            content += "\n" + section + "\n"
+    content = _replace_markdown_section(content, section)
 
     safe_write_text_locked(path, content)
     return True
+
+
+def update_debug_summary(
+    path: str,
+    debug_summary: dict[str, Any] | None,
+) -> bool:
+    """更新调试摘要到 SESSION-STATE.md。"""
+    if not ensure_session_state_exists(path) and not os.path.exists(path):
+        return False
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    debug_summary = debug_summary or {}
+    section = (
+        "## DEBUG摘要\n"
+        f"- **debug_found**: {debug_summary.get('debug_found', False)}\n"
+        f"- **debug_source**: {debug_summary.get('debug_source', '(未设置)')}\n"
+        f"- **strategy**: {debug_summary.get('strategy', '(未设置)')}\n"
+        f"- **error_type**: {debug_summary.get('error_type', '(未设置)')}\n"
+        f"- **retry_count**: {debug_summary.get('retry_count', 0)}\n"
+        f"- **activation_level**: {debug_summary.get('activation_level', 0)}\n"
+        f"- **escalation_reason**: {debug_summary.get('escalation_reason', '(未设置)')}\n"
+        f"- **root_cause**: {_display_value(debug_summary.get('root_cause'))}\n"
+        f"- **minimal_fix**: {_display_value(debug_summary.get('minimal_fix'))}\n"
+        f"- **regression_check**: {_display_value(debug_summary.get('regression_check'))}\n"
+        f"- **reflection_path**: {_display_value(debug_summary.get('reflection_path'))}\n"
+        f"- **quality_gate_failed**: {debug_summary.get('quality_gate_failed', False)}\n"
+    )
+
+    content = _replace_markdown_section(content, section)
+
+    safe_write_text_locked(path, content)
+    return True
+
+
+def get_debug_summary(path: str) -> dict[str, Any]:
+    """从 SESSION-STATE.md 读取调试摘要。"""
+    if not os.path.exists(path):
+        return {}
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    pattern = (
+        r"## DEBUG摘要\n"
+        r"(?:- \*\*debug_found\*\*: (.*)\n"
+        r"- \*\*debug_source\*\*: (.*)\n"
+        r"- \*\*strategy\*\*: (.*)\n"
+        r"- \*\*error_type\*\*: (.*)\n"
+        r"- \*\*retry_count\*\*: (\d+)\n"
+        r"- \*\*activation_level\*\*: (\d+)\n"
+        r"- \*\*escalation_reason\*\*: (.*)\n"
+        r"- \*\*root_cause\*\*: (.*)\n"
+        r"- \*\*minimal_fix\*\*: (.*)\n"
+        r"- \*\*regression_check\*\*: (.*)\n"
+        r"- \*\*reflection_path\*\*: (.*)\n"
+        r"- \*\*quality_gate_failed\*\*: (.*)\n)?"
+    )
+    match = re.search(pattern, content)
+    if not match:
+        return {}
+
+    groups = match.groups()
+    if not groups or len(groups) < 12 or groups[0] is None:
+        return {}
+
+    def _as_bool(value: str | None) -> bool:
+        return str(value).strip().lower() in {"true", "1", "yes", "y"}
+
+    return {
+        "debug_found": _as_bool(groups[0]),
+        "debug_source": str(groups[1]).strip(),
+        "strategy": str(groups[2]).strip(),
+        "error_type": str(groups[3]).strip(),
+        "retry_count": int(groups[4]),
+        "activation_level": int(groups[5]),
+        "escalation_reason": str(groups[6]).strip() if groups[6] else None,
+        "root_cause": str(groups[7]).strip() if groups[7] else None,
+        "minimal_fix": str(groups[8]).strip() if groups[8] else None,
+        "regression_check": str(groups[9]).strip() if groups[9] else None,
+        "reflection_path": str(groups[10]).strip() if groups[10] else None,
+        "quality_gate_failed": _as_bool(groups[11]),
+    }
 
 
 def update_research_summary(
