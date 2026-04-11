@@ -546,6 +546,11 @@ class WorkerAgent:
                 f"To enable, set `use_real_agent=True` when constructing WorkerAgent.\n"
                 f"\n## Files Reviewed\n"
                 f"**Files Reviewed**: 0 code files\n"
+                f"\n## Contract Coverage\n"
+                f"- Contract alignment: template\n"
+                f"- Contract files count: 0\n"
+                f"- Reviewed targets count: 0\n"
+                f"- Matched contract files: 0\n"
                 f"\n## Stage 1: Spec Compliance\n"
                 f"- Contract/owned_files alignment: UNKNOWN\n"
                 f"- Acceptance coverage: UNKNOWN\n"
@@ -584,6 +589,7 @@ class WorkerAgent:
             output += f"- Plan digest: {capsule.get('planning', {}).get('plan_digest')}\n"
             output += f"- Contract status: {capsule.get('contract', {}).get('status')}\n"
             output += f"- Review status: {capsule.get('review', {}).get('review_status')}\n"
+            output += f"- Contract alignment: {capsule.get('review', {}).get('contract_alignment')}\n"
             output += f"- Thinking mode: {capsule.get('thinking', {}).get('thinking_mode')}\n"
         if context and context.get("owned_files"):
             output += "\n## Files to Review\n"
@@ -591,6 +597,15 @@ class WorkerAgent:
                 output += f"- {f}\n"
         reviewed_files = len(context.get("owned_files", [])) if context else 0
         output += f"\n## Files Reviewed\n**Files Reviewed**: {reviewed_files} code files\n"
+        contract_files_count = 0
+        if context and context.get("contract"):
+            contract_files_count = len(context.get("contract", {}).get("owned_files", [])) + len(context.get("contract", {}).get("impact_files", []))
+        contract_alignment = "legacy_targeted" if reviewed_files > 0 else "template"
+        output += "\n## Contract Coverage\n"
+        output += f"- Contract alignment: {contract_alignment}\n"
+        output += f"- Contract files count: {contract_files_count}\n"
+        output += f"- Reviewed targets count: {reviewed_files}\n"
+        output += f"- Matched contract files: {reviewed_files if contract_files_count else 0}\n"
 
         if context and context.get("planning_summary"):
             planning_summary = context["planning_summary"]

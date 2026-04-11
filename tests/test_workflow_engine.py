@@ -315,6 +315,10 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(review_summary["stage_2_status"], "pending")
         self.assertTrue(review_summary["degraded_mode"])
         self.assertGreaterEqual(review_summary["files_reviewed"], 0)
+        self.assertEqual(review_summary["contract_alignment"], "state_fallback")
+        self.assertEqual(review_summary["contract_files_count"], 0)
+        self.assertEqual(review_summary["reviewed_targets_count"], review_summary["files_reviewed"])
+        self.assertEqual(review_summary["matched_contract_files_count"], 0)
 
     def test_planning_phase_context_prefers_canonical_tasks_and_contract(self):
         result = workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
@@ -356,7 +360,14 @@ class TestWorkflowEngine(unittest.TestCase):
 
         review_content = (Path(self.temp_dir) / ".reviews" / "review" / "review_latest.md").read_text(encoding="utf-8")
         self.assertIn("reviewed against contract_json", review_content)
+        self.assertIn("Contract alignment: contract_targeted", review_content)
         self.assertIn("src/auth.py", review_content)
+
+        snapshot = workflow_engine.get_workflow_snapshot(self.temp_dir)
+        self.assertEqual(snapshot["review_summary"]["contract_alignment"], "contract_targeted")
+        self.assertEqual(snapshot["review_summary"]["contract_files_count"], 2)
+        self.assertEqual(snapshot["review_summary"]["reviewed_targets_count"], 1)
+        self.assertEqual(snapshot["review_summary"]["matched_contract_files_count"], 1)
 
     def test_illegal_transition_is_rejected(self):
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
@@ -708,9 +719,15 @@ class TestQualityGateCompletionBlock(unittest.TestCase):
             review_content = """# Code Review: Test task
 
 ## Stage 1: Spec Compliance
-- Contract/owned_files alignment: reviewed against contract
+- Contract/owned_files alignment: reviewed against contract_json
 - Acceptance coverage: checked via task contract and target files
 - Scope completeness: target files count = 1
+
+## Contract Coverage
+- Contract alignment: contract_targeted
+- Contract files count: 1
+- Reviewed targets count: 1
+- Matched contract files: 1
 
 ## Files Reviewed
 **Files Reviewed**: {files_reviewed} code files
@@ -1127,6 +1144,10 @@ class TestNewPhases(unittest.TestCase):
         self.assertEqual(result["resume_summary"]["planning_summary"]["plan_source"], "tasks.md")
         self.assertEqual(result["resume_summary"]["planning_summary"]["planning_mode"], "canonical")
         self.assertEqual(result["review_summary"]["review_source"], "review_latest")
+        self.assertEqual(result["review_summary"]["contract_alignment"], "(未设置)")
+        self.assertEqual(result["review_summary"]["contract_files_count"], 0)
+        self.assertEqual(result["review_summary"]["reviewed_targets_count"], 0)
+        self.assertEqual(result["review_summary"]["matched_contract_files_count"], 0)
         self.assertEqual(result["thinking_summary"]["workflow_label"], "复杂问题攻坚")
         self.assertEqual(result["thinking_summary"]["thinking_mode"], "contradiction_analysis")
         self.assertEqual(

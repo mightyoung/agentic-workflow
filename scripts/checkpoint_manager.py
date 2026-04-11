@@ -385,6 +385,10 @@ def conditional_checkpoint(
 - Risk level: {checkpoint_data['review_summary'].get('risk_level') or 'unset'}
 - Verdict: {checkpoint_data['review_summary'].get('verdict') or 'unset'}
 - Degraded mode: {checkpoint_data['review_summary'].get('degraded_mode', False)}
+- Contract alignment: {checkpoint_data['review_summary'].get('contract_alignment') or 'unset'}
+- Contract files count: {checkpoint_data['review_summary'].get('contract_files_count', 0)}
+- Reviewed targets count: {checkpoint_data['review_summary'].get('reviewed_targets_count', 0)}
+- Matched contract files: {checkpoint_data['review_summary'].get('matched_contract_files_count', 0)}
 
 ## Failure Events
 - Failure events: {failure_event_summary.get('failure_event_count', 0)}

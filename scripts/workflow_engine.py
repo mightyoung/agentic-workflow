@@ -139,10 +139,15 @@ def _run_review_gate_if_applicable(
         return False, "code quality stage missing"
     if int(review_summary.get("files_reviewed", 0) or 0) <= 0:
         return False, "review did not analyze any files"
+    if int(review_summary.get("reviewed_targets_count", review_summary.get("files_reviewed", 0)) or 0) <= 0:
+        return False, "review did not target any contract or task files"
     if review_summary.get("degraded_mode"):
         return False, "review is degraded"
     if review_summary.get("review_source") in {"template", "none", "workdir_scan"}:
         return False, f"review source is {review_summary.get('review_source')}"
+    contract_alignment = str(review_summary.get("contract_alignment", "") or "").strip().lower()
+    if contract_alignment in {"template", "fallback", "workdir_scan", "contract_miss"}:
+        return False, f"review contract alignment is {contract_alignment or 'unset'}"
     if not review_summary.get("verdict"):
         return False, "review verdict missing"
     return True, "review gate passed"
@@ -2364,6 +2369,37 @@ def advance_workflow(
             # Read phase contract if available (Anthropic-style negotiated contract)
             contract_info = ""
             contract = parse_phase_contract(workdir)
+            contract_owned_files = [str(item).strip() for item in contract.get("owned_files", []) if str(item).strip()]
+            contract_impact_files = [str(item).strip() for item in contract.get("impact_files", []) if str(item).strip()]
+            contract_files = contract_owned_files + contract_impact_files
+            reviewed_targets = [str(fp.relative_to(workdir_path)) for fp in target_files]
+
+            def _paths_match(left: str, right: str) -> bool:
+                left_norm = left.replace("\\", "/").strip().lower().lstrip("./")
+                right_norm = right.replace("\\", "/").strip().lower().lstrip("./")
+                return (
+                    left_norm == right_norm
+                    or left_norm.endswith("/" + right_norm)
+                    or right_norm.endswith("/" + left_norm)
+                    or left_norm in right_norm
+                    or right_norm in left_norm
+                )
+
+            matched_contract_files = [
+                target for target in reviewed_targets
+                if any(_paths_match(target, contract_file) for contract_file in contract_files)
+            ]
+            if contract_files:
+                contract_alignment = "contract_targeted" if matched_contract_files else "contract_miss"
+            elif used_real_review and review_source in {"tasks_md", "contract_json", "file_changes"}:
+                contract_alignment = "legacy_targeted"
+            elif review_source == "workdir_scan":
+                contract_alignment = "fallback_scan"
+            elif review_source == "none":
+                contract_alignment = "template"
+            else:
+                contract_alignment = "ad_hoc"
+
             if contract.get("goals"):
                 contract_info = "\n## Phase Contract\n"
                 if contract.get("goals"):
@@ -2398,6 +2434,12 @@ def advance_workflow(
 
 ## Files Reviewed
 **Files Reviewed**: {len(target_files)} code files
+
+## Contract Coverage
+- Contract alignment: {contract_alignment}
+- Contract files count: {len(contract_files)}
+- Reviewed targets count: {len(reviewed_targets)}
+- Matched contract files: {len(matched_contract_files)}
 
 ## Stage 1: Spec Compliance
 - Contract/owned_files alignment: reviewed against {review_source}
@@ -2438,6 +2480,10 @@ def advance_workflow(
                 "review_source": review_source,
                 "degraded_mode": review_source == "workdir_scan",
                 "fallback_mode": review_source == "workdir_scan",
+                "contract_alignment": contract_alignment,
+                "contract_files_count": len(contract_files),
+                "reviewed_targets_count": len(reviewed_targets),
+                "matched_contract_files_count": len(matched_contract_files),
             }
             review_summary = {
                 "review_found": True,
@@ -2449,6 +2495,10 @@ def advance_workflow(
                 "verdict": "REVIEWED",
                 "degraded_mode": review_source == "workdir_scan",
                 "files_reviewed": len(target_files),
+                "contract_alignment": contract_alignment,
+                "contract_files_count": len(contract_files),
+                "reviewed_targets_count": len(reviewed_targets),
+                "matched_contract_files_count": len(matched_contract_files),
             }
         else:
             # Fall back to template-based review (no code files found)
@@ -2504,6 +2554,12 @@ def advance_workflow(
 ## Files Reviewed
 **Files Reviewed**: 0 code files
 
+## Contract Coverage
+- Contract alignment: template
+- Contract files count: 0
+- Reviewed targets count: 0
+- Matched contract files: 0
+
 ## Stage 1: Spec Compliance
 - Contract/owned_files alignment: no file-level contract available
 - Acceptance coverage: verified against task description only
@@ -2549,6 +2605,10 @@ def advance_workflow(
                 "verdict": "REVIEWED",
                 "degraded_mode": True,
                 "files_reviewed": 0,
+                "contract_alignment": "template",
+                "contract_files_count": 0,
+                "reviewed_targets_count": 0,
+                "matched_contract_files_count": 0,
             }
 
         safe_write_text_locked(review_path, review_content)

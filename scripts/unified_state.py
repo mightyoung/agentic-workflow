@@ -737,6 +737,10 @@ def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict
             "verdict": None,
             "degraded_mode": False,
             "files_reviewed": 0,
+            "contract_alignment": None,
+            "contract_files_count": 0,
+            "reviewed_targets_count": 0,
+            "matched_contract_files_count": 0,
         }
 
     try:
@@ -753,6 +757,10 @@ def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict
             "verdict": None,
             "degraded_mode": False,
             "files_reviewed": 0,
+            "contract_alignment": None,
+            "contract_files_count": 0,
+            "reviewed_targets_count": 0,
+            "matched_contract_files_count": 0,
         }
 
     def _extract(pattern: str) -> str | None:
@@ -768,6 +776,10 @@ def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict
     if not files_reviewed_str:
         files_reviewed_str = _extract(r"^## Reviewed Files \((\d+)\s*files analyzed\)$")
     files_reviewed = int(files_reviewed_str) if files_reviewed_str and files_reviewed_str.isdigit() else 0
+    contract_alignment = _extract(r"^\s*-\s*Contract alignment:\s*(.+)$")
+    contract_files_count_str = _extract(r"^\s*-\s*Contract files count:\s*(\d+)$")
+    reviewed_targets_count_str = _extract(r"^\s*-\s*Reviewed targets count:\s*(\d+)$")
+    matched_contract_files_count_str = _extract(r"^\s*-\s*Matched contract files:\s*(\d+)$")
     degraded_mode = "Degraded Mode" in content or "degraded mode" in content.lower()
     if review_status == "reviewed" and files_reviewed <= 0 and "template-based fallback" in content.lower():
         degraded_mode = True
@@ -783,6 +795,10 @@ def get_review_summary(workdir: str, state: WorkflowState | None = None) -> dict
         "verdict": verdict,
         "degraded_mode": degraded_mode,
         "files_reviewed": files_reviewed,
+        "contract_alignment": contract_alignment,
+        "contract_files_count": int(contract_files_count_str) if contract_files_count_str and contract_files_count_str.isdigit() else 0,
+        "reviewed_targets_count": int(reviewed_targets_count_str) if reviewed_targets_count_str and reviewed_targets_count_str.isdigit() else 0,
+        "matched_contract_files_count": int(matched_contract_files_count_str) if matched_contract_files_count_str and matched_contract_files_count_str.isdigit() else 0,
     }
 
 
@@ -810,6 +826,10 @@ def _build_review_state_fallback(state: WorkflowState | None) -> dict[str, Any]:
         "verdict": None,
         "degraded_mode": True,
         "files_reviewed": reviewed_files,
+        "contract_alignment": "state_fallback",
+        "contract_files_count": 0,
+        "reviewed_targets_count": reviewed_files,
+        "matched_contract_files_count": 0,
     }
 
 
@@ -917,6 +937,10 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
         "verdict",
         "degraded_mode",
         "files_reviewed",
+        "contract_alignment",
+        "contract_files_count",
+        "reviewed_targets_count",
+        "matched_contract_files_count",
     ]
 
     for field in runtime_fields:

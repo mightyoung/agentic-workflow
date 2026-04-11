@@ -839,7 +839,12 @@ def get_review_summary(path: str) -> dict[str, Any]:
         r"- \*\*risk_level\*\*: (.*)\n"
         r"- \*\*verdict\*\*: (.*)\n"
         r"- \*\*degraded_mode\*\*: (.*)\n"
-        r"- \*\*files_reviewed\*\*: (\d+)\n)?"
+        r"- \*\*files_reviewed\*\*: (\d+)\n"
+        r"(?:- \*\*contract_alignment\*\*: (.*)\n"
+        r"- \*\*contract_files_count\*\*: (\d+)\n"
+        r"- \*\*reviewed_targets_count\*\*: (\d+)\n"
+        r"- \*\*matched_contract_files_count\*\*: (\d+)\n)?"
+        r")?"
     )
     match = re.search(pattern, content)
     if not match:
@@ -862,6 +867,10 @@ def get_review_summary(path: str) -> dict[str, Any]:
         "verdict": str(groups[6]).strip() if groups[6] else None,
         "degraded_mode": _as_bool(groups[7]),
         "files_reviewed": int(groups[8]),
+        "contract_alignment": str(groups[9]).strip() if len(groups) > 9 and groups[9] else None,
+        "contract_files_count": int(groups[10]) if len(groups) > 10 and groups[10] else 0,
+        "reviewed_targets_count": int(groups[11]) if len(groups) > 11 and groups[11] else 0,
+        "matched_contract_files_count": int(groups[12]) if len(groups) > 12 and groups[12] else 0,
     }
 
 
@@ -1052,9 +1061,14 @@ def update_review_summary(
         f"- **verdict**: {_display_value(review_summary.get('verdict'))}\n"
         f"- **degraded_mode**: {review_summary.get('degraded_mode', False)}\n"
         f"- **files_reviewed**: {review_summary.get('files_reviewed', 0)}\n"
+        f"- **contract_alignment**: {_display_value(review_summary.get('contract_alignment'))}\n"
+        f"- **contract_files_count**: {review_summary.get('contract_files_count', 0)}\n"
+        f"- **reviewed_targets_count**: {review_summary.get('reviewed_targets_count', 0)}\n"
+        f"- **matched_contract_files_count**: {review_summary.get('matched_contract_files_count', 0)}\n"
     )
 
     pattern = r"## 审查摘要\n(?:- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n)?"
+    pattern = r"## 审查摘要\n(?:- \*\*review_found\*\*: .*\n- \*\*review_source\*\*: .*\n- \*\*review_status\*\*: .*\n- \*\*stage_1_status\*\*: .*\n- \*\*stage_2_status\*\*: .*\n- \*\*risk_level\*\*: .*\n- \*\*verdict\*\*: .*\n- \*\*degraded_mode\*\*: .*\n- \*\*files_reviewed\*\*: .*\n- \*\*contract_alignment\*\*: .*\n- \*\*contract_files_count\*\*: .*\n- \*\*reviewed_targets_count\*\*: .*\n- \*\*matched_contract_files_count\*\*: .*\n)?"
     if re.search(pattern, content):
         content = re.sub(pattern, section, content, count=1)
     else:
