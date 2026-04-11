@@ -435,6 +435,7 @@ def build_skill_context(
     phase: str,
     complexity: str,
     activation_level: int | None = None,
+    model_id: str | None = None,
 ) -> tuple[str, int]:
     """Build skill context from tiered files, with PHASE_PROMPTS fallback.
 
@@ -444,19 +445,38 @@ def build_skill_context(
     Args:
         phase: Phase name (e.g., "EXECUTING")
         complexity: Complexity level ("XS"/"S"/"M"/"L"/"XL")
-        activation_level: 0-100 tier depth. If None, inferred from complexity.
+        activation_level: 0-100 tier depth. If None, resolved via model_profiles.
+        model_id: Optional LLM model identifier for capability-aware routing.
     """
     phase = (phase or "").upper()
     complexity = (complexity or "").upper()
 
-    # Infer activation_level from complexity if not provided
+    # Resolve activation_level using model profile when available
     if activation_level is None:
-        activation_level = _infer_activation_from_complexity(phase, complexity)
+        try:
+            from adaptive_tier import adaptive_activation_level as _adaptive
+            activation_level = _adaptive(phase, complexity, model_id, workdir=".")
+        except (ImportError, Exception):
+            try:
+                from model_profiles import get_profile, resolve_activation_level as _resolve
+                profile = get_profile(model_id)
+                activation_level = _resolve(phase, complexity, profile)
+            except (ImportError, Exception):
+                activation_level = _infer_activation_from_complexity(phase, complexity)
+
+    # Resolve format from model profile
+    format_name = "markdown"
+    if model_id:
+        try:
+            from model_profiles import get_profile
+            format_name = get_profile(model_id).format
+        except (ImportError, Exception):
+            pass
 
     # Try tier-based assembly first
     try:
         from skill_assembler import assemble_skill_prompt
-        prompt, tokens = assemble_skill_prompt(phase, activation_level)
+        prompt, tokens = assemble_skill_prompt(phase, activation_level, format_name, model_id)
         if prompt:
             return prompt, tokens
     except (ImportError, Exception):

@@ -151,7 +151,7 @@ class PlainAdapter:
         return text.strip()
 
 
-# Default adapter registry (Phase 2 will add model_profiles.py)
+# Adapter registry
 _ADAPTERS: dict[str, FormatAdapter] = {
     "markdown": MarkdownAdapter(),
     "xml": XMLAdapter(),
@@ -172,17 +172,29 @@ def assemble_skill_prompt(
     phase: str,
     activation_level: int,
     format_name: str = "markdown",
+    model_id: str | None = None,
 ) -> tuple[str, int]:
     """Assemble a skill prompt from tiered files.
 
     Args:
         phase: Phase name (e.g., "EXECUTING")
         activation_level: 0-100, determines tier depth
-        format_name: Output format ("markdown", "xml", "plain")
+        format_name: Output format ("markdown", "xml", "plain").
+            If "auto", resolves from model_profiles using model_id.
+        model_id: Optional model identifier for auto format/level resolution.
 
     Returns:
         (formatted_prompt, estimated_tokens)
     """
+    # Auto-resolve format from model profile when requested
+    if format_name == "auto" and model_id:
+        try:
+            from model_profiles import get_profile
+            profile = get_profile(model_id)
+            format_name = profile.format
+        except (ImportError, Exception):
+            format_name = "markdown"
+
     if activation_level <= 0:
         return "", 0
 

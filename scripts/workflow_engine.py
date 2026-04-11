@@ -194,7 +194,7 @@ from phase_transitions import (  # noqa: F401
 )
 
 
-def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
+def _build_runtime_profile(prompt: str, workdir: str, model_id: str | None = None) -> dict[str, Any]:
     """
     Build the initial runtime profile for a prompt.
 
@@ -222,9 +222,24 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         skill_activation_level = (
             skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
         )
+
+        # Check for de-escalation opportunity
+        try:
+            from adaptive_tier import AdaptiveResolver
+            de_esc = AdaptiveResolver(workdir=workdir).should_de_escalate(
+                phase=current_phase,
+                current_level=skill_activation_level,
+                model_id=model_id,
+            )
+            if de_esc is not None:
+                skill_activation_level = de_esc.activation_level
+        except Exception:
+            pass
+
         if use_skill:
             skill_context, tokens_expected = build_skill_context(
                 current_phase, complexity, activation_level=skill_activation_level,
+                model_id=model_id,
             )
         else:
             skill_context = ""
@@ -294,6 +309,7 @@ def initialize_workflow(
     workdir: str = ".",
     task_id: str | None = None,
     auto_create_plan: bool = True,
+    model_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Initialize a new workflow session.
@@ -327,7 +343,7 @@ def initialize_workflow(
     memory_ops.ensure_session_state_exists(str(session_path))
     task_tracker.save_tracker(str(tracker_path), task_tracker.load_tracker(str(tracker_path)))
 
-    runtime_profile = _build_runtime_profile(prompt, workdir)
+    runtime_profile = _build_runtime_profile(prompt, workdir, model_id=model_id)
     trigger_type = runtime_profile["trigger_type"]
     current_phase = runtime_profile["phase"]
     complexity = runtime_profile["complexity"]
@@ -1479,6 +1495,46 @@ def advance_workflow(
     if isinstance(exp_check, dict) and exp_check.get("warning"):
         experience_warning = exp_check["warning"]
 
+    # Skill Metrics P3: Record outcome for the phase that just completed.
+    # Only fires when skill was actually used (activation_level > 0).
+    # Wrapped in try/except — purely observational, never breaks execution.
+    try:
+        _skill_activation = int(runtime_profile.get("skill_activation_level", 0)) if runtime_profile else 0
+        if _skill_activation > 0:
+            from skill_metrics import SkillOutcome, compute_quality_score, record_skill_outcome
+            _phase_success = task_status == "completed" if task_status else (phase != "DEBUGGING")
+            _phase_complexity = str(
+                runtime_profile.get("complexity")
+                or (state.metadata.get("complexity") if state.metadata else "M")
+                or "M"
+            )
+            _model_id = str(runtime_profile.get("model_id") or "unknown") if runtime_profile else "unknown"
+            _tokens_expected = int(runtime_profile.get("tokens_expected", 0)) if runtime_profile else 0
+            _failure_count = len(_get_error_history(state)) if state else 0
+            _quality = compute_quality_score(
+                success=_phase_success,
+                failure_count=_failure_count,
+            )
+            _outcome = SkillOutcome(
+                success=_phase_success,
+                quality_score=_quality,
+                token_input=_tokens_expected,
+                token_output=0,
+                duration_ms=0,
+                failure_count=_failure_count,
+                error_type=None,
+            )
+            record_skill_outcome(
+                phase=current_phase,
+                activation_level=_skill_activation,
+                model_id=_model_id,
+                complexity=_phase_complexity,
+                outcome=_outcome,
+                workdir=workdir,
+            )
+    except Exception:
+        pass  # Skill metrics recording is best-effort — never block workflow
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -1952,6 +2008,19 @@ def handle_workflow_failure(
             if state.metadata is None:
                 state.metadata = {}
             state.metadata["runtime_profile"] = runtime_profile
+
+            # Record escalation for adaptive learning
+            try:
+                from adaptive_tier import AdaptiveResolver
+                AdaptiveResolver(workdir=workdir).record_escalation(
+                    phase=current_phase,
+                    from_level=current_activation_level,
+                    to_level=escalated_activation_level,
+                    reason="failure_escalation",
+                )
+            except Exception:
+                pass
+
             state.decisions.append(Decision(
                 timestamp=datetime.now().isoformat(),
                 decision="Escalate skill activation",
