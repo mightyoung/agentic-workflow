@@ -386,7 +386,7 @@ class TestCodeImplementationChain(TestE2EBusinessChains):
                 # If real review was used, should have files reviewed count
                 self.assertIsNotNone(files_reviewed,
                     "Real review should report files_reviewed count")
-                self.assertIn(review_source, ["owned_files", "file_changes", "workdir_scan"],
+                self.assertIn(review_source, ["tasks_md", "contract_json", "task_plan_md", "file_changes", "workdir_scan"],
                     "Real review should identify the review source")
 
         # Step 9: 验证完成总结工件（交付结算点）
@@ -430,7 +430,7 @@ class TestResearchAnalysisChain(TestE2EBusinessChains):
         5. trigger_type 正确
         6. Artifacts 已注册
         """
-        prompt = "研究微服务架构的最佳实践，包括服务拆分、通信模式、容错处理"
+        prompt = "请调研微服务架构的最佳实践，包括服务拆分、通信模式、容错处理"
 
         # Step 1: 初始化workflow
         init_result = self._run_workflow_init(prompt)

@@ -220,6 +220,14 @@ def parse_phase_contract(workdir: str = ".") -> dict[str, Any]:
             current_section = "goals"
         elif line.startswith("## Verification"):
             current_section = "verification_methods"
+        elif line.startswith("## Acceptance Criteria"):
+            current_section = "acceptance_criteria"
+        elif line.startswith("## Impact Files"):
+            current_section = "impact_files"
+        elif line.startswith("## Dependencies"):
+            current_section = "dependencies"
+        elif line.startswith("## Rollback Note"):
+            current_section = "rollback_note"
         elif line.startswith("## Owned Files"):
             current_section = "owned_files"
         elif line.startswith("#"):

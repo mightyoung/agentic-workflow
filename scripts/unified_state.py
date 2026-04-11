@@ -923,13 +923,18 @@ def compare_state_sidecar_consistency(workdir: str = ".", state: WorkflowState |
         _compare_field(errors, "runtime_profile", field, state_runtime.get(field), sidecar_runtime.get(field))
     for field in planning_fields:
         _compare_field(errors, "planning_summary", field, state_planning.get(field), sidecar_planning.get(field))
-    if not (current_phase in {"IDLE", "PLANNING"} and not _is_meaningful_research_summary(state_research)):
+    state_has_research = _is_meaningful_research_summary(state_research)
+    if current_phase == "RESEARCH" and state_has_research:
         for field in research_fields:
             _compare_field(errors, "research_summary", field, state_research.get(field), sidecar_research.get(field))
-    for field in thinking_fields:
-        _compare_field(errors, "thinking_summary", field, state_thinking.get(field), sidecar_thinking.get(field))
-    for field in review_fields:
-        _compare_field(errors, "review_summary", field, state_review.get(field), sidecar_review.get(field))
+    state_has_thinking = _is_meaningful_thinking_summary(state_thinking)
+    if current_phase == "THINKING" and state_has_thinking:
+        for field in thinking_fields:
+            _compare_field(errors, "thinking_summary", field, state_thinking.get(field), sidecar_thinking.get(field))
+    state_has_review = bool(state_review.get("review_found")) and str(state_review.get("review_source", "")).strip() not in {"", "none", "template"}
+    if current_phase == "REVIEWING" and state_has_review:
+        for field in review_fields:
+            _compare_field(errors, "review_summary", field, state_review.get(field), sidecar_review.get(field))
 
     return len(errors) == 0, errors
 

@@ -430,6 +430,40 @@ These tests cover:
             self.assertEqual(len(result["verification_methods"]), 2)
             self.assertIn("Run pytest tests/test_a.py", result["verification_methods"][0])
 
+    def test_parse_contract_markdown_fallback_extended_sections(self):
+        """Markdown fallback parses acceptance, impact, dependencies, and rollback."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            contract = Path(tmpdir) / "phase_contract.md"
+            contract.write_text("""# Phase Contract
+
+## Goals
+- [ ] Goal 1: Implement feature A
+
+## Acceptance Criteria
+- Login succeeds with valid credentials
+
+## Verification
+1. Run pytest tests/test_auth.py
+
+## Owned Files
+- `src/auth.py`
+
+## Impact Files
+- `src/auth.py`
+- `tests/test_auth.py`
+
+## Dependencies
+- auth service available
+
+## Rollback Note
+- Revert auth.py and rerun auth tests
+""")
+            result = parse_phase_contract(tmpdir)
+            self.assertEqual(result["acceptance_criteria"], ["Login succeeds with valid credentials"])
+            self.assertEqual(result["impact_files"], ["src/auth.py", "tests/test_auth.py"])
+            self.assertEqual(result["dependencies"], ["auth service available"])
+            self.assertEqual(result["rollback_note"], "Revert auth.py and rerun auth tests")
+
 
 class TestTeamAgent(unittest.TestCase):
     """Test team agent worker assignments"""

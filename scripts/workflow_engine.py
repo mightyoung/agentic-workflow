@@ -686,11 +686,20 @@ def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> d
                 summary = "Research findings available."
 
     elif current_phase == "PLANNING":
-        # PLANNING produces task_plan — EXECUTING should follow it
-        plan = workdir_path / "task_plan.md"
-        if plan.exists():
-            files_to_read.append(str(plan))
-            summary = "Task plan available. Execute tasks in priority order."
+        # PLANNING produces the canonical spec/task chain — EXECUTING should follow it
+        canonical_tasks = _find_canonical_tasks_path(workdir)
+        contract_json = workdir_path / ".contract.json"
+        legacy_plan = workdir_path / "task_plan.md"
+        if canonical_tasks and canonical_tasks.exists():
+            files_to_read.append(str(canonical_tasks))
+            if contract_json.exists():
+                files_to_read.append(str(contract_json))
+            summary = "Canonical task chain available. Execute tasks in priority order and follow the contract."
+        elif legacy_plan.exists():
+            files_to_read.append(str(legacy_plan))
+            if contract_json.exists():
+                files_to_read.append(str(contract_json))
+            summary = "Legacy task plan available. Execute tasks in priority order and follow the contract."
 
     elif current_phase == "EXECUTING":
         # EXECUTING produces code changes — REVIEWING should diff them
@@ -1882,6 +1891,56 @@ def advance_workflow(
 
     runtime_profile = state.metadata.get("runtime_profile", {}) if state.metadata else {}
     thinking_summary: dict[str, Any] | None = None
+    complete_gate_prevalidated = False
+
+    if phase == "COMPLETE":
+        # Check if this is a code implementation task (has REVIEWING or EXECUTING in history)
+        phase_history = state.phase.get("history", [])
+        is_code_task = any(p.get("phase") in ("REVIEWING", "EXECUTING") for p in phase_history)
+
+        if is_code_task:
+            # Get quality gate status from tracker
+            tracker_data = task_tracker.load_tracker(str(tracker_path))
+            task_data = None
+            for t in tracker_data.get("tasks", []):
+                if t.get("id") == task_id:
+                    task_data = t
+                    break
+
+            quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
+            task_priority = task_data.get("priority") if task_data else None
+            task_verification = task_data.get("verification") if task_data else None
+
+            # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
+            if quality_gate_passed is not True:
+                raise ValueError(
+                    f"Cannot transition to COMPLETE: quality gate not passed for task {task_id}. "
+                    f"quality_gates_passed={quality_gate_passed}. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
+
+            # If P0/P1 task has no verification, block COMPLETE
+            if task_priority in ("P0", "P1") and not task_verification:
+                raise ValueError(
+                    f"Cannot transition to COMPLETE: task {task_id} (P0/P1) has no verification method. "
+                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                )
+
+            review_valid, review_error = _run_review_gate_if_applicable(workdir, True)
+            if not review_valid:
+                raise ValueError(
+                    f"Cannot transition to COMPLETE: {review_error}. "
+                    f"Allowed transitions: stay in {current_phase}, go to REVIEWING, or abort."
+                )
+
+        # Contract fulfillment gate: validate contract is properly fulfilled
+        contract_valid, contract_error = validate_contract_gate(workdir, state)
+        if not contract_valid:
+            raise ValueError(
+                f"Cannot transition to COMPLETE: {contract_error}"
+            )
+
+        complete_gate_prevalidated = True
 
     # Update progress.md
     progress_file = Path(workdir) / "progress.md"
@@ -2147,9 +2206,10 @@ def advance_workflow(
         target_files = []
         review_source = "none"
 
-        # 1. Try tasks.md (spec-kit): parse **Files:** per task
-        tasks_md_path = Path(workdir) / "tasks.md"
-        if tasks_md_path.exists():
+        # 1. Try canonical tasks.md (spec-kit): parse **Files:** per task
+        tasks_md_path = _find_canonical_tasks_path(workdir)
+        plan_path: Path | None = None
+        if tasks_md_path and tasks_md_path.exists():
             tasks_content = tasks_md_path.read_text(encoding="utf-8", errors="ignore")
             files_pattern = re.compile(r'\*\*Files:\*\*\s*`([^`]+)`', re.IGNORECASE)
             for match in files_pattern.finditer(tasks_content):
@@ -2219,8 +2279,16 @@ def advance_workflow(
                 review_fallback_allowed = True
 
         # Also check task_plan.md / tasks.md for explicit allow_fallback flag
-        if not review_fallback_allowed and plan_path.exists():
-            plan_content = plan_path.read_text(encoding="utf-8", errors="ignore").lower()
+        allow_fallback_candidates: list[Path] = []
+        if tasks_md_path and tasks_md_path.exists():
+            allow_fallback_candidates.append(tasks_md_path)
+        if plan_path and plan_path.exists():
+            allow_fallback_candidates.append(plan_path)
+
+        for fallback_candidate in allow_fallback_candidates:
+            if review_fallback_allowed:
+                break
+            plan_content = fallback_candidate.read_text(encoding="utf-8", errors="ignore").lower()
             if "allow_review_fallback" in plan_content or "review_fallback: true" in plan_content:
                 review_fallback_allowed = True
 
@@ -2511,53 +2579,52 @@ def advance_workflow(
 
     # Block COMPLETE transition if quality gate failed for code tasks
     if phase == "COMPLETE":
-        # Check if this is a code implementation task (has REVIEWING or EXECUTING in history)
-        phase_history = state.phase.get("history", [])
-        is_code_task = any(p.get("phase") in ("REVIEWING", "EXECUTING") for p in phase_history)
+        if not complete_gate_prevalidated:
+            # Defensive fallback: keep legacy behavior if the prevalidation block is bypassed.
+            phase_history = state.phase.get("history", [])
+            is_code_task = any(p.get("phase") in ("REVIEWING", "EXECUTING") for p in phase_history)
 
-        if is_code_task:
-            # Get quality gate status from tracker
-            tracker_data = task_tracker.load_tracker(str(tracker_path))
-            task_data = None
-            for t in tracker_data.get("tasks", []):
-                if t.get("id") == task_id:
-                    task_data = t
-                    break
+            if is_code_task:
+                tracker_data = task_tracker.load_tracker(str(tracker_path))
+                task_data = None
+                for t in tracker_data.get("tasks", []):
+                    if t.get("id") == task_id:
+                        task_data = t
+                        break
 
-            quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
-            task_priority = task_data.get("priority") if task_data else None
-            task_verification = task_data.get("verification") if task_data else None
+                quality_gate_passed = task_data.get("quality_gates_passed") if task_data else None
+                task_priority = task_data.get("priority") if task_data else None
+                task_verification = task_data.get("verification") if task_data else None
 
-            # Code tasks must have explicitly passed quality gate (None = not run, False = failed)
-            if quality_gate_passed is not True:
+                if quality_gate_passed is not True:
+                    raise ValueError(
+                        f"Cannot transition to COMPLETE: quality gate not passed for task {task_id}. "
+                        f"quality_gates_passed={quality_gate_passed}. "
+                        f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                    )
+
+                if task_priority in ("P0", "P1") and not task_verification:
+                    raise ValueError(
+                        f"Cannot transition to COMPLETE: task {task_id} (P0/P1) has no verification method. "
+                        f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                    )
+
+                review_valid, review_error = _run_review_gate_if_applicable(workdir, True)
+                if not review_valid:
+                    raise ValueError(
+                        f"Cannot transition to COMPLETE: {review_error}. "
+                        f"Allowed transitions: stay in {current_phase}, go to REVIEWING, or abort."
+                    )
+
+            contract_valid, contract_error = validate_contract_gate(workdir, state)
+            if not contract_valid:
                 raise ValueError(
-                    f"Cannot transition to COMPLETE: quality gate not passed for task {task_id}. "
-                    f"quality_gates_passed={quality_gate_passed}. "
-                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
+                    f"Cannot transition to COMPLETE: {contract_error}"
                 )
-
-            # If P0/P1 task has no verification, block COMPLETE
-            if task_priority in ("P0", "P1") and not task_verification:
-                raise ValueError(
-                    f"Cannot transition to COMPLETE: task {task_id} (P0/P1) has no verification method. "
-                    f"Allowed transitions: stay in {current_phase}, go to DEBUGGING, or abort."
-                )
-
-            review_valid, review_error = _run_review_gate_if_applicable(workdir, True)
-            if not review_valid:
-                raise ValueError(
-                    f"Cannot transition to COMPLETE: {review_error}. "
-                    f"Allowed transitions: stay in {current_phase}, go to REVIEWING, or abort."
-                )
-
-        # Contract fulfillment gate: validate contract is properly fulfilled
-        contract_valid, contract_error = validate_contract_gate(workdir, state)
-        if not contract_valid:
-            raise ValueError(
-                f"Cannot transition to COMPLETE: {contract_error}"
-            )
 
         _generate_and_register_summary(workdir, state, current_phase, "completed", session_id)
+        # Keep the sidecar review summary aligned with the final review artifact.
+        memory_ops.update_review_summary(str(session_path), get_review_summary(workdir, state))
 
     # Load and format skill prompt for the new phase
     skill_prompt_path = None

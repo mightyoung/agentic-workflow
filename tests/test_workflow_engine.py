@@ -316,6 +316,48 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertTrue(review_summary["degraded_mode"])
         self.assertGreaterEqual(review_summary["files_reviewed"], 0)
 
+    def test_planning_phase_context_prefers_canonical_tasks_and_contract(self):
+        result = workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "PLANNING")
+
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        context = workflow_engine._build_phase_context("PLANNING", self.temp_dir, state.session_id)
+
+        canonical_tasks = next(Path(self.temp_dir).glob(".specs/*/tasks.md"))
+        contract_path = Path(self.temp_dir) / ".contract.json"
+        self.assertIn(str(canonical_tasks), context["files_to_read"])
+        self.assertIn(str(contract_path), context["files_to_read"])
+        self.assertIn("Canonical task chain available", context["summary"])
+
+    def test_review_exit_uses_contract_owned_files_without_plan_path_leak(self):
+        workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
+        state = unified_state.load_state(self.temp_dir)
+        self.assertIsNotNone(state)
+        state = unified_state.transition_phase(state, "REVIEWING", reason="test review exit")
+        unified_state.save_state(self.temp_dir, state)
+
+        src_dir = Path(self.temp_dir) / "src"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        auth_file = src_dir / "auth.py"
+        auth_file.write_text("def login():\n    return True\n", encoding="utf-8")
+
+        contract_path = Path(self.temp_dir) / ".contract.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        contract["owned_files"] = ["src/auth.py"]
+        contract["impact_files"] = ["src/auth.py"]
+        contract["acceptance_criteria"] = ["login works"]
+        contract["rollback_note"] = "Revert src/auth.py"
+        contract["status"] = "review"
+        contract_path.write_text(json.dumps(contract, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        result = workflow_engine.advance_workflow("EXECUTING", workdir=self.temp_dir)
+        self.assertEqual(result["phase"], "EXECUTING")
+
+        review_content = (Path(self.temp_dir) / ".reviews" / "review" / "review_latest.md").read_text(encoding="utf-8")
+        self.assertIn("reviewed against contract_json", review_content)
+        self.assertIn("src/auth.py", review_content)
+
     def test_illegal_transition_is_rejected(self):
         workflow_engine.initialize_workflow("帮我制定一个开发计划", workdir=self.temp_dir)
 
