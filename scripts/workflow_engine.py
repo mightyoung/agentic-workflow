@@ -80,707 +80,23 @@ _active_loggers: dict[str, TrajectoryLogger] = {}
 
 DEFAULT_CATEGORY = "WORKFLOW"
 
-def _run_quality_gate_if_applicable(workdir: str, task_id: str, tracker_path: str, is_code_task: bool = True) -> bool:
-    """
-    Run quality gate if applicable for the task.
-
-    For code implementation tasks, runs typecheck/lint/test.
-    For research-only tasks, returns True (no code to check).
-
-    Args:
-        workdir: Working directory
-        task_id: Task ID
-        tracker_path: Path to task tracker
-        is_code_task: Whether this is a code task (False for research-only)
-
-    Returns:
-        True if gate passed or not applicable, False if gate failed
-    """
-    if not is_code_task:
-        # Research-only tasks don't need quality gate
-        return True
-
-    try:
-        import quality_gate
-
-        # Run quality gate on workdir
-        report = quality_gate.run_quality_gate(workdir, ["all"], timeout=60)
-
-        # Log the result
-        gate_result_path = Path(workdir) / f".quality_gate_{task_id}.json"
-        safe_write_json(gate_result_path, report.to_dict())
-
-        return bool(report.all_passed)
-    except Exception:
-        # If quality gate fails for any reason, block completion for code tasks
-        # This is fail-closed: code tasks must pass quality gate to complete
-        return False
-
-
-def _run_review_gate_if_applicable(
-    workdir: str,
-    is_code_task: bool,
-    state: Any | None = None,
-) -> tuple[bool, str]:
-    """Validate that code tasks have a completed two-stage review before completion."""
-    if not is_code_task:
-        return True, "not applicable"
-
-    if state is None:
-        state = load_state(workdir)
-
-    review_summary = get_review_summary(workdir, state)
-    if not review_summary.get("review_found"):
-        return False, "review artifact not found"
-    if review_summary.get("review_status") != "reviewed":
-        return False, f"review status is {review_summary.get('review_status')}"
-    if review_summary.get("stage_1_status") != "reviewed":
-        return False, "spec compliance stage missing"
-    if review_summary.get("stage_2_status") != "reviewed":
-        return False, "code quality stage missing"
-    if int(review_summary.get("files_reviewed", 0) or 0) <= 0:
-        return False, "review did not analyze any files"
-    if int(review_summary.get("reviewed_targets_count", review_summary.get("files_reviewed", 0)) or 0) <= 0:
-        return False, "review did not target any contract or task files"
-    if review_summary.get("degraded_mode"):
-        return False, "review is degraded"
-    if review_summary.get("review_source") in {"template", "none", "workdir_scan"}:
-        return False, f"review source is {review_summary.get('review_source')}"
-    contract_alignment = str(review_summary.get("contract_alignment", "") or "").strip().lower()
-    if contract_alignment in {"template", "fallback", "workdir_scan", "contract_miss"}:
-        return False, f"review contract alignment is {contract_alignment or 'unset'}"
-    if not review_summary.get("verdict"):
-        return False, "review verdict missing"
-    return True, "review gate passed"
-
-
-def _task_id_from_timestamp() -> str:
-    return f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-
-def _generate_and_register_summary(
-    workdir: str,
-    state,
-    current_phase: str,
-    final_state: str,
-    session_id: str,
-    failure_reason: str | None = None,
-) -> str:
-    """
-    Generate completion summary content and register artifact.
-    Used by both advance_workflow (COMPLETE) and complete_workflow.
-
-    Returns:
-        Path to the summary file
-    """
-    from unified_state import ArtifactType, _load_artifact_registry, register_artifact
-    registry = _load_artifact_registry(workdir)
-    artifact_types = [a.get("type") for a in registry.get("artifacts", [])]
-
-    summary_path = Path(workdir) / f"completion_summary_{session_id}.md"
-    task_info = f"# Workflow Completed: {state.task.title if state.task else 'N/A'}\n\n"
-    task_info += f"## Status\n- Final State: {final_state}\n"
-    task_info += f"- Completed At: {datetime.now().isoformat()}\n"
-    task_info += f"- Last Phase: {current_phase}\n\n"
-
-    if failure_reason:
-        task_info += f"- Reason: {failure_reason}\n\n"
-
-    # Aggregate research findings content if available
-    findings_session_file = findings_session_path(workdir, session_id)
-    findings_latest_file = findings_latest_path(workdir)
-    findings_content = ""
-    for candidate_path in [findings_session_file, findings_latest_file, *legacy_findings_paths(workdir)]:
-        if candidate_path.exists():
-            findings_content = candidate_path.read_text(encoding="utf-8")
-            break
-
-    if findings_content:
-        lines = findings_content.split("\n")
-
-        # Extract Research Question
-        for i, line in enumerate(lines):
-            if "## Research Question" in line and i + 1 < len(lines):
-                task_info += f"## Research Summary\n**Question:** {lines[i+1].strip()}\n"
-                break
-
-        # Extract Key Findings (first 2 bullet points)
-        finding_count = 0
-        for i, line in enumerate(lines):
-            if "## Key Findings" in line:
-                task_info += "\n**Key Findings:**\n"
-                for j in range(i + 1, min(i + 5, len(lines))):
-                    if lines[j].startswith("## ") or not lines[j].strip():
-                        break
-                    if lines[j].strip().startswith(("1.", "2.", "3.", "- ")) and finding_count < 2:
-                        task_info += f"- {lines[j].strip()[3:] if lines[j].strip().startswith(('1.', '2.', '3.')) else lines[j].strip()[2:]}\n"
-                        finding_count += 1
-                task_info += "\n"
-                break
-
-        # Extract Conclusions
-        for i, line in enumerate(lines):
-            if "## Conclusions" in line and i + 1 < len(lines):
-                task_info += f"**Conclusions:** {lines[i+1].strip()}\n\n"
-                break
-
-    # Aggregate review findings content if available
-    review_session_file = review_session_path(workdir, session_id)
-    review_latest_file = review_latest_path(workdir)
-    review_content = ""
-    for candidate_path in [review_session_file, review_latest_file, *legacy_review_paths(workdir)]:
-        if candidate_path.exists():
-            review_content = candidate_path.read_text(encoding="utf-8")
-            break
-
-    if review_content:
-        lines = review_content.split("\n")
-
-        # Extract Review Scope
-        for i, line in enumerate(lines):
-            if "## Review Scope" in line and i + 1 < len(lines):
-                task_info += f"## Review Summary\n**Scope:** {lines[i+1].strip()}\n"
-                break
-
-        # Extract Risk Assessment
-        for i, line in enumerate(lines):
-            if "## Risk Assessment" in line:
-                risk_lines = []
-                for j in range(i + 1, min(i + 6, len(lines))):
-                    if lines[j].startswith("## ") or not lines[j].strip():
-                        break
-                    if lines[j].strip() and lines[j].startswith("- **"):
-                        risk_lines.append(lines[j].strip())
-                if risk_lines:
-                    task_info += "**Risk Assessment:**\n" + "\n".join(risk_lines[:3]) + "\n\n"
-                break
-
-        # Extract Risk Level
-        for i, line in enumerate(lines):
-            if "## Risk Level" in line and i + 1 < len(lines):
-                task_info += f"**Risk Level:** {lines[i+1].strip()}\n\n"
-                break
-
-    # Include task plan summary if available
-    plan_path = Path(workdir) / "task_plan.md"
-    if plan_path.exists():
-        plan_content = plan_path.read_text(encoding="utf-8")
-        if "## Task Breakdown" in plan_content or "# Task Plan" in plan_content:
-            task_info += "## Execution Summary\n"
-            task_info += "- Task plan was created and executed\n"
-
-    task_info += "## Delivered Artifacts\n"
-    for atype in set(artifact_types):
-        task_info += f"- {atype}\n"
-
-    # Aggregate quality gate results if available (for code tasks)
-    tracker_path = Path(workdir) / ".task_tracker.json"
-    if tracker_path.exists():
-        try:
-            tracker_data = json.loads(tracker_path.read_text(encoding="utf-8"))
-            tasks_with_qg = [t for t in tracker_data.get("tasks", []) if "quality_gates_passed" in t]
-            if tasks_with_qg:
-                task_info += "\n## Quality Gate\n"
-                for t in tasks_with_qg[:5]:  # Limit to first 5
-                    qg_passed = t.get("quality_gates_passed")
-                    task_info += f"- {t.get('id')}: {'Passed' if qg_passed else 'Failed'}\n"
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    safe_write_text_locked(summary_path, task_info)
-    register_artifact(workdir, ArtifactType.SUMMARY, str(summary_path), "COMPLETE", "system",
-                     metadata={"final_state": final_state,
-                             "aggregated_types": list(set(artifact_types)),
-                             "session_id": session_id})
-    return str(summary_path)
-
-
-def _derive_phase_contract_fields(
-    task_title: str,
-    task_desc: str,
-    plan_tasks: list[dict[str, Any]],
-    workdir: str,
-) -> dict[str, Any]:
-    """Derive machine-readable contract fields from planning output."""
-    goals: list[str] = []
-    acceptance_criteria: list[str] = []
-    verification_methods: list[str] = []
-    owned_files: list[str] = []
-    dependencies: list[str] = []
-    impact_files: list[str] = []
-
-    for task in plan_tasks:
-        task_id = str(task.get("id", "")).strip()
-        title = str(task.get("title", "")).strip()
-        if title:
-            goals.append(title)
-            acceptance_criteria.append(f"Complete {task_id or 'task'}: {title}")
-        verification = str(task.get("verification", "")).strip()
-        if verification:
-            verification_methods.append(verification)
-        task_owned_files = task.get("owned_files", [])
-        if isinstance(task_owned_files, list):
-            for file_path in task_owned_files:
-                file_path = str(file_path).strip()
-                if file_path:
-                    owned_files.append(file_path)
-                    impact_files.append(file_path)
-        task_dependencies = task.get("dependencies", [])
-        if isinstance(task_dependencies, list):
-            for dep in task_dependencies:
-                dep = str(dep).strip()
-                if dep:
-                    dependencies.append(dep)
-
-    if not goals:
-        goals = [task_title.strip() or task_desc.strip() or "Deliver the requested task"]
-
-    if not acceptance_criteria:
-        acceptance_criteria = [
-            "All planned tasks are completed or explicitly deferred with rationale",
-            "All verification methods pass",
-            "All impacted files are aligned with the implementation",
-        ]
-
-    if not verification_methods:
-        verification_methods = ["Run the project test suite", "Review the implementation against the plan"]
-
-    if not owned_files:
-        owned_files = []
-
-    if not impact_files:
-        impact_files = list(dict.fromkeys(owned_files))
-
-    if not dependencies:
-        dependencies = []
-
-    rollback_note = (
-        "Revert the files listed in owned_files or impact_files and rerun the listed verification methods."
-    )
-
-    return {
-        "goals": list(dict.fromkeys(goals)),
-        "acceptance_criteria": list(dict.fromkeys(acceptance_criteria)),
-        "verification_methods": list(dict.fromkeys(verification_methods)),
-        "owned_files": list(dict.fromkeys(owned_files)),
-        "impact_files": list(dict.fromkeys(impact_files or owned_files)),
-        "dependencies": list(dict.fromkeys(dependencies)),
-        "rollback_note": rollback_note,
-        "status": "active",
-    }
-
-
-def _create_plan_from_template(task_name: str, workdir: str) -> Path | None:
-    destination = Path(workdir) / "task_plan.md"
-    if destination.exists():
-        return destination
-
-    # Try to find template in references/templates/
-    template_dir = Path(workdir) / "references" / "templates"
-    template_path = template_dir / "task_plan.md" if template_dir.exists() else None
-
-    if template_path and template_path.exists():
-        content = template_path.read_text(encoding="utf-8")
-        content = content.replace("{{TASK_NAME}}", task_name)
-        content = content.replace("{{CREATED_AT}}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        safe_write_text_locked(destination, content)
-        return destination
-    else:
-        # Create minimal plan file if no template
-        content = f"""# Task Plan - {task_name}
-
-## Overview
-- Task: {task_name}
-- Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Tasks
-
-### P1 Tasks
-- [ ] TASK-1: Initial task
-
-## Status
-- Overall: Not Started
-"""
-        safe_write_text_locked(destination, content)
-        return destination
-
-
-def _create_spec_artifacts(task_name: str, task_description: str, workdir: str, session_id: str) -> tuple[Path | None, Path | None, Path | None]:
-    """
-    Create spec.md and plan.md artifacts in .specs/<feature_id>/ directory.
-
-    Args:
-        task_name: Name/title of the task
-        task_description: Full description
-        workdir: Working directory
-        session_id: Session identifier
-
-    Returns:
-        (spec_path, plan_path, tasks_path) tuple - any may be None if creation failed
-    """
-    # Generate feature_id from task_name
-    feature_id = re.sub(r"[^a-zA-Z0-9]+", "_", task_name.lower())[:50]
-    specs_dir = Path(workdir) / ".specs" / feature_id
-    specs_dir.mkdir(parents=True, exist_ok=True)
-
-    spec_path = None
-    plan_path = None
-    tasks_path = None
-
-    # Create spec.md from template if available
-    template_dir = Path(workdir) / "scripts" / "templates"
-    spec_template = template_dir / "spec_template.md"
-    if spec_template.exists():
-        content = spec_template.read_text(encoding="utf-8")
-        content = content.replace("{{TASK_NAME}}", task_name)
-        content = content.replace("{{SESSION_ID}}", session_id)
-        content = content.replace("{{TIMESTAMP}}", datetime.now().isoformat())
-        spec_path = specs_dir / "spec.md"
-        safe_write_text_locked(spec_path, content)
-    else:
-        # Create minimal spec
-        spec_path = specs_dir / "spec.md"
-        content = f"""# Spec: {task_name}
-
-> Generated: {datetime.now().isoformat()}
-> Session: {session_id}
-
-## User Stories
-
-### Story 1: {task_name}
-**As a** [user type]
-**I want** [goal]
-**So that** [benefit]
-
-**Acceptance Criteria:**
-- [ ] Criterion 1: [verifiable outcome]
-- [ ] Criterion 2: [verifiable outcome]
-
-## Success Criteria
-
-- [ ] **SC-1:** [Measurable outcome with specific metrics]
-
-## Constraints
-
-- **Tech Stack:** [e.g., Python 3.11+]
-- **Performance:** [e.g., <100ms latency]
-"""
-        safe_write_text_locked(spec_path, content)
-
-    # Create plan.md from template if available
-    plan_template = template_dir / "plan_template.md"
-    if plan_template.exists():
-        content = plan_template.read_text(encoding="utf-8")
-        content = content.replace("{{TASK_NAME}}", task_name)
-        content = content.replace("{{SESSION_ID}}", session_id)
-        content = content.replace("{{FEATURE_ID}}", feature_id)
-        content = content.replace("{{TIMESTAMP}}", datetime.now().isoformat())
-        plan_path = specs_dir / "plan.md"
-        safe_write_text_locked(plan_path, content)
-    else:
-        # Create minimal plan
-        plan_path = specs_dir / "plan.md"
-        content = f"""# Plan: {task_name}
-
-> **Provenance Header**
-> Generated-By: agentic-workflow
-> Session: {session_id}
-> Source-Spec: .specs/{feature_id}/spec.md
-> Timestamp: {datetime.now().isoformat()}
-
----
-
-## Technical Context
-
-### Project Overview
-{task_description[:200]}
-
-### Technology Stack
-- **Language:** Python 3.11+
-- **Framework:** TBD
-
----
-
-## Structure Decisions
-
-### Directory Structure
-```
-/
-├── src/
-├── tests/
-└── docs/
-```
-
----
-
-## Constraints
-
-- [ ] **Tech Stack:** Python 3.11+
-- [ ] **Performance:** TBD
-
----
-
-## Output Artifacts
-
-| Artifact | Source | Description |
-|----------|--------|-------------|
-| `.contract.json` | plan.md | Machine-readable contract |
-| `tasks.md` | plan.md | Task breakdown |
-
----
-
-*This plan is generated from spec.md and drives task decomposition.*
-"""
-        safe_write_text_locked(plan_path, content)
-
-    # Create tasks.md from the generated spec so the canonical planning chain exists
-    try:
-        import task_decomposer
-
-        decomposed_tasks = task_decomposer.decompose_from_spec(workdir, feature_id)
-        tasks_content = task_decomposer.generate_tasks_md(decomposed_tasks, str(spec_path), session_id, feature_id)
-        tasks_path = specs_dir / "tasks.md"
-        safe_write_text_locked(tasks_path, tasks_content)
-    except Exception:
-        # Fallback: create a minimal canonical tasks.md so downstream code can consume it
-        tasks_path = specs_dir / "tasks.md"
-        fallback_content = f"""# Tasks
-
-> **Provenance Header**
-> Generated-By: agentic-workflow
-> Session: {session_id}
-> Source-Spec: {spec_path}
-> Timestamp: {datetime.now().isoformat()}
-
----
-
-## Setup
-
-- [ ] **TASK-US1-1:** Initial task [P]
-  - **Files:** `src/`
-  - **Verification:** `pytest -v`
-        - **Blocked-By:**
-"""
-        safe_write_text_locked(tasks_path, fallback_content)
-
-    return spec_path, plan_path, tasks_path
-
-
-def _build_phase_context(current_phase: str, workdir: str, session_id: str) -> dict[str, Any]:
-    """
-    Build context for the next phase based on artifacts from the current phase.
-
-    Returns dict with:
-        files_to_read: list of file paths the AI should read
-        summary: brief description of what was produced
-    """
-    workdir_path = Path(workdir)
-    files_to_read: list[str] = []
-    summary = ""
-    memory_hints: list[str] = []
-    memory_query = ""
-    memory_intent = "auto"
-    research_summary: dict[str, Any] = {}
-
-    try:
-        state = load_state(workdir)
-    except Exception:
-        state = None
-
-    task_text = ""
-    if state and state.task:
-        task_text = state.task.description or state.task.title or ""
-    if not task_text:
-        task_text = session_id
-
-    complexity = ""
-    if state and state.metadata:
-        complexity = str(state.metadata.get("complexity") or "")
-    if not complexity and task_text:
-        complexity, _ = router.estimate_complexity(task_text)
-
-    research_summary = get_research_summary(workdir, state)
-    try:
-        contract_summary = parse_phase_contract(workdir)
-    except Exception:
-        contract_summary = {}
-
-    if current_phase in ("PLANNING", "THINKING"):
-        memory_intent = "plan"
-    elif current_phase == "REVIEWING":
-        memory_intent = "review"
-    elif current_phase in ("DEBUGGING", "REFINING"):
-        memory_intent = "debug"
-
-    thinking_summary: dict[str, Any] = {}
-
-    try:
-        from memory_longterm import search_memory
-
-        memory_query = task_text or current_phase
-        memory_hints = search_memory(
-            memory_query,
-            filepath=str(workdir_path / "MEMORY.md"),
-            scope="project",
-            limit=3,
-            intent=memory_intent,
-        )
-    except Exception:
-        memory_hints = []
-        memory_query = ""
-
-    # MAGMA P2: Also search semantic and temporal views for richer context
-    try:
-        from memory_views import search_views
-        view_results = search_views(
-            task_text or current_phase,
-            intent=memory_intent,
-            limit=3,
-        )
-        # Add semantic hits as memory hints if not already covered
-        semantic_hints = view_results.get("semantic", [])
-        for hit in semantic_hints[:2]:
-            snippet = hit.get("snippet", "")
-            if snippet and snippet not in memory_hints:
-                memory_hints.append(f"[semantic] {snippet}")
-        # Add temporal context if recent and relevant
-        temporal_hints = view_results.get("temporal", [])
-        for hit in temporal_hints[:1]:
-            month = hit.get("_month", "")
-            snippet = hit.get("text", "")
-            if snippet and month:
-                hint = f"[temporal:{month}] {snippet[:80]}"
-                if hint not in memory_hints:
-                    memory_hints.append(hint)
-    except Exception:
-        pass  # MAGMA views are best-effort
-
-    # Reflexion P1: Pre-flight experience check before high-stakes phases
-    # This retrieves actionable experience from the ledger before planning/review/debug
-    experience_check: dict[str, Any] = {
-        "has_relevant_experience": False,
-        "recommendations": [],
-        "warning": None,
-        "patterns_found": 0,
-    }
-    if current_phase in ("PLANNING", "REVIEWING", "DEBUGGING", "EXECUTING", "ANALYZING", "THINKING"):
-        try:
-            from experience_ledger import check_experience_before_action
-            experience_check = check_experience_before_action(
-                phase=current_phase,
-                context=task_text,
-                workdir=workdir,
-            )
-        except Exception:
-            # Experience ledger is best-effort - don't fail the workflow
-            pass
-
-    if current_phase == "RESEARCH":
-        # RESEARCH produces findings — THINKING should read them
-        findings = findings_session_path(workdir_path, session_id)
-        findings_latest = findings_latest_path(workdir_path)
-        if findings.exists():
-            files_to_read.append(str(findings))
-            summary = "Research findings available. Read findings before analysis."
-        elif findings_latest.exists():
-            files_to_read.append(str(findings_latest))
-            summary = "Research findings available. Read findings before analysis."
-        else:
-            findings_glob = legacy_findings_paths(workdir_path)
-            if findings_glob:
-                files_to_read.append(str(findings_glob[0]))
-                summary = "Research findings available."
-
-    elif current_phase == "PLANNING":
-        # PLANNING produces the canonical spec/task chain — EXECUTING should follow it
-        canonical_tasks = _find_canonical_tasks_path(workdir)
-        contract_json = workdir_path / ".contract.json"
-        legacy_plan = workdir_path / "task_plan.md"
-        if canonical_tasks and canonical_tasks.exists():
-            files_to_read.append(str(canonical_tasks))
-            if contract_json.exists():
-                files_to_read.append(str(contract_json))
-            summary = "Canonical task chain available. Execute tasks in priority order and follow the contract."
-        elif legacy_plan.exists():
-            files_to_read.append(str(legacy_plan))
-            if contract_json.exists():
-                files_to_read.append(str(contract_json))
-            summary = "Legacy task plan available. Execute tasks in priority order and follow the contract."
-
-    elif current_phase == "EXECUTING":
-        # EXECUTING produces code changes — REVIEWING should diff them
-        contract_parts: list[str] = []
-        if contract_summary.get("goals"):
-            contract_parts.append(
-                "Contract goals: "
-                + " | ".join(str(goal) for goal in contract_summary.get("goals", [])[:3])
-            )
-        if contract_summary.get("acceptance_criteria"):
-            contract_parts.append(
-                "Acceptance: "
-                + " | ".join(str(item) for item in contract_summary.get("acceptance_criteria", [])[:2])
-            )
-        if contract_summary.get("impact_files"):
-            contract_parts.append(
-                "Impact files: "
-                + ", ".join(str(item) for item in contract_summary.get("impact_files", [])[:3])
-            )
-        if contract_parts:
-            summary = "Code changes made. Run `git diff` to review actual changes. " + " ".join(contract_parts)
-        else:
-            summary = "Code changes made. Run `git diff` to review actual changes."
-
-    elif current_phase == "REVIEWING":
-        # REVIEWING produces review feedback — REFINING should fix issues
-        summary = "Review complete. Fix any issues identified in review."
-
-    elif current_phase == "THINKING":
-        # THINKING produces analysis — PLANNING should use conclusions
-        thinking_summary = build_thinking_summary(
-            task_text,
-            complexity or "M",
-            memory_hints,
-            experience_check,
-            research_summary=research_summary,
-            contract_summary=contract_summary,
-        )
-        thinking_methods = thinking_summary.get("thinking_methods", [])
-        methods_text = " → ".join(thinking_methods) if thinking_methods else "调查研究 → 矛盾分析 → 群众路线 → 持久战略"
-        summary = (
-            f"{thinking_summary.get('workflow_label', 'THINKING')}："
-            f"{methods_text}。"
-            f"当前阶段: {thinking_summary.get('stage_judgment', '战术速决')}。"
-            f"主要矛盾: {thinking_summary.get('major_contradiction', '事实 vs 假设')}。"
-            f"局部攻坚点: {thinking_summary.get('local_attack_point', '先找最小可验证切口')}。"
-        )
-
-    if research_summary:
-        research_note = (
-            f"Research evidence status: {research_summary.get('evidence_status', 'unset')}; "
-            f"sources={research_summary.get('sources_count', 0)}; "
-            f"engine={research_summary.get('search_engine') or 'unset'}."
-        )
-        if current_phase == "RESEARCH":
-            summary = f"{summary} {research_note}".strip() if summary else research_note
-        elif current_phase in {"PLANNING", "THINKING", "REVIEWING", "EXECUTING"}:
-            summary = f"{summary} {research_note}".strip() if summary else research_note
-
-    if memory_hints and summary:
-        summary += " Relevant long-term memory is available."
-    elif memory_hints:
-        summary = "Relevant long-term memory is available."
-
-    return {
-        "files_to_read": files_to_read,
-        "summary": summary,
-        "research_summary": research_summary,
-        "thinking_summary": thinking_summary if current_phase == "THINKING" else {},
-        "memory_query": memory_query,
-        "memory_intent": memory_intent,
-        "memory_hints": memory_hints,
-        # Reflexion P1: Include experience recommendations in phase context
-        "experience_check": experience_check,
-    }
+from workflow_helpers import (  # noqa: F401
+    _create_plan_from_template,
+    _create_spec_artifacts,
+    _derive_phase_contract_fields,
+    _generate_and_register_summary,
+    _run_quality_gate_if_applicable,
+    _run_review_gate_if_applicable,
+    _task_id_from_timestamp,
+)
+
+
+
+
+from snapshot_builder import (  # noqa: F401
+    _build_phase_context,
+    get_workflow_snapshot,
+)
 
 
 def _phase_display_name(trigger_type: str, phase: str) -> str:
@@ -851,621 +167,34 @@ def _render_progress_content(
     return "\n".join(lines)
 
 
-def parse_task_plan(workdir: str = ".") -> list[dict[str, Any]]:
-    """
-    解析 task_plan.md 为结构化任务列表
+from frontier_scheduler import (  # noqa: F401
+    CheckpointConfig,
+    _find_canonical_tasks_path,
+    compute_frontier,
+    conditional_checkpoint,
+    load_planning_tasks,
+    next_plan_tasks,
+    parse_task_plan,
+    parse_tasks_md,
+    should_checkpoint,
+)
 
-    支持的字段:
-    - id, title, done (从 checkbox 解析)
-    - status: backlog | in_progress | completed | blocked
-    - priority: P0 | P1 | P2 | P3
-    - description: 任务描述
-    - owned_files: 逗号分隔的文件列表
-    - dependencies: 逗号分隔的任务ID列表
-    - verification: 验证命令或方法
-    - acceptance: 验收标准
-    """
-    plan_path = Path(workdir) / "task_plan.md"
-    if not plan_path.exists():
-        return []
 
-    tasks: list[dict[str, Any]] = []
-    current_priority = None
-    current_task: dict[str, Any] | None = None
-    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
-    field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+): (?P<value>.+)$")
 
-    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.rstrip()
+from task_validator import (  # noqa: F401
+    update_task_status_in_plan,
+    validate_task_plan,
+)
 
-        if line.startswith("### P"):
-            current_priority = line.replace("###", "").strip()
-            continue
 
-        task_match = task_pattern.match(line)
-        if task_match:
-            is_done = task_match.group("done").lower() == "x"
-            current_task = {
-                "id": task_match.group("id"),
-                "title": task_match.group("title"),
-                "done": is_done,
-                "priority": current_priority,
-                "status": "completed" if is_done else "backlog",
-            }
-            tasks.append(current_task)
-            continue
+from phase_transitions import (  # noqa: F401
+    allowed_next_phases,
+    recommend_next_phases,
+    validate_transition,
+)
 
-        field_match = field_pattern.match(line)
-        if field_match and current_task is not None:
-            key = field_match.group("key")
-            value = field_match.group("value")
-            # Only set status if checkbox and status disagree, prefer checkbox
-            if key == "status" and not current_task.get("done"):
-                current_task[key] = value
-            elif key == "dependencies":
-                current_task[key] = [d.strip() for d in value.split(",") if d.strip()]
-            elif key == "owned_files":
-                current_task[key] = [f.strip() for f in value.split(",") if f.strip()]
-            elif key != "status":  # Skip status if from checkbox
-                current_task[key] = value
 
-    return tasks
-
-
-def parse_tasks_md(workdir: str = ".") -> list[dict[str, Any]]:
-    """
-    Parse tasks.md (spec-kit style) from .specs/<feature_id>/tasks.md.
-
-    Returns structured tasks with owned_files, dependencies, and verification.
-
-    Supports the format:
-    - [ ] **TASK-US1-1:** Title [P]
-      - **Files:** `file1.py`, `file2.py`
-      - **Verification:** `[P]` pytest tests/ -v
-      - **Blocked-By:** TASK-US1-2
-    """
-    # Find the most recent .specs/<feature_id>/tasks.md
-    specs_dir = Path(workdir) / ".specs"
-    if not specs_dir.exists():
-        return []
-
-    # Get the most recent feature directory
-    feature_dirs = sorted(specs_dir.glob("*/"), key=lambda p: p.stat().st_mtime, reverse=True)
-    tasks_path = None
-    for feature_dir in feature_dirs:
-        tp = feature_dir / "tasks.md"
-        if tp.exists():
-            tasks_path = tp
-            break
-
-    if not tasks_path or not tasks_path.exists():
-        return []
-
-    tasks: list[dict[str, Any]] = []
-    current_section = None
-
-    # Patterns for parsing
-    task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] \*\*(?P<id>[^:]+):\*\* (?P<title>.+?)(?:\s+\[P\])?$")
-    file_pattern = re.compile(r"\*\*Files:\*\*\s*`?([^`]+)`?")
-    verification_pattern = re.compile(r"\*\*Verification:\*\*\s*(?:\[P\]\s*)?([^\n]+)")
-    blocked_by_pattern = re.compile(r"\*\*Blocked-By:\*\*\s*([^\n]+)")
-    status_pattern = re.compile(r"\*\*Status:\*\*\s*([^\n]+)")
-    section_pattern = re.compile(r"^## (.+)$")
-
-    current_task: dict[str, Any] | None = None
-
-    for line in tasks_path.read_text(encoding="utf-8").splitlines():
-        line = line.rstrip()
-
-        # Check for section headers
-        section_match = section_pattern.match(line)
-        if section_match:
-            current_section = section_match.group(1)
-            continue
-
-        # Try to match task line
-        task_match = task_pattern.match(line)
-        if task_match:
-            if current_task:
-                tasks.append(current_task)
-
-            task_id = task_match.group("id")
-            title = task_match.group("title").strip()
-            is_done = task_match.group("done").lower() == "x"
-
-            # Determine priority from section or task ID
-            priority = "P1"
-            if current_section in ("Setup", "Foundational"):
-                priority = "P0"
-            elif current_section == "Polish":
-                priority = "P2"
-
-            current_task = {
-                "id": task_id,
-                "title": title,
-                "status": "completed" if is_done else "backlog",
-                "priority": priority,
-                "owned_files": [],
-                "dependencies": [],
-                "verification": "",
-                "section": current_section,
-            }
-            continue
-
-        # Parse fields for current task
-        if current_task:
-            file_match = file_pattern.search(line)
-            if file_match:
-                files_str = file_match.group(1)
-                current_task["owned_files"] = [f.strip() for f in files_str.split(",")]
-
-            verification_match = verification_pattern.search(line)
-            if verification_match:
-                current_task["verification"] = verification_match.group(1).strip()
-
-            blocked_match = blocked_by_pattern.search(line)
-            if blocked_match:
-                deps_str = blocked_match.group(1).strip()
-                current_task["dependencies"] = [d.strip() for d in deps_str.split(",")]
-
-            status_match = status_pattern.search(line)
-            if status_match:
-                current_task["status"] = status_match.group(1).strip()
-
-    if current_task:
-        tasks.append(current_task)
-
-    return tasks
-
-
-def load_planning_tasks(workdir: str = ".") -> tuple[list[dict[str, Any]], str]:
-    """
-    Load planning tasks, preferring the canonical spec-kit chain.
-
-    Returns:
-        (tasks, source_name) where source_name is "tasks.md", "task_plan.md", or "none".
-    """
-    tasks = parse_tasks_md(workdir)
-    if tasks:
-        return tasks, "tasks.md"
-
-    legacy_tasks = parse_task_plan(workdir)
-    if legacy_tasks:
-        return legacy_tasks, "task_plan.md"
-
-    return [], "none"
-
-
-def _find_canonical_tasks_path(workdir: str = ".") -> Path | None:
-    """Find the most recent canonical tasks.md file under .specs/."""
-    specs_dir = Path(workdir) / ".specs"
-    if not specs_dir.exists():
-        return None
-
-    feature_dirs = sorted(specs_dir.glob("*/"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for feature_dir in feature_dirs:
-        tasks_path = feature_dir / "tasks.md"
-        if tasks_path.exists():
-            return tasks_path
-    return None
-
-
-def next_plan_tasks(workdir: str = ".", limit: int = 3) -> list[dict[str, Any]]:
-    """
-    获取下一个应该执行的任务列表
-
-    考虑:
-    - 优先级 (P0 > P1 > P2 > P3)
-    - 依赖关系 (只有依赖都完成才能开始)
-    - 状态 (只选 backlog 的)
-    """
-    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, None: 9}
-    # Prefer tasks.md (spec-kit style) over task_plan.md when available
-    all_tasks, _source = load_planning_tasks(workdir)
-    completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
-
-    candidates = []
-    for task in all_tasks:
-        if task.get("status") in ("completed", "in_progress", "blocked"):
-            continue
-
-        # 检查依赖是否都满足
-        deps = task.get("dependencies", [])
-        if deps and not all(d in completed_ids for d in deps):
-            continue
-
-        candidates.append(task)
-
-    candidates.sort(key=lambda item: (priority_order.get(item.get("priority"), 9), item.get("id", "")))
-    return candidates[:limit]
-
-
-def compute_frontier(workdir: str = ".") -> dict[str, Any]:
-    """
-    Compute the executable task frontier from task_plan.md.
-
-    Returns:
-        {
-            "executable_frontier": [task, ...],     # Tasks ready to execute
-            "ready_tasks": [task, ...],            # Alias for executable_frontier
-            "parallel_candidates": [[task, task], ...], # Tasks can run in parallel (ownership-safe, parallel-ready)
-            "blocked_tasks": [task, ...],           # Tasks blocked by dependencies
-            "conflict_groups": [[task, task], ...], # Tasks with overlapping owned_files (must be serialized)
-            "completed_count": int,
-            "total_count": int,
-        }
-
-    Frontier rules:
-    - executable_frontier: backlog tasks with all dependencies satisfied
-    - parallel_candidates: within frontier, tasks WITHOUT ownership conflicts can run concurrently (parallel-ready, not yet parallel execution)
-    - conflict_groups: tasks with overlapping owned_files that must be serialized
-
-    Prefers tasks.md (spec-kit style) over task_plan.md when available for richer owned_files semantics.
-    """
-    # Prefer tasks.md (spec-kit style) over task_plan.md when available
-    all_tasks, source = load_planning_tasks(workdir)
-    if not all_tasks:
-        return {
-            "executable_frontier": [],
-            "ready_tasks": [],
-            "parallel_candidates": [],
-            "blocked_tasks": [],
-            "conflict_groups": [],
-            "completed_count": 0,
-            "total_count": 0,
-            "plan_source": "none",
-        }
-
-    completed_ids = {t["id"] for t in all_tasks if t.get("status") == "completed"}
-    backlog_tasks = [t for t in all_tasks if t.get("status") == "backlog"]
-
-    # Partition into frontier (ready) vs blocked
-    frontier_tasks = []
-    blocked_tasks = []
-    for task in backlog_tasks:
-        deps = task.get("dependencies", [])
-        if deps and not all(d in completed_ids for d in deps):
-            blocked_tasks.append(task)
-        else:
-            frontier_tasks.append(task)
-
-    # Ownership conflict detection
-    # Build a map: file -> [task_ids] that own it
-    file_owner_map: dict[str, list[str]] = {}
-    for task in frontier_tasks:
-        owned = task.get("owned_files", [])
-        if isinstance(owned, list):
-            for f in owned:
-                if f not in file_owner_map:
-                    file_owner_map[f] = []
-                file_owner_map[f].append(task["id"])
-
-    # Find conflicting task pairs (share owned files)
-    conflicts: list[tuple[str, str]] = []
-    for _file_path, owners in file_owner_map.items():
-        if len(owners) > 1:
-            for i in range(len(owners)):
-                for j in range(i + 1, len(owners)):
-                    pair = (owners[i], owners[j]) if owners[i] < owners[j] else (owners[j], owners[i])
-                    if pair not in conflicts:
-                        conflicts.append(pair)
-
-    # Build conflict groups
-    conflict_graph: dict[str, set] = {}
-    for t1, t2 in conflicts:
-        if t1 not in conflict_graph:
-            conflict_graph[t1] = set()
-        if t2 not in conflict_graph:
-            conflict_graph[t2] = set()
-        conflict_graph[t1].add(t2)
-        conflict_graph[t2].add(t1)
-
-    # Find maximal independent sets for parallel execution
-    parallel_groups: list[list[dict[str, Any]]] = []
-    assigned_ids: set = set()
-
-    # First, assign tasks that have conflicts to conflict_groups (serial execution)
-    conflict_groups: list[list[dict[str, Any]]] = []
-    for task in frontier_tasks:
-        if task["id"] in conflict_graph and task["id"] not in assigned_ids:
-            # This task has conflicts, find all its conflict partners
-            group = [task]
-            assigned_ids.add(task["id"])
-            to_check = list(conflict_graph[task["id"]])
-            while to_check:
-                tid = to_check.pop()
-                if tid in assigned_ids:
-                    continue
-                # Find task object
-                t = next((x for x in frontier_tasks if x["id"] == tid), None)
-                if t:
-                    group.append(t)
-                    assigned_ids.add(tid)
-                    to_check.extend(conflict_graph.get(tid, []))
-            conflict_groups.append(group)
-
-    # Remaining tasks (no conflicts) can run in parallel
-    independent_tasks = [t for t in frontier_tasks if t["id"] not in assigned_ids]
-    if independent_tasks:
-        # Each independent task is its own parallel group
-        parallel_groups.extend([[t] for t in independent_tasks])
-        for t in independent_tasks:
-            assigned_ids.add(t["id"])
-
-    # Handle dependency chains within non-conflicting tasks
-    frontier_ids = {t["id"] for t in frontier_tasks}
-    dep_graph: dict[str, set] = {}
-    for task in frontier_tasks:
-        task_deps = task.get("dependencies", [])
-        relevant_deps = {d for d in task_deps if d in frontier_ids}
-        dep_graph[task["id"]] = relevant_deps
-
-    return {
-        "executable_frontier": frontier_tasks,
-        "ready_tasks": frontier_tasks,  # Alias
-        "parallel_candidates": parallel_groups,
-        "blocked_tasks": blocked_tasks,
-        "conflict_groups": conflict_groups,
-        "completed_count": len(completed_ids),
-        "total_count": len(all_tasks),
-        "plan_source": source,
-    }
-
-
-@dataclass
-class CheckpointConfig:
-    """
-    Conditional checkpoint configuration.
-
-    Attributes:
-        phase_change_threshold: Trigger after N phase transitions (default 1)
-        resume_threshold: Trigger after N resume attempts
-        failure_threshold: Trigger after N failures
-        step_threshold: Trigger after N workflow steps
-        enabled: Whether auto-checkpoint is enabled
-    """
-    phase_change_threshold: int = 1
-    resume_threshold: int = 2
-    failure_threshold: int = 1
-    step_threshold: int = 5
-    enabled: bool = True
-
-
-def should_checkpoint(
-    workdir: str,
-    config: CheckpointConfig | None = None,
-) -> tuple[bool, str]:
-    """
-    Determine if a checkpoint should be triggered based on conditions.
-
-    Conditions evaluated:
-    - Phase changes since last checkpoint
-    - Resume attempts
-    - Failure count
-    - Total workflow steps
-
-    Args:
-        workdir: Working directory
-        config: Checkpoint configuration (uses defaults if None)
-
-    Returns:
-        (should_checkpoint, reason) tuple
-    """
-    # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
-    from checkpoint_manager import should_checkpoint as _impl
-    result: tuple[bool, str] = _impl(workdir, config)
-    return bool(result[0]), str(result[1])
-
-
-def conditional_checkpoint(
-    workdir: str,
-    config: CheckpointConfig | None = None,
-) -> dict[str, Any]:
-    """
-    Save a checkpoint if conditions are met.
-
-    Creates:
-    - .checkpoints/<checkpoint_id>.json: Full state snapshot
-    - handoff_<checkpoint_id>.md: Human-readable handoff document
-
-    Args:
-        workdir: Working directory
-        config: Checkpoint configuration (uses defaults if None)
-
-    Returns:
-        dict with keys:
-            checkpoint_saved: bool
-            reason: str
-            checkpoint_id: str
-            session_id: str
-            files: list of created file paths
-            error: str or None
-            partial: bool (True if only JSON was saved, not handoff)
-    """
-    # Delegate to checkpoint_manager (imported lazily to avoid circular dependency)
-    from checkpoint_manager import conditional_checkpoint as _impl
-    result: dict[str, Any] = _impl(workdir, config)
-    return result
-
-
-def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
-    """
-    验证任务计划的合法性
-
-    检查:
-    - 循环依赖
-    - 缺失的依赖
-    - 非法的任务ID引用
-
-    Returns:
-        (is_valid, error_list)
-    """
-    tasks, _source = load_planning_tasks(workdir)
-    if not tasks:
-        return True, []
-
-    errors = []
-    task_ids = {t["id"] for t in tasks}
-    task_map = {t["id"]: t for t in tasks}
-
-    for task in tasks:
-        deps = task.get("dependencies", [])
-        for dep in deps:
-            if dep not in task_ids:
-                errors.append(f"Task {task['id']} depends on non-existent task {dep}")
-
-    # 检查循环依赖 (简单的 DFS)
-    def has_cycle(task_id: str, visited: set, rec_stack: set) -> bool:
-        visited.add(task_id)
-        rec_stack.add(task_id)
-        for dep in task_map.get(task_id, {}).get("dependencies", []):
-            if dep not in visited:
-                if has_cycle(dep, visited, rec_stack):
-                    return True
-            elif dep in rec_stack:
-                return True
-        rec_stack.remove(task_id)
-        return False
-
-    for task in tasks:
-        if task["id"] not in task_ids:
-            continue
-        if has_cycle(task["id"], set(), set()):
-            errors.append(f"Circular dependency detected involving {task['id']}")
-
-    return len(errors) == 0, errors
-
-
-def update_task_status_in_plan(
-    workdir: str,
-    task_id: str,
-    status: str,
-) -> dict[str, Any]:
-    """
-    更新 task_plan.md 中任务的状态
-
-    Args:
-        workdir: 工作目录
-        task_id: 任务ID (如 "TASK-001")
-        status: 新状态 (backlog | in_progress | completed | blocked)
-
-    Returns:
-        更新结果
-    """
-    if status not in ("backlog", "in_progress", "completed", "blocked"):
-        return {"success": False, "error": f"Invalid status: {status}"}
-
-    plan_path = _find_canonical_tasks_path(workdir)
-    source = "tasks.md"
-    if plan_path is None:
-        plan_path = Path(workdir) / "task_plan.md"
-        source = "task_plan.md"
-
-    if not plan_path.exists():
-        return {"success": False, "error": "task_plan.md not found"}
-
-    content = plan_path.read_text(encoding="utf-8")
-    lines = content.split("\n")
-    new_lines: list[str] = []
-    task_found = False
-    in_target_task = False
-
-    legacy_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
-    canonical_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] \*\*(?P<id>[^:]+):\*\* (?P<title>.+)$")
-    status_pattern = re.compile(r"^\s+- \*\*Status:\*\*")
-
-    task_pattern = canonical_task_pattern if source == "tasks.md" else legacy_task_pattern
-
-    for line in lines:
-        line_stripped = line.rstrip()
-        task_match = task_pattern.match(line_stripped)
-        if task_match:
-            in_target_task = task_match.group("id") == task_id
-            if in_target_task:
-                task_found = True
-                done_marker = "x" if status == "completed" else " "
-                if source == "tasks.md":
-                    task_title = task_match.group("title").rstrip()
-                    new_lines.append(f"- [{done_marker}] **{task_match.group('id')}:** {task_title}")
-                    new_lines.append(f"  - **Status:** {status}")
-                else:
-                    task_title = task_match.group("title").rstrip()
-                    new_lines.append(f"- [{done_marker}] {task_match.group('id')}: {task_title}")
-                continue
-
-        if in_target_task:
-            if source == "tasks.md" and status_pattern.match(line_stripped):
-                continue
-            if source == "task_plan.md":
-                field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+):")
-                field_match = field_pattern.match(line)
-                if field_match and field_match.group("key") == "status":
-                    new_lines.append(f"  - status: {status}")
-                    continue
-
-        new_lines.append(line)
-
-    if not task_found:
-        return {"success": False, "error": f"Task {task_id} not found"}
-
-    safe_write_text_locked(plan_path, "\n".join(new_lines))
-    return {"success": True, "task_id": task_id, "status": status, "source": source}
-
-
-def allowed_next_phases(phase: str) -> list[str]:
-    return sorted(get_allowed_transitions(phase))
-
-
-def recommend_next_phases(current_phase: str, trigger_type: str | None = None) -> list[str]:
-    """
-    Recommend the next phases reachable from the current phase.
-
-    Args:
-        current_phase: The current workflow phase
-        trigger_type: Optional trigger type (FULL_WORKFLOW, STAGE, DIRECT_ANSWER)
-
-    Returns:
-        List of phase names that are valid next steps, ordered by recommendation priority
-    """
-    if current_phase == "DIRECT_ANSWER":
-        return ["COMPLETE"]
-    if current_phase == "PLANNING":
-        return ["ANALYZING", "EXECUTING", "RESEARCH", "THINKING"]
-    if current_phase == "ANALYZING":
-        return ["EXECUTING", "PLANNING"]
-    if current_phase == "RESEARCH":
-        return ["THINKING", "PLANNING"]
-    if current_phase == "THINKING":
-        return ["PLANNING", "EXECUTING"]
-    if current_phase == "EXECUTING":
-        return ["REVIEWING", "COMPLETE", "DEBUGGING"]
-    if current_phase == "REVIEWING":
-        return ["COMPLETE", "DEBUGGING"]
-    if current_phase == "DEBUGGING":
-        return ["EXECUTING", "REVIEWING"]
-    if current_phase == "COMPLETE":
-        return []
-    if trigger_type == "FULL_WORKFLOW":
-        return ["PLANNING"]
-    return allowed_next_phases(current_phase)
-
-
-def validate_transition(current_phase: str, next_phase: str) -> None:
-    """
-    Validate that a phase transition is allowed by the state machine.
-
-    Args:
-        current_phase: Current phase
-        next_phase: Desired next phase
-
-    Raises:
-        ValueError: If the transition is not allowed
-    """
-    if not can_transition(current_phase, next_phase):
-        raise ValueError(f"illegal phase transition: {current_phase} -> {next_phase}")
-
-
-def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
+def _build_runtime_profile(prompt: str, workdir: str, model_id: str | None = None) -> dict[str, Any]:
     """
     Build the initial runtime profile for a prompt.
 
@@ -1486,18 +215,35 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         skill_context = ""
         tokens_expected = 500
         use_skill = False
+        skill_activation_level = 0
     else:
         use_skill = should_use_skill_for_phase(current_phase, complexity, trigger_type, prompt)
+        # Compute activation level FIRST — it drives tier-based prompt assembly
+        skill_activation_level = (
+            skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
+        )
+
+        # Check for de-escalation opportunity
+        try:
+            from adaptive_tier import AdaptiveResolver
+            de_esc = AdaptiveResolver(workdir=workdir).should_de_escalate(
+                phase=current_phase,
+                current_level=skill_activation_level,
+                model_id=model_id,
+            )
+            if de_esc is not None:
+                skill_activation_level = de_esc.activation_level
+        except Exception:
+            pass
+
         if use_skill:
-            # Build skill context inline using sunk PHASE_PROMPTS
-            skill_context, tokens_expected = build_skill_context(current_phase, complexity)
+            skill_context, tokens_expected = build_skill_context(
+                current_phase, complexity, activation_level=skill_activation_level,
+                model_id=model_id,
+            )
         else:
             skill_context = ""
             tokens_expected = 500
-
-    skill_activation_level = (
-        skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
-    )
 
     profile: dict[str, Any] = {
         "trigger_type": trigger_type,
@@ -1563,6 +309,7 @@ def initialize_workflow(
     workdir: str = ".",
     task_id: str | None = None,
     auto_create_plan: bool = True,
+    model_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Initialize a new workflow session.
@@ -1583,13 +330,20 @@ def initialize_workflow(
     workdir_path = Path(workdir)
     workdir_path.mkdir(parents=True, exist_ok=True)
 
+    # Clean up stale lock files from previous crashed sessions
+    try:
+        from safe_io import cleanup_stale_locks
+        cleanup_stale_locks(workdir_path)
+    except Exception:
+        pass  # Non-critical — never block initialization
+
     session_path = workdir_path / memory_ops.DEFAULT_SESSION_STATE
     tracker_path = workdir_path / task_tracker.DEFAULT_TRACKER_FILE
 
     memory_ops.ensure_session_state_exists(str(session_path))
     task_tracker.save_tracker(str(tracker_path), task_tracker.load_tracker(str(tracker_path)))
 
-    runtime_profile = _build_runtime_profile(prompt, workdir)
+    runtime_profile = _build_runtime_profile(prompt, workdir, model_id=model_id)
     trigger_type = runtime_profile["trigger_type"]
     current_phase = runtime_profile["phase"]
     complexity = runtime_profile["complexity"]
@@ -2741,6 +1495,46 @@ def advance_workflow(
     if isinstance(exp_check, dict) and exp_check.get("warning"):
         experience_warning = exp_check["warning"]
 
+    # Skill Metrics P3: Record outcome for the phase that just completed.
+    # Only fires when skill was actually used (activation_level > 0).
+    # Wrapped in try/except — purely observational, never breaks execution.
+    try:
+        _skill_activation = int(runtime_profile.get("skill_activation_level", 0)) if runtime_profile else 0
+        if _skill_activation > 0:
+            from skill_metrics import SkillOutcome, compute_quality_score, record_skill_outcome
+            _phase_success = task_status == "completed" if task_status else (phase != "DEBUGGING")
+            _phase_complexity = str(
+                runtime_profile.get("complexity")
+                or (state.metadata.get("complexity") if state.metadata else "M")
+                or "M"
+            )
+            _model_id = str(runtime_profile.get("model_id") or "unknown") if runtime_profile else "unknown"
+            _tokens_expected = int(runtime_profile.get("tokens_expected", 0)) if runtime_profile else 0
+            _failure_count = len(_get_error_history(state)) if state else 0
+            _quality = compute_quality_score(
+                success=_phase_success,
+                failure_count=_failure_count,
+            )
+            _outcome = SkillOutcome(
+                success=_phase_success,
+                quality_score=_quality,
+                token_input=_tokens_expected,
+                token_output=0,
+                duration_ms=0,
+                failure_count=_failure_count,
+                error_type=None,
+            )
+            record_skill_outcome(
+                phase=current_phase,
+                activation_level=_skill_activation,
+                model_id=_model_id,
+                complexity=_phase_complexity,
+                outcome=_outcome,
+                workdir=workdir,
+            )
+    except Exception:
+        pass  # Skill metrics recording is best-effort — never block workflow
+
     return {
         "task_id": task_id,
         "session_id": state.session_id,
@@ -3132,102 +1926,15 @@ def resume_workflow(
     }
 
 
-# Error classification patterns
-_ERROR_TYPE_PATTERNS = {
-    "test_failure": [
-        "FAILED", "pytest", "test fail", "assertion error",
-        "AssertionError", "test failed", "tests failed",
-    ],
-    "type_error": [
-        "TypeError", "type error", "typing error",
-        "cannot assign", "argument type", "expected ", "got ",
-    ],
-    "lint_error": [
-        "lint", "ruff", "flake8", "pylint", "mypy",
-        "unused import", "undefined name", "missing import",
-    ],
-    "runtime_exception": [
-        "Exception", "Error:", "Traceback", "IndexError",
-        "KeyError", "ValueError", "AttributeError", "ImportError",
-    ],
-    "syntax_error": [
-        "SyntaxError", "IndentationError", "TabError",
-        "unexpected EOF", "invalid syntax",
-    ],
-    "quality_gate_failed": [
-        "quality gate", "gate failed", "gate_check",
-    ],
-}
-
-
-def classify_error(error: str) -> tuple[str, float]:
-    """
-    Classify error type and return (error_type, confidence).
-
-    Args:
-        error: Error message string
-
-    Returns:
-        Tuple of (error_type, confidence_score)
-    """
-    error_lower = error.lower()
-    scores: dict[str, float] = {}
-
-    for error_type, patterns in _ERROR_TYPE_PATTERNS.items():
-        score = sum(1 for p in patterns if p.lower() in error_lower)
-        if score > 0:
-            scores[error_type] = score / len(patterns)
-
-    if not scores:
-        return ("unknown", 1.0)
-
-    # Return highest scoring type
-    best_type = max(scores, key=lambda k: scores[k])
-    return (best_type, scores[best_type])
-
-
-def _get_error_history(state) -> list[dict[str, Any]]:
-    """Extract error history from state decisions."""
-    history = []
-    for decision in state.decisions:
-        if "error" in decision.metadata:
-            history.append({
-                "error": decision.metadata.get("error", ""),
-                "type": decision.metadata.get("error_type", "unknown"),
-                "timestamp": decision.timestamp,
-            })
-    return history
-
-
-def _should_escalate_skill_activation(
-    error: str,
-    error_type: str,
-    strategy: str,
-    retry_count: int,
-    error_history: list[dict[str, Any]],
-) -> tuple[bool, str]:
-    """
-    Decide whether to escalate skill activation based on explicit failure events.
-
-    Escalation is reserved for high-signal failures and repeated test failures.
-    Generic recoverable failures should not automatically increase activation.
-    """
-    if strategy == "abort":
-        return False, "abort strategy does not escalate skill activation"
-
-    if error_type in {"syntax_error", "type_error", "quality_gate_failed"}:
-        return True, f"high_signal_failure:{error_type}"
-
-    if error_type == "test_failure":
-        normalized_error = error[:120].lower()
-        repeated_test_failure = any(
-            item.get("type") == "test_failure" and item.get("error", "")[:120].lower() == normalized_error
-            for item in error_history[-5:]
-        )
-        if repeated_test_failure or retry_count >= 1:
-            return True, "repeated_test_failure"
-
-    return False, "no escalation event"
+from error_classifier import (  # noqa: F401
+    _ERROR_TYPE_PATTERNS,
+    _build_debug_summary,
+    _extract_quality_gate_details,
+    _get_error_history,
+    _persist_failure_reflection,
+    _should_escalate_skill_activation,
+    classify_error,
+)
 
 
 def handle_workflow_failure(
@@ -3301,6 +2008,19 @@ def handle_workflow_failure(
             if state.metadata is None:
                 state.metadata = {}
             state.metadata["runtime_profile"] = runtime_profile
+
+            # Record escalation for adaptive learning
+            try:
+                from adaptive_tier import AdaptiveResolver
+                AdaptiveResolver(workdir=workdir).record_escalation(
+                    phase=current_phase,
+                    from_level=current_activation_level,
+                    to_level=escalated_activation_level,
+                    reason="failure_escalation",
+                )
+            except Exception:
+                pass
+
             state.decisions.append(Decision(
                 timestamp=datetime.now().isoformat(),
                 decision="Escalate skill activation",
@@ -3584,268 +2304,6 @@ def handle_workflow_failure(
         }
 
     return {"success": False, "error": f"Unknown strategy: {strategy}"}
-
-
-def _extract_quality_gate_details(workdir: str) -> dict[str, Any] | None:
-    """Extract quality gate failure details from latest gate report."""
-    import json
-    gate_files = list(Path(workdir).glob(".quality_gate_*.json"))
-    if not gate_files:
-        return None
-
-    latest = max(gate_files, key=lambda p: p.stat().st_mtime)
-    try:
-        data = json.loads(latest.read_text())
-        return {
-            "gate_file": str(latest.name),
-            "passed": data.get("all_passed", False),
-            "failed_checks": data.get("failed_checks", []),
-        }
-    except Exception:
-        return None
-
-
-def _persist_failure_reflection(
-    workdir: str,
-    state,
-    error: str,
-    error_type: str,
-    confidence: float,
-    retry_hint: str,
-    strategy: str,
-    quality_gate_details: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Persist a Reflexion-style failure note into artifacts and long-term memory."""
-    from memory_longterm import record_reflection_experience, search_memory
-    from unified_state import ArtifactType, register_artifact
-
-    session_id = state.session_id or "unknown"
-    current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
-    task_title = state.task.title if state.task else "Unknown task"
-    task_desc = state.task.description if state.task else task_title
-    memory_path = str(Path(workdir) / "MEMORY.md")
-    memory_index_path = str(Path(workdir) / ".memory_index.jsonl")
-
-    try:
-        relevant_experiences = search_memory(
-            error,
-            filepath=memory_path,
-            scope="project",
-            limit=3,
-            intent="debug",
-        )
-    except Exception:
-        relevant_experiences = []
-
-    trigger = f"{current_phase}::{strategy}"
-    if quality_gate_details:
-        trigger = f"{trigger}::quality_gate"
-
-    signal_parts = [error_type]
-    if quality_gate_details and quality_gate_details.get("failed_checks"):
-        signal_parts.append(",".join(str(item) for item in quality_gate_details["failed_checks"][:3]))
-    signal = " | ".join(signal_parts)
-
-    next_hint = retry_hint or "inspect the failure and retry with tighter scope"
-    reflection_path = Path(workdir) / f"reflection_{session_id}.md"
-    reflection_content = f"""# Failure Reflection
-
-## Context
-- Session: {session_id}
-- Phase: {current_phase}
-- Strategy: {strategy}
-- Error Type: {error_type}
-- Confidence: {confidence:.2f}
-
-## Task
-{task_desc}
-
-## Reflection
-Task: {task_title}
-Trigger: {trigger}
-Mistake: {error[:500]}
-Fix: {next_hint}
-Signal: {signal}
-
-## Relevant Experiences
-"""
-    if relevant_experiences:
-        for item in relevant_experiences:
-            reflection_content += f"- {item}\n"
-    else:
-        reflection_content += "- None found\n"
-
-    reflection_content += f"""
-
-## Next Action
-{next_hint}
-"""
-
-    safe_write_text_locked(reflection_path, reflection_content)
-    register_artifact(
-        workdir,
-        ArtifactType.CUSTOM,
-        str(reflection_path),
-        current_phase,
-        "system",
-        metadata={
-            "kind": "reflection",
-            "error_type": error_type,
-            "confidence": confidence,
-            "strategy": strategy,
-            "relevant_experiences": relevant_experiences,
-        },
-    )
-
-    try:
-        record_reflection_experience(
-            task=task_desc,
-            trigger=trigger,
-            mistake=error[:500],
-            fix=next_hint,
-            signal=signal,
-            filepath=memory_path,
-            index_file=memory_index_path,
-            confidence=max(0.3, min(0.9, confidence if confidence else 0.7)),
-            scope="project",
-            tags=[error_type, current_phase.lower()],
-        )
-    except Exception:
-        pass
-
-    return {
-        "reflection_path": str(reflection_path),
-        "relevant_experiences": relevant_experiences,
-    }
-
-
-def _build_debug_summary(
-    *,
-    strategy: str,
-    error: str,
-    error_type: str,
-    confidence: float,
-    retry_count: int,
-    activation_level: int,
-    retry_hint: str,
-    quality_gate_details: dict[str, Any] | None,
-    reflection_artifact: dict[str, Any] | None,
-    escalation_reason: str | None,
-) -> dict[str, Any]:
-    """Build a structured debug summary for state and sidecar persistence."""
-    root_cause = retry_hint or error[:240]
-    if quality_gate_details and quality_gate_details.get("failed_checks"):
-        failed_checks = [str(item) for item in quality_gate_details.get("failed_checks", [])[:3] if str(item).strip()]
-        if failed_checks:
-            root_cause = " | ".join(failed_checks)
-
-    regression_check = "rerun affected tests and quality gate"
-    if quality_gate_details and quality_gate_details.get("gate_file"):
-        regression_check = f"rerun {quality_gate_details['gate_file']}"
-
-    minimal_fix = retry_hint or "inspect the failure and retry with tighter scope"
-    if error_type in {"syntax_error", "type_error"} and not retry_hint:
-        minimal_fix = "fix the syntax or typing issue, then rerun validation"
-    elif error_type == "quality_gate_failed" and not retry_hint:
-        minimal_fix = "address the failing gate checks, then rerun validation"
-
-    return {
-        "debug_found": True,
-        "debug_source": strategy,
-        "strategy": strategy,
-        "error_type": error_type,
-        "retry_count": retry_count,
-        "activation_level": activation_level,
-        "escalation_reason": escalation_reason,
-        "root_cause": root_cause,
-        "minimal_fix": minimal_fix,
-        "regression_check": regression_check,
-        "reflection_path": reflection_artifact.get("reflection_path") if reflection_artifact else None,
-        "quality_gate_failed": bool(quality_gate_details),
-        "confidence": confidence,
-    }
-
-
-def get_workflow_snapshot(workdir: str = ".") -> dict[str, Any]:
-    state = load_state(workdir)
-    tracker_path = Path(workdir) / task_tracker.DEFAULT_TRACKER_FILE
-    task = None
-    plan_tasks, plan_source = load_planning_tasks(workdir)
-    next_tasks = next_plan_tasks(workdir)
-
-    if state is None:
-        return {
-            "exists": False,
-            "valid": False,
-            "errors": ["state file does not exist"],
-            "recommended_next_phases": [],
-            "plan_tasks": plan_tasks,
-            "plan_source": plan_source,
-            "next_plan_tasks": next_tasks,
-            "planning_summary": get_planning_summary(workdir, None),
-            "research_summary": get_research_summary(workdir, None),
-            "thinking_summary": get_thinking_summary(workdir, None),
-            "review_summary": get_review_summary(workdir, None),
-            "debug_summary": get_debug_summary(workdir, None),
-            "runtime_profile_summary": get_runtime_profile_summary(None),
-            "failure_event_summary": get_failure_event_summary(None),
-            "context_for_next_phase": {
-                "files_to_read": [],
-                "summary": "",
-                "thinking_summary": {},
-                "memory_query": "",
-                "memory_intent": "auto",
-                "memory_hints": [],
-                "experience_check": {
-                    "has_relevant_experience": False,
-                    "recommendations": [],
-                    "warning": None,
-                    "patterns_found": 0,
-                },
-            },
-        }
-
-    if state.task and state.task.task_id:
-        task = task_tracker.get_task(state.task.task_id, str(tracker_path))
-
-    current_phase = state.phase.get("current", "IDLE") if state.phase else "IDLE"
-    context_for_next_phase = _build_phase_context(current_phase, workdir, state.session_id or "unknown")
-
-    # Load artifact registry for full audit trail
-    from unified_state import _load_artifact_registry
-    artifact_registry = _load_artifact_registry(workdir)
-
-    # Validate state
-    from unified_state import validate_workflow_state
-    is_valid, errors = validate_workflow_state(workdir)
-    runtime_profile_summary = get_runtime_profile_summary(state)
-    planning_summary = get_planning_summary(workdir, state)
-
-    return {
-        "exists": True,
-        "valid": is_valid,
-        "errors": errors,
-        "session_id": state.session_id,
-        "task_id": state.task.task_id if state.task else None,
-        "current_phase": current_phase,
-        "trigger_type": state.trigger_type,
-        "task": task,
-        "runtime_profile_summary": runtime_profile_summary,
-        "planning_summary": planning_summary,
-        "research_summary": get_research_summary(workdir, state),
-        "thinking_summary": get_thinking_summary(workdir, state),
-        "review_summary": get_review_summary(workdir, state),
-        "debug_summary": get_debug_summary(workdir, state),
-        "failure_event_summary": get_failure_event_summary(state),
-        "recommended_next_phases": recommend_next_phases(current_phase, None),
-        "plan_tasks": plan_tasks,
-        "plan_source": plan_source,
-        "next_plan_tasks": next_tasks,
-        "context_for_next_phase": context_for_next_phase,
-        "state_file": str(workflow_state_path(workdir)),
-        # artifact_registry is the authoritative source - state.artifacts removed from interface
-        "artifact_registry": artifact_registry.get("artifacts", []),
-    }
 
 
 def main() -> int:

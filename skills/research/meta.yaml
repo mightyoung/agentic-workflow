@@ -1,0 +1,13 @@
+name: research
+version: 1.1.0
+phase: RESEARCH
+status: implemented
+description: Technical research for best practices and solutions with structured findings and evidence tracking
+tags: [phase, research]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob, WebSearch, WebFetch]

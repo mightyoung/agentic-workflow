@@ -11,7 +11,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ROUTER = load_router_module()
 
 
+TEMPLATES_AVAILABLE = (REPO_ROOT / "references" / "templates" / "task_plan.md").exists()
+
+
 class TestWorkflowChain(unittest.TestCase):
+    @unittest.skipUnless(TEMPLATES_AVAILABLE, "references/templates not available (gitignored, run from main worktree)")
     def test_router_to_plan_to_state_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)

@@ -1,0 +1,13 @@
+name: thinking
+version: 1.4.0
+phase: THINKING
+status: implemented
+description: Expert perspective reasoning with first-principles analysis, tree-of-thoughts, and quantitative evaluation
+tags: [phase, thinking, expert-reasoning, first-principles, tree-of-thoughts]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob]

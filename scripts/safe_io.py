@@ -184,6 +184,51 @@ def safe_read_json(path: str | Path) -> Any:
         return None
 
 
+def cleanup_stale_locks(directory: str | Path, max_age_seconds: float = 300.0) -> list[str]:
+    """
+    Remove stale lock files that are not currently held by any process.
+
+    A lock file is considered stale if it is older than max_age_seconds AND
+    no process currently holds an exclusive lock on it.
+
+    Args:
+        directory: Directory to scan for .lock files
+        max_age_seconds: Maximum age in seconds before a lock is considered stale
+
+    Returns:
+        List of removed lock file paths
+    """
+    import time
+    removed: list[str] = []
+    directory = Path(directory)
+    if not directory.is_dir():
+        return removed
+
+    now = time.time()
+    for lock_file in directory.glob("*.lock"):
+        try:
+            age = now - lock_file.stat().st_mtime
+            if age < max_age_seconds:
+                continue  # Too fresh to be stale
+
+            # Try a non-blocking exclusive lock; if we can acquire it, no process holds it
+            lock_fd = os.open(str(lock_file), os.O_RDWR)
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # We got the lock — file is genuinely stale, remove it
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                os.close(lock_fd)
+                lock_file.unlink(missing_ok=True)
+                removed.append(str(lock_file))
+            except BlockingIOError:
+                # Lock is held by a live process — skip it
+                os.close(lock_fd)
+        except OSError:
+            pass  # File may have been removed concurrently
+
+    return removed
+
+
 def safe_append_jsonl(path: str | Path, record: dict) -> None:
     """
     Safely append a record to a JSONL file with file locking.

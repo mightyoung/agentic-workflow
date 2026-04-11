@@ -18,6 +18,7 @@ Usage:
     python3 router.py --semantic "user message"  # Force semantic routing
 """
 
+import os
 import re
 import sys
 from typing import Any, Optional
@@ -241,16 +242,33 @@ def _skill_body_text(skill: Any) -> str:
     return "\n".join(part for part in parts if part).lower()
 
 
-def _score_skill_candidate(text: str, candidate: dict[str, Any], skill: Any | None) -> dict[str, Any]:
-    """Score a stage candidate using the loaded skill body."""
+def _score_skill_candidate(
+    text: str,
+    candidate: dict[str, Any],
+    skill: Any | None,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Score a stage candidate using the loaded skill body and optional meta.yaml.
+
+    ``meta`` is an optional dict loaded from the skill's meta.yaml file.  When
+    provided it augments (but never replaces) the information extracted from the
+    skill body object.  If the file was missing or unparseable, pass ``{}`` or
+    ``None`` — both are treated identically as "no meta enhancement".
+    """
     base_confidence = float(candidate.get("base_confidence", 0.0))
+    meta = meta or {}
+
+    # --- meta.yaml bonus (applied even when skill body is unavailable) ---
+    meta_yaml_bonus = _compute_meta_yaml_bonus(text, candidate, meta)
+
     if skill is None:
+        meta_only_score = min(base_confidence + meta_yaml_bonus, 0.98)
         return {
             **candidate,
-            "skill_name": None,
-            "skill_score": 0.0,
-            "score": base_confidence,
-            "score_reason": "no skill body available",
+            "skill_name": meta.get("name") or None,
+            "skill_score": round(meta_yaml_bonus, 3),
+            "score": round(meta_only_score, 3),
+            "score_reason": f"no skill body; meta_yaml_bonus={meta_yaml_bonus:.3f}",
         }
 
     prompt_terms = _extract_route_terms(text)
@@ -277,7 +295,10 @@ def _score_skill_candidate(text: str, candidate: dict[str, Any], skill: Any | No
         if phrase and phrase.lower() in prompt_text and phrase.lower() in skill_text:
             exact_phrase_bonus += 0.05
 
-    skill_score = min(term_score * 0.55 + keyword_score * 0.25 + metadata_bonus + exact_phrase_bonus, 1.0)
+    skill_score = min(
+        term_score * 0.55 + keyword_score * 0.25 + metadata_bonus + exact_phrase_bonus + meta_yaml_bonus,
+        1.0,
+    )
     combined_score = min(base_confidence * 0.45 + skill_score * 0.55, 0.98)
 
     return {
@@ -285,8 +306,90 @@ def _score_skill_candidate(text: str, candidate: dict[str, Any], skill: Any | No
         "skill_name": getattr(getattr(skill, "metadata", None), "name", candidate["stage"].lower()),
         "skill_score": round(skill_score, 3),
         "score": round(combined_score, 3),
-        "score_reason": f"terms={matched_terms[:5]} keywords={matched_keywords[:5]}",
+        "score_reason": (
+            f"terms={matched_terms[:5]} keywords={matched_keywords[:5]}"
+            + (f" meta_yaml_bonus={meta_yaml_bonus:.3f}" if meta_yaml_bonus else "")
+        ),
     }
+
+
+def _compute_meta_yaml_bonus(
+    text: str,
+    candidate: dict[str, Any],
+    meta: dict[str, Any],
+) -> float:
+    """Derive a small score bonus from meta.yaml fields.
+
+    This is intentionally capped at 0.15 so it cannot override the primary
+    keyword/term scoring — it is a lightweight signal, not a decision driver.
+
+    Fields used:
+    - ``phase``: exact match against the candidate stage adds +0.06
+    - ``description``: term overlap with the user text adds up to +0.04
+    - ``tags``: keyword presence in user text adds up to +0.03
+    - ``status``: "implemented" adds +0.02 as a mild availability signal
+    """
+    if not meta:
+        return 0.0
+
+    bonus = 0.0
+    stage = candidate.get("stage", "").upper()
+    text_lower = _normalize_route_text(text)
+
+    # Phase exact match
+    meta_phase = str(meta.get("phase", "")).upper()
+    if meta_phase and meta_phase == stage:
+        bonus += 0.06
+
+    # Description overlap
+    description = str(meta.get("description", "")).lower()
+    if description:
+        desc_terms = _extract_route_terms(description)
+        prompt_terms = _extract_route_terms(text)
+        if desc_terms and prompt_terms:
+            overlap = len(set(prompt_terms) & set(desc_terms))
+            bonus += min(overlap / max(len(prompt_terms), 1) * 0.08, 0.04)
+
+    # Tags overlap
+    tags = meta.get("tags", []) or []
+    if tags:
+        matched_tags = [t for t in tags if str(t).lower() in text_lower]
+        bonus += min(len(matched_tags) * 0.01, 0.03)
+
+    # Status signal
+    if str(meta.get("status", "")).lower() == "implemented":
+        bonus += 0.02
+
+    return round(min(bonus, 0.15), 4)
+
+
+def _load_skill_meta(stage: str, skills_dir: str = "skills") -> dict[str, Any]:
+    """Optionally load meta.yaml for a skill phase directory.
+
+    Returns an empty dict if the file doesn't exist or can't be parsed,
+    so callers can treat a missing file as a no-op.
+    """
+    # Map stage name to directory: stages are uppercase (e.g. EXECUTING),
+    # but directories are lowercase (e.g. executing / office-hours).
+    dir_name = stage.lower().replace("_", "-")
+    # Support both scripts/ sibling path and an explicit skills_dir
+    candidates_paths = [
+        os.path.join(skills_dir, dir_name, "meta.yaml"),
+        os.path.join(os.path.dirname(__file__), "..", skills_dir, dir_name, "meta.yaml"),
+    ]
+    for path in candidates_paths:
+        norm = os.path.normpath(path)
+        if not os.path.isfile(norm):
+            continue
+        try:
+            import yaml  # type: ignore[import]
+            with open(norm, "r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass  # Silently fall back — meta.yaml is optional
+    return {}
 
 
 def rerank_stage_candidates(
@@ -303,7 +406,10 @@ def rerank_stage_candidates(
         from skill_loader import SkillLoader
     except Exception:
         return [
-            _score_skill_candidate(text, candidate, None)
+            _score_skill_candidate(
+                text, candidate, None,
+                meta=_load_skill_meta(candidate["stage"], skills_dir),
+            )
             for candidate in candidates[:top_k]
         ]
 
@@ -311,7 +417,8 @@ def rerank_stage_candidates(
     reranked: list[dict[str, Any]] = []
     for candidate in candidates[:top_k]:
         skill = loader.load_skill(candidate["stage"])
-        reranked.append(_score_skill_candidate(text, candidate, skill))
+        meta = _load_skill_meta(candidate["stage"], skills_dir)
+        reranked.append(_score_skill_candidate(text, candidate, skill, meta=meta))
 
     reranked.sort(key=lambda item: (item["score"], item["base_confidence"], item["priority"], item["match_count"]), reverse=True)
     return reranked

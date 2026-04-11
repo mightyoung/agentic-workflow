@@ -1,0 +1,13 @@
+name: executing
+version: 1.3.0
+phase: EXECUTING
+status: implemented
+description: TDD development cycle and code implementation aligned with .specs, .contract.json, run_tracker.py and step_recorder.py
+tags: [phase, executing, tdd, reflexion, agentsys]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob, Edit]

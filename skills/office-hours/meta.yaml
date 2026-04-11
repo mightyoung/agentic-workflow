@@ -1,0 +1,13 @@
+name: office-hours
+version: 1.0.0
+phase: OFFICE-HOURS
+status: implemented
+description: Product consultation phase to clarify product ideas before coding using expert simulation
+tags: [phase, product, consultation]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Read, Write, AskUserQuestion]

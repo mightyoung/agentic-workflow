@@ -431,117 +431,75 @@ def build_thinking_summary(
     }
 
 
-def build_skill_context(phase: str, complexity: str) -> tuple[str, int]:
-    """Build skill context and expected tokens from phase and complexity."""
+def build_skill_context(
+    phase: str,
+    complexity: str,
+    activation_level: int | None = None,
+    model_id: str | None = None,
+) -> tuple[str, int]:
+    """Build skill context from tiered files, with PHASE_PROMPTS fallback.
+
+    When tier files exist (skills/<phase>/tier_*.md), assembles them based on
+    activation_level. Falls back to legacy PHASE_PROMPTS when tiers are absent.
+
+    Args:
+        phase: Phase name (e.g., "EXECUTING")
+        complexity: Complexity level ("XS"/"S"/"M"/"L"/"XL")
+        activation_level: 0-100 tier depth. If None, resolved via model_profiles.
+        model_id: Optional LLM model identifier for capability-aware routing.
+    """
     phase = (phase or "").upper()
     complexity = (complexity or "").upper()
 
+    # Resolve activation_level using model profile when available
+    if activation_level is None:
+        try:
+            from adaptive_tier import adaptive_activation_level as _adaptive
+            activation_level = _adaptive(phase, complexity, model_id, workdir=".")
+        except (ImportError, Exception):
+            try:
+                from model_profiles import get_profile, resolve_activation_level as _resolve
+                profile = get_profile(model_id)
+                activation_level = _resolve(phase, complexity, profile)
+            except (ImportError, Exception):
+                activation_level = _infer_activation_from_complexity(phase, complexity)
+
+    # Resolve format from model profile
+    format_name = "markdown"
+    if model_id:
+        try:
+            from model_profiles import get_profile
+            format_name = get_profile(model_id).format
+        except (ImportError, Exception):
+            pass
+
+    # Try tier-based assembly first
+    try:
+        from skill_assembler import assemble_skill_prompt
+        prompt, tokens = assemble_skill_prompt(phase, activation_level, format_name, model_id)
+        if prompt:
+            return prompt, tokens
+    except (ImportError, Exception):
+        pass  # Fall through to legacy
+
+    # Legacy fallback: PHASE_PROMPTS (kept for phases without tier files)
     phase_prompt = PHASE_PROMPTS.get(phase, "")
-
-    if phase == "PLANNING" and complexity in {"XS", "S"}:
-        phase_prompt = """## PLANNING 任务规划 (轻量)
-
-**目标**: 先把需求写成文件,再决定是否展开完整 spec
-
-**输出最少包含**:
-- 一句话目标
-- 1-3 个拆分步骤
-- 风险/依赖
-- 验收标准
-
-**原则**:
-- XS/S 只保留轻量计划和 progress
-- 不写厚重说明,不展开完整 spec-kit"""
-    elif phase == "DEBUGGING":
-        if complexity in {"XS", "S"}:
-            phase_prompt = """## DEBUGGING 调试 (轻量)
-
-**目标**: 先缩小到单点根因,再决定是否修复
-
-步骤:
-1. 复现问题
-2. 定位最可能根因
-3. 只做最小修复
-4. 补一条回归验证
-
-**原则**:
-- 轻量任务不展开深度排障
-- 发现多轮失败再升级"""
-        else:
-            phase_prompt = """## DEBUGGING 调试 (深度)
-
-**目标**: 先定位根因,再修复,最后验证回归
-
-步骤:
-1. 收集症状(错误信息/堆栈)
-2. 追踪代码找可能原因
-3. 构造假设并验证
-4. 缩小到单点根因
-5. 最小修复 + 回归测试
-6. 重复失败时再考虑架构问题
-
-**输出**: 根因 / 最小修复 / 回归测试 / 是否需要升级"""
-    elif phase == "THINKING":
-        if complexity in {"XS", "S"}:
-            phase_prompt = """## THINKING 专家推理 (轻量)
-
-**目标**: 先调查事实,再识别主要矛盾,最后给出一个明确的局部攻坚点
-
-**求是式最小循环**:
-1. 调查研究: 收集代码、测试、日志、历史记录中的事实
-2. 矛盾分析: 找到主要矛盾和次要矛盾
-3. 群众路线: 汇聚多源信息,避免闭门造车
-4. 持久战略: 如果任务不止一轮,先判断阶段再推进
-
-**输出**:
-- 调查结论
-- 主要矛盾
-- 阶段判断
-- 局部攻坚点
-- 建议
-
-**原则**:
-- 先调查,后判断
-- 先抓主要矛盾,再谈方案
-- 不把未验证的假设当事实"""
-        else:
-            phase_prompt = """## THINKING 专家推理
-
-**核心**: 谁最懂这个?TA会怎么说?
-
-**Mandatory Think**: 重大决策(git操作,阶段转换)前必须思考
-
-**求是式四步法**:
-1. 调查研究: 先收集代码、测试、日志、git history、用户反馈等第一手事实
-2. 矛盾分析: 找出主要矛盾、次要矛盾和矛盾的主要方面
-3. 群众路线: 把多源事实集中、归纳、再返回验证
-4. 持久战略: 判断当前阶段(防御/相持/反攻)与局部攻坚点
-
-回答:
-- 调查结论: [一句话]
-- 主要矛盾: [A vs B]
-- 阶段判断: [战略防御/相持/反攻]
-- 局部攻坚点: [具体可做的小切口]
-- 建议: [1个明确建议]"""
-    elif phase == "REVIEWING":
-        phase_prompt = """## REVIEWING 代码审查
-
-**默认形态**: 先审文件,再审实现;先对 contract/owned_files,再对代码细节
-
-**必须项**:
-- 先确认审查范围
-- 按文件逐项检查
-- 区分契约偏差和实现缺陷
-- 输出 file:line 级别意见
-
-**输出**:
-- Stage 1: Spec Compliance
-- Stage 2: Code Quality
-- Verdict"""
-
-    prompt = (MINIMAL_CORE + "\n\n" + phase_prompt).strip()
+    prompt = (MINIMAL_CORE + "\n\n" + phase_prompt).strip() if phase_prompt else MINIMAL_CORE
     tokens = COMPLEXITY_TOKENS.get(complexity, 1500)
     return prompt, tokens
+
+
+def _infer_activation_from_complexity(phase: str, complexity: str) -> int:
+    """Map phase + complexity to a default activation level.
+
+    This is the fallback when callers don't pass an explicit level.
+    """
+    if complexity in {"XS", "S"}:
+        return 25
+    if complexity == "M":
+        return 50
+    # L, XL
+    return 75
 
 
 def token_budget_for_complexity(complexity: str) -> int:
