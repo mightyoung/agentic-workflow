@@ -865,128 +865,10 @@ from frontier_scheduler import (  # noqa: F401
 
 
 
-def validate_task_plan(workdir: str = ".") -> tuple[bool, list[str]]:
-    """
-    验证任务计划的合法性
-
-    检查:
-    - 循环依赖
-    - 缺失的依赖
-    - 非法的任务ID引用
-
-    Returns:
-        (is_valid, error_list)
-    """
-    tasks, _source = load_planning_tasks(workdir)
-    if not tasks:
-        return True, []
-
-    errors = []
-    task_ids = {t["id"] for t in tasks}
-    task_map = {t["id"]: t for t in tasks}
-
-    for task in tasks:
-        deps = task.get("dependencies", [])
-        for dep in deps:
-            if dep not in task_ids:
-                errors.append(f"Task {task['id']} depends on non-existent task {dep}")
-
-    # 检查循环依赖 (简单的 DFS)
-    def has_cycle(task_id: str, visited: set, rec_stack: set) -> bool:
-        visited.add(task_id)
-        rec_stack.add(task_id)
-        for dep in task_map.get(task_id, {}).get("dependencies", []):
-            if dep not in visited:
-                if has_cycle(dep, visited, rec_stack):
-                    return True
-            elif dep in rec_stack:
-                return True
-        rec_stack.remove(task_id)
-        return False
-
-    for task in tasks:
-        if task["id"] not in task_ids:
-            continue
-        if has_cycle(task["id"], set(), set()):
-            errors.append(f"Circular dependency detected involving {task['id']}")
-
-    return len(errors) == 0, errors
-
-
-def update_task_status_in_plan(
-    workdir: str,
-    task_id: str,
-    status: str,
-) -> dict[str, Any]:
-    """
-    更新 task_plan.md 中任务的状态
-
-    Args:
-        workdir: 工作目录
-        task_id: 任务ID (如 "TASK-001")
-        status: 新状态 (backlog | in_progress | completed | blocked)
-
-    Returns:
-        更新结果
-    """
-    if status not in ("backlog", "in_progress", "completed", "blocked"):
-        return {"success": False, "error": f"Invalid status: {status}"}
-
-    plan_path = _find_canonical_tasks_path(workdir)
-    source = "tasks.md"
-    if plan_path is None:
-        plan_path = Path(workdir) / "task_plan.md"
-        source = "task_plan.md"
-
-    if not plan_path.exists():
-        return {"success": False, "error": "task_plan.md not found"}
-
-    content = plan_path.read_text(encoding="utf-8")
-    lines = content.split("\n")
-    new_lines: list[str] = []
-    task_found = False
-    in_target_task = False
-
-    legacy_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] (?P<id>TASK-\d+): (?P<title>.+)$")
-    canonical_task_pattern = re.compile(r"^- \[(?P<done>[ xX])\] \*\*(?P<id>[^:]+):\*\* (?P<title>.+)$")
-    status_pattern = re.compile(r"^\s+- \*\*Status:\*\*")
-
-    task_pattern = canonical_task_pattern if source == "tasks.md" else legacy_task_pattern
-
-    for line in lines:
-        line_stripped = line.rstrip()
-        task_match = task_pattern.match(line_stripped)
-        if task_match:
-            in_target_task = task_match.group("id") == task_id
-            if in_target_task:
-                task_found = True
-                done_marker = "x" if status == "completed" else " "
-                if source == "tasks.md":
-                    task_title = task_match.group("title").rstrip()
-                    new_lines.append(f"- [{done_marker}] **{task_match.group('id')}:** {task_title}")
-                    new_lines.append(f"  - **Status:** {status}")
-                else:
-                    task_title = task_match.group("title").rstrip()
-                    new_lines.append(f"- [{done_marker}] {task_match.group('id')}: {task_title}")
-                continue
-
-        if in_target_task:
-            if source == "tasks.md" and status_pattern.match(line_stripped):
-                continue
-            if source == "task_plan.md":
-                field_pattern = re.compile(r"^\s+- (?P<key>[a-zA-Z_]+):")
-                field_match = field_pattern.match(line)
-                if field_match and field_match.group("key") == "status":
-                    new_lines.append(f"  - status: {status}")
-                    continue
-
-        new_lines.append(line)
-
-    if not task_found:
-        return {"success": False, "error": f"Task {task_id} not found"}
-
-    safe_write_text_locked(plan_path, "\n".join(new_lines))
-    return {"success": True, "task_id": task_id, "status": status, "source": source}
+from task_validator import (  # noqa: F401
+    update_task_status_in_plan,
+    validate_task_plan,
+)
 
 
 from phase_transitions import (  # noqa: F401
@@ -2670,102 +2552,15 @@ def resume_workflow(
     }
 
 
-# Error classification patterns
-_ERROR_TYPE_PATTERNS = {
-    "test_failure": [
-        "FAILED", "pytest", "test fail", "assertion error",
-        "AssertionError", "test failed", "tests failed",
-    ],
-    "type_error": [
-        "TypeError", "type error", "typing error",
-        "cannot assign", "argument type", "expected ", "got ",
-    ],
-    "lint_error": [
-        "lint", "ruff", "flake8", "pylint", "mypy",
-        "unused import", "undefined name", "missing import",
-    ],
-    "runtime_exception": [
-        "Exception", "Error:", "Traceback", "IndexError",
-        "KeyError", "ValueError", "AttributeError", "ImportError",
-    ],
-    "syntax_error": [
-        "SyntaxError", "IndentationError", "TabError",
-        "unexpected EOF", "invalid syntax",
-    ],
-    "quality_gate_failed": [
-        "quality gate", "gate failed", "gate_check",
-    ],
-}
-
-
-def classify_error(error: str) -> tuple[str, float]:
-    """
-    Classify error type and return (error_type, confidence).
-
-    Args:
-        error: Error message string
-
-    Returns:
-        Tuple of (error_type, confidence_score)
-    """
-    error_lower = error.lower()
-    scores: dict[str, float] = {}
-
-    for error_type, patterns in _ERROR_TYPE_PATTERNS.items():
-        score = sum(1 for p in patterns if p.lower() in error_lower)
-        if score > 0:
-            scores[error_type] = score / len(patterns)
-
-    if not scores:
-        return ("unknown", 1.0)
-
-    # Return highest scoring type
-    best_type = max(scores, key=lambda k: scores[k])
-    return (best_type, scores[best_type])
-
-
-def _get_error_history(state) -> list[dict[str, Any]]:
-    """Extract error history from state decisions."""
-    history = []
-    for decision in state.decisions:
-        if "error" in decision.metadata:
-            history.append({
-                "error": decision.metadata.get("error", ""),
-                "type": decision.metadata.get("error_type", "unknown"),
-                "timestamp": decision.timestamp,
-            })
-    return history
-
-
-def _should_escalate_skill_activation(
-    error: str,
-    error_type: str,
-    strategy: str,
-    retry_count: int,
-    error_history: list[dict[str, Any]],
-) -> tuple[bool, str]:
-    """
-    Decide whether to escalate skill activation based on explicit failure events.
-
-    Escalation is reserved for high-signal failures and repeated test failures.
-    Generic recoverable failures should not automatically increase activation.
-    """
-    if strategy == "abort":
-        return False, "abort strategy does not escalate skill activation"
-
-    if error_type in {"syntax_error", "type_error", "quality_gate_failed"}:
-        return True, f"high_signal_failure:{error_type}"
-
-    if error_type == "test_failure":
-        normalized_error = error[:120].lower()
-        repeated_test_failure = any(
-            item.get("type") == "test_failure" and item.get("error", "")[:120].lower() == normalized_error
-            for item in error_history[-5:]
-        )
-        if repeated_test_failure or retry_count >= 1:
-            return True, "repeated_test_failure"
-
-    return False, "no escalation event"
+from error_classifier import (  # noqa: F401
+    _ERROR_TYPE_PATTERNS,
+    _build_debug_summary,
+    _extract_quality_gate_details,
+    _get_error_history,
+    _persist_failure_reflection,
+    _should_escalate_skill_activation,
+    classify_error,
+)
 
 
 def handle_workflow_failure(
