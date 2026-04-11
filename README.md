@@ -109,6 +109,7 @@ Key runtime behavior:
 
 - Benchmark track produces explicit evidence (`tests/bench/...`).
 - Self-improvement track records benchmark evidence and proposal references.
+- Proposal lifecycle events are persisted in `knowledge/skill_proposals/index.jsonl`.
 - Skill evolution is proposal-driven (`scripts/skill_evolution.py`), not auto-mutation.
 - Proposal verification gate (`scripts/proposal_verifier.py`) enforces `approve/revise/reject` with threshold config (`configs/proposal_verifier.toml`).
 - Memory writes are gated (`memory_write_gate`) to filter low-signal/placeholder entries.

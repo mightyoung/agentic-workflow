@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from proposal_registry import record_proposal_event
+
 
 DEFAULT_OUTPUT_DIR = Path("knowledge/skill_proposals/verifications")
 DEFAULT_CONFIG_PATH = Path("configs/proposal_verifier.toml")
@@ -45,6 +47,11 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         "min_completion_gap_pp": 1.0,
         "min_quality_improvement_pct": 10.0,
         "max_token_cost_increase_pct": 220.0,
+        "require_confidence_intervals": True,
+        "min_ci_sample_size": 5,
+        "min_overall_improvement_ci_lower_pct": 0.0,
+        "min_quality_improvement_ci_lower_pct": 0.0,
+        "min_completion_gap_ci_lower_pp": 0.0,
     }
     cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
     if not cfg_path.exists():
@@ -61,6 +68,38 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         if key in policy:
             merged[key] = policy[key]
     return merged
+
+
+def _extract_confidence_source(proposal: dict[str, Any], benchmark: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(benchmark, dict) and benchmark.get("confidence_intervals"):
+        return benchmark
+    if proposal.get("confidence_intervals"):
+        return proposal
+    return benchmark if isinstance(benchmark, dict) else proposal
+
+
+def _get_overall_ci(confidence_source: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(confidence_source, dict):
+        return {}
+    confidence_intervals = confidence_source.get("confidence_intervals", {})
+    if not isinstance(confidence_intervals, dict):
+        return {}
+    overall = confidence_intervals.get("overall", {})
+    return overall if isinstance(overall, dict) else {}
+
+
+def _get_ci_sample_size(overall_ci: dict[str, Any]) -> int:
+    if not isinstance(overall_ci, dict):
+        return 0
+    direct = _safe_int(overall_ci.get("sample_size"), 0)
+    if direct > 0:
+        return direct
+    sample_sizes = [
+        _safe_int(metric.get("sample_size"), 0)
+        for metric in overall_ci.values()
+        if isinstance(metric, dict)
+    ]
+    return max(sample_sizes, default=0)
 
 
 def verify_proposal(
@@ -179,6 +218,46 @@ def verify_proposal(
             f"token_cost_increase_pct={token_cost_increase:.2f}, limit={max_token_cost:.2f}",
         )
 
+    confidence_source = _extract_confidence_source(proposal, benchmark)
+    overall_ci = _get_overall_ci(confidence_source)
+    require_ci = bool(config.get("require_confidence_intervals", True))
+    min_ci_sample_size = _safe_int(config.get("min_ci_sample_size"), 5)
+    if not overall_ci:
+        if require_ci:
+            add_check("confidence_intervals", "revise", "confidence intervals are required but missing")
+        else:
+            add_check("confidence_intervals", "pass", "confidence intervals missing but optional")
+    else:
+        sample_size = _get_ci_sample_size(overall_ci)
+        if sample_size >= min_ci_sample_size:
+            add_check("confidence_interval_sample_size", "pass", f"sample_size={sample_size}")
+        else:
+            add_check(
+                "confidence_interval_sample_size",
+                "revise",
+                f"sample_size={sample_size}, expected >= {min_ci_sample_size}",
+            )
+
+        ci_thresholds = {
+            "overall_improvement_pct": float(config.get("min_overall_improvement_ci_lower_pct", 0.0)),
+            "quality_improvement_pct": float(config.get("min_quality_improvement_ci_lower_pct", 0.0)),
+            "completion_gap_pp": float(config.get("min_completion_gap_ci_lower_pp", 0.0)),
+        }
+        for metric_name, minimum_lower in ci_thresholds.items():
+            metric_ci = overall_ci.get(metric_name, {})
+            if not isinstance(metric_ci, dict):
+                add_check(metric_name, "revise", f"{metric_name} confidence interval missing")
+                continue
+            lower_bound = float(metric_ci.get("lower", 0.0))
+            if lower_bound >= minimum_lower:
+                add_check(metric_name, "pass", f"{metric_name}.lower={lower_bound:.2f}")
+            else:
+                add_check(
+                    metric_name,
+                    "revise",
+                    f"{metric_name}.lower={lower_bound:.2f}, expected >= {minimum_lower:.2f}",
+                )
+
     if benchmark is not None:
         expected_version = str(
             (benchmark.get("experiment_info", {}) if isinstance(benchmark, dict) else {}).get(
@@ -239,6 +318,7 @@ def write_verification_artifacts(
     benchmark_path: str | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     config_path: str | Path | None = None,
+    registry_path: str | Path | None = None,
 ) -> VerificationArtifact:
     proposal_file = Path(proposal_path)
     if not proposal_file.exists():
@@ -263,6 +343,32 @@ def write_verification_artifacts(
     json_path.write_text(json.dumps(verification, ensure_ascii=False, indent=2), encoding="utf-8")
     markdown_path.write_text(render_markdown(verification), encoding="utf-8")
 
+    if registry_path is not None:
+        registry_status = {
+            "approve": "verified",
+            "revise": "revised",
+            "reject": "blocked",
+        }.get(str(verification.get("decision", "reject")), "blocked")
+        record_proposal_event(
+            proposal_id=str(proposal.get("proposal_id", proposal_file.stem)),
+            status=registry_status,
+            event_type="verification",
+            index_path=registry_path,
+            source_reference=str(proposal_file),
+            benchmark_version=str(proposal.get("benchmark_version", "unknown")),
+            proposal_path=str(proposal_file),
+            verification_path=str(json_path),
+            decision=str(verification.get("decision", "reject")),
+            run_id=str(proposal.get("proposal_id", proposal_file.stem)),
+            hypothesis="skill evolution proposal verification",
+            benchmark_evidence=benchmark_path,
+            notes="proposal verification completed",
+            metadata={
+                "check_count": len(verification.get("checks", [])),
+                "registry_status": registry_status,
+            },
+        )
+
     return VerificationArtifact(
         decision=str(verification.get("decision", "reject")),
         json_path=json_path,
@@ -284,6 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Verifier policy config (TOML)",
     )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for verification artifacts")
+    parser.add_argument("--registry-path", default="", help="Optional proposal registry JSONL path")
     args = parser.parse_args(argv)
 
     artifact = write_verification_artifacts(
@@ -291,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         benchmark_path=args.benchmark or None,
         output_dir=args.output_dir,
         config_path=args.config,
+        registry_path=args.registry_path or None,
     )
     print(json.dumps({"decision": artifact.decision, "verification_path": str(artifact.json_path)}, ensure_ascii=False))
     return 0

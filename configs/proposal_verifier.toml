@@ -11,3 +11,12 @@ min_quality_improvement_pct = 10.0
 # Maximum tolerated token-cost increase percentage.
 # token_cost_increase_pct = max(0, -avg_token_improvement_pct)
 max_token_cost_increase_pct = 220.0
+
+# Require confidence intervals and a minimum sample size before approving a proposal.
+require_confidence_intervals = true
+min_ci_sample_size = 5
+
+# Lower bounds for the 95% CI on core metrics must remain positive.
+min_overall_improvement_ci_lower_pct = 0.0
+min_quality_improvement_ci_lower_pct = 0.0
+min_completion_gap_ci_lower_pp = 0.0

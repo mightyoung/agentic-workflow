@@ -4,10 +4,12 @@
 import json
 import sys
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from proposal_registry import get_latest_proposal_state  # noqa: E402
 from skill_evolution import build_proposal, write_proposal_artifacts  # noqa: E402
 
 
@@ -23,6 +25,15 @@ def _sample_benchmark() -> dict:
         },
         "experiment_info": {
             "benchmark_version": "6.3",
+        },
+        "confidence_intervals": {
+            "overall": {
+                "time_improvement_pct": {"mean": 66.0, "lower": 30.0, "upper": 88.0, "sample_size": 13, "confidence_level": 0.95},
+                "token_improvement_pct": {"mean": -83.8, "lower": -92.0, "upper": -70.0, "sample_size": 13, "confidence_level": 0.95},
+                "quality_improvement_pct": {"mean": 113.0, "lower": 52.0, "upper": 160.0, "sample_size": 13, "confidence_level": 0.95},
+                "overall_improvement_pct": {"mean": 62.9, "lower": 18.0, "upper": 88.0, "sample_size": 13, "confidence_level": 0.95},
+                "completion_gap_pp": {"mean": 80.0, "lower": 64.0, "upper": 100.0, "sample_size": 13, "confidence_level": 0.95},
+            }
         },
         "interpretation_notes": [
             "time deltas within +/-1% are noise",
@@ -43,6 +54,7 @@ def test_build_proposal_contains_core_actions():
     assert actions["EXECUTING"]["action"].startswith("retain_default_enable")
     assert proposal["benchmark_summary"]["task_count"] == 13
     assert proposal["benchmark_version"] == "6.3"
+    assert "overall" in proposal["confidence_intervals"]
 
 
 def test_write_proposal_artifacts(tmp_path):
@@ -56,6 +68,7 @@ def test_write_proposal_artifacts(tmp_path):
     markdown = artifact.markdown_path.read_text(encoding="utf-8")
     assert "Skill Evolution Proposal" in markdown
     assert "Benchmark Version: 6.3" in markdown
+    assert "Confidence Intervals" in markdown
     assert "EXECUTING" in markdown
     payload = json.loads(artifact.json_path.read_text(encoding="utf-8"))
     assert payload["evidence_available"] is True
@@ -67,3 +80,19 @@ def test_write_proposal_artifacts_reference_only(tmp_path):
     payload = json.loads(artifact.json_path.read_text(encoding="utf-8"))
     assert payload["evidence_available"] is False
     assert payload["benchmark_version"] == "unknown"
+
+
+def test_write_proposal_artifacts_updates_registry(tmp_path):
+    benchmark_path = tmp_path / "bench.json"
+    registry_path = tmp_path / "index.jsonl"
+    benchmark_path.write_text(json.dumps(_sample_benchmark()), encoding="utf-8")
+
+    artifact = write_proposal_artifacts(
+        str(benchmark_path),
+        output_dir=tmp_path / "proposals",
+        registry_path=registry_path,
+    )
+    latest = get_latest_proposal_state(artifact.proposal_id, index_path=registry_path)
+    assert latest is not None
+    assert latest["status"] == "generated"
+    assert latest["proposal_path"] == str(artifact.json_path)

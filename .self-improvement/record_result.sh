@@ -5,7 +5,7 @@
 # Usage:
 #   record_result.sh --run-id <id> --hypothesis <text> --files <paths> \
 #       --checks <summary> --status <keep|discard|rollback|stabilization> \
-#       [--benchmark-evidence <ref>] [--skill-proposal <ref>] \
+#       [--proposal-id <id>] [--benchmark-evidence <ref>] [--skill-proposal <ref>] \
 #       [--proposal-verification <ref>] [--proposal-decision <decision>] [--notes <text>]
 #
 #   Shorthand:
@@ -15,6 +15,7 @@
 #   record_result.sh "improve routing heuristics" "scripts/router.py" "keep" "routing +5%"
 #   record_result.sh --run-id 20260401-01 --hypothesis "tighten REVIEWING" \
 #       --files "scripts/workflow_engine.py" --checks "10/10 gates" --status keep \
+#       --proposal-id "skill-evolution-20260411T010101Z" \
 #       --benchmark-evidence "tests/bench/ab_experiment_results/ab_experiment_20260408_223414.json" \
 #       --skill-proposal "knowledge/skill_proposals/...md" \
 #       --proposal-verification "knowledge/skill_proposals/verifications/...json" \
@@ -31,7 +32,7 @@ HELPER="$SCRIPT_DIR/_record_helper.py"
 usage() {
     echo "Usage: record_result.sh [--run-id <id>] --hypothesis <text> --files <paths>"
     echo "       --checks <summary> --status <keep|discard|rollback|stabilization>"
-    echo "       [--benchmark-evidence <ref>] [--skill-proposal <ref>]"
+    echo "       [--proposal-id <id>] [--benchmark-evidence <ref>] [--skill-proposal <ref>]"
     echo "       [--proposal-verification <ref>] [--proposal-decision <decision>] [--notes <text>]"
     echo ""
     echo "   Shorthand: record_result.sh <hypothesis> <files> <status> [notes]"
@@ -46,6 +47,7 @@ HYPOTHESIS=""
 FILES=""
 CHECKS=""
 STATUS=""
+PROPOSAL_ID=""
 BENCHMARK_EVIDENCE=""
 SKILL_PROPOSAL=""
 PROPOSAL_VERIFICATION=""
@@ -74,6 +76,8 @@ if [[ "$1" == "--"* ]]; then
                 CHECKS="$2"; shift 2;;
             --status)
                 STATUS="$2"; shift 2;;
+            --proposal-id)
+                PROPOSAL_ID="$2"; shift 2;;
             --benchmark-evidence)
                 BENCHMARK_EVIDENCE="$2"; shift 2;;
             --skill-proposal)
@@ -124,7 +128,7 @@ if [[ -z "$RUN_ID" ]]; then
 fi
 
 # Use Python helper for locked TSV append (cross-platform fcntl)
-python3 - "$LEDGER" "$LEDGER_V2" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$PROPOSAL_DECISION" "$NOTES" << 'PYEOF'
+python3 - "$LEDGER" "$LEDGER_V2" "$RUN_ID" "$HYPOTHESIS" "$FILES" "${CHECKS:-passed}" "$STATUS" "$BENCHMARK_EVIDENCE" "$SKILL_PROPOSAL" "$PROPOSAL_VERIFICATION" "$PROPOSAL_DECISION" "$NOTES" "$PROPOSAL_ID" << 'PYEOF'
 import sys
 import fcntl
 import os
@@ -143,6 +147,7 @@ skill_proposal = sys.argv[9]
 proposal_verification = sys.argv[10]
 proposal_decision = sys.argv[11]
 notes = sys.argv[12]
+proposal_id = sys.argv[13] if len(sys.argv) > 13 else ""
 
 # TSV-safe cleaning: replace tabs and newlines with spaces
 def tsv_clean(value):
@@ -156,6 +161,7 @@ benchmark_evidence = tsv_clean(benchmark_evidence)
 skill_proposal = tsv_clean(skill_proposal)
 proposal_verification = tsv_clean(proposal_verification)
 proposal_decision = tsv_clean(proposal_decision)
+proposal_id = tsv_clean(proposal_id)
 
 if benchmark_evidence:
     notes = f"benchmark_evidence={benchmark_evidence}" + (f" | {notes}" if notes else "")
@@ -165,6 +171,8 @@ if proposal_verification:
     notes = f"proposal_verification={proposal_verification}" + (f" | {notes}" if notes else "")
 if proposal_decision:
     notes = f"proposal_decision={proposal_decision}" + (f" | {notes}" if notes else "")
+if proposal_id:
+    notes = f"proposal_id={proposal_id}" + (f" | {notes}" if notes else "")
 
 lock_path = ledger_path + '.lock'
 lock_path_v2 = ledger_v2_path + '.lock'
@@ -187,6 +195,7 @@ record = {
     "checks_passed": checks,
     "status": status,
     "notes": notes,
+    "proposal_id": proposal_id or None,
     "benchmark_evidence": benchmark_evidence or None,
     "skill_proposal": skill_proposal or None,
     "proposal_verification": proposal_verification or None,

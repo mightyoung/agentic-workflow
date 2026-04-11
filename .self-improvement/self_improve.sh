@@ -20,10 +20,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LEDGER="$SCRIPT_DIR/results.tsv"
 RECORD_HELPER="$SCRIPT_DIR/record_result.sh"
+PROPOSAL_REGISTRY="$PROJECT_ROOT/scripts/proposal_registry.py"
 BENCHMARK_EVIDENCE="${BENCHMARK_EVIDENCE:-}"
 SKILL_PROPOSAL=""
 PROPOSAL_VERIFICATION=""
 PROPOSAL_DECISION=""
+PROPOSAL_ID=""
 
 usage() {
     echo "Self-Improvement Runner"
@@ -156,15 +158,20 @@ echo "=== Baseline PASSED - Ready for improvement ==="
 echo ""
 if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
     echo "[3/4] Generating skill evolution proposal from benchmark evidence..."
-    SKILL_PROPOSAL=$(python3 "$PROJECT_ROOT/scripts/skill_evolution.py" --benchmark "$BENCHMARK_EVIDENCE" --output-dir "$PROJECT_ROOT/knowledge/skill_proposals")
+    SKILL_PROPOSAL=$(python3 "$PROJECT_ROOT/scripts/skill_evolution.py" \
+        --benchmark "$BENCHMARK_EVIDENCE" \
+        --output-dir "$PROJECT_ROOT/knowledge/skill_proposals" \
+        --registry-path "$PROJECT_ROOT/knowledge/skill_proposals/index.jsonl")
     echo "  Proposal: $SKILL_PROPOSAL"
     proposal_json="${SKILL_PROPOSAL%.md}.json"
     if [[ -f "$proposal_json" ]]; then
+        PROPOSAL_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["proposal_id"])' "$proposal_json")
         echo "  Verifying proposal..."
         verifier_output=$(python3 "$PROJECT_ROOT/scripts/proposal_verifier.py" \
             --proposal "$proposal_json" \
             --benchmark "$BENCHMARK_EVIDENCE" \
-            --output-dir "$PROJECT_ROOT/knowledge/skill_proposals/verifications")
+            --output-dir "$PROJECT_ROOT/knowledge/skill_proposals/verifications" \
+            --registry-path "$PROJECT_ROOT/knowledge/skill_proposals/index.jsonl")
         PROPOSAL_DECISION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("decision","reject"))' "$verifier_output")
         PROPOSAL_VERIFICATION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("verification_path",""))' "$verifier_output")
         echo "  Verification decision: $PROPOSAL_DECISION"
@@ -175,6 +182,23 @@ if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
             else
                 echo "  Proposal verification returned revise. Use --allow-revise to continue."
             fi
+            if [[ -n "$PROPOSAL_ID" ]]; then
+                final_status="discarded"
+                python3 "$PROPOSAL_REGISTRY" record \
+                    --index-path "$PROJECT_ROOT/knowledge/skill_proposals/index.jsonl" \
+                    --proposal-id "$PROPOSAL_ID" \
+                    --status "$final_status" \
+                    --event-type "run_aborted" \
+                    --source-reference "$proposal_json" \
+                    --benchmark-version "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("benchmark_version","unknown"))' "$proposal_json")" \
+                    --proposal-path "$proposal_json" \
+                    --verification-path "$PROPOSAL_VERIFICATION" \
+                    --decision "$PROPOSAL_DECISION" \
+                    --run-id "$run_id" \
+                    --hypothesis "$HYPOTHESIS" \
+                    --benchmark-evidence "$BENCHMARK_EVIDENCE" \
+                    --notes "run aborted after proposal gate"
+            fi
             "$RECORD_HELPER" \
                 --run-id "$run_id" \
                 --hypothesis "$HYPOTHESIS" \
@@ -182,11 +206,30 @@ if [[ -n "$BENCHMARK_EVIDENCE" ]]; then
                 --checks "proposal_verifier=$PROPOSAL_DECISION" \
                 --status "discard" \
                 "${BENCHMARK_ARGS[@]}" \
+                --proposal-id "$PROPOSAL_ID" \
                 --skill-proposal "$SKILL_PROPOSAL" \
                 --proposal-verification "$PROPOSAL_VERIFICATION" \
                 --proposal-decision "$PROPOSAL_DECISION" \
                 --notes "Proposal blocked by verifier gate"
             exit 1
+        fi
+
+        if [[ -n "$PROPOSAL_ID" ]]; then
+            final_status="approved"
+            python3 "$PROPOSAL_REGISTRY" record \
+                --index-path "$PROJECT_ROOT/knowledge/skill_proposals/index.jsonl" \
+                --proposal-id "$PROPOSAL_ID" \
+                --status "$final_status" \
+                --event-type "run_approved" \
+                --source-reference "$proposal_json" \
+                --benchmark-version "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("benchmark_version","unknown"))' "$proposal_json")" \
+                --proposal-path "$proposal_json" \
+                --verification-path "$PROPOSAL_VERIFICATION" \
+                --decision "$PROPOSAL_DECISION" \
+                --run-id "$run_id" \
+                --hypothesis "$HYPOTHESIS" \
+                --benchmark-evidence "$BENCHMARK_EVIDENCE" \
+                --notes "run approved by proposal gate"
         fi
     fi
     echo ""
@@ -230,6 +273,7 @@ fi
     --checks "10/10 baseline gates passed" \
     --status "in_progress" \
     "${BENCHMARK_ARGS[@]}" \
+    --proposal-id "$PROPOSAL_ID" \
     --skill-proposal "$SKILL_PROPOSAL" \
     --proposal-verification "$PROPOSAL_VERIFICATION" \
     --proposal-decision "$PROPOSAL_DECISION" \

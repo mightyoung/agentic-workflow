@@ -5,7 +5,9 @@ This directory contains the self-improvement program artifacts for the agentic-w
 ## Files
 
 - `results.tsv` - Ledger of improvement runs (hypothesis, files changed, outcome)
+- `results_v2.jsonl` - Structured ledger with benchmark/proposal/verifier metadata
 - `baseline_check.sh` - Pre-mutation baseline validation script
+- `scripts/proposal_registry.py` - Event-sourced proposal lifecycle index
 - `zones.md` - Protected core vs mutable surface definitions
 
 ## Usage
@@ -28,6 +30,7 @@ If the run is driven by benchmark evidence, include a `benchmark_evidence=<path-
 The runner will:
 - generate a reviewable skill proposal artifact under `knowledge/skill_proposals/`
 - verify the proposal via `scripts/proposal_verifier.py`
+- append proposal lifecycle events to `knowledge/skill_proposals/index.jsonl`
 - record both proposal and verification artifact paths in the ledger
 - append a structured JSONL record to `results_v2.jsonl` alongside the TSV ledger
 

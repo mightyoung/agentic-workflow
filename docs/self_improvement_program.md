@@ -175,10 +175,16 @@ Every run must record:
 - soft observations
 - benchmark evidence reference when the run is motivated by benchmark data
 - skill evolution proposal reference when benchmark evidence produces one
+- proposal lifecycle registry entry in `knowledge/skill_proposals/index.jsonl`
 - proposal verification reference and decision (`approve|revise|reject`)
 - default block policy: `reject` and `revise` both block run initialization unless explicitly overridden
 - structured ledger output in `results_v2.jsonl` for machine-readable audit
 - keep or discard decision
+
+Proposal verification should not rely on point estimates alone. It should
+consume benchmark confidence intervals and minimum sample-size thresholds; if
+the evidence is weak or the interval crosses the acceptance boundary, the
+proposal should be revised or blocked rather than approved.
 
 ## Required Baseline Before Any Mutation
 

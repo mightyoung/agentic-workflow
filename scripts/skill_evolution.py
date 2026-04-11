@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from proposal_registry import record_proposal_event
+
 
 DEFAULT_OUTPUT_DIR = Path("knowledge/skill_proposals")
 
@@ -52,6 +54,7 @@ def build_proposal(benchmark: dict[str, Any], source_ref: str, evidence_availabl
     overall = benchmark.get("overall_summary", {}) if isinstance(benchmark, dict) else {}
     module_policies = benchmark.get("module_policies", []) if isinstance(benchmark, dict) else []
     interpretation_notes = benchmark.get("interpretation_notes", []) if isinstance(benchmark, dict) else []
+    confidence_intervals = benchmark.get("confidence_intervals", {}) if isinstance(benchmark, dict) else {}
 
     policy_map = {
         item.get("module"): item for item in module_policies if isinstance(item, dict)
@@ -132,6 +135,7 @@ def build_proposal(benchmark: dict[str, Any], source_ref: str, evidence_availabl
         },
         "interpretation_notes": interpretation_notes,
         "module_policies": module_policies,
+        "confidence_intervals": confidence_intervals,
         "proposed_actions": proposed_actions,
         "rollback_conditions": [
             "quality regression on the core workflow suite",
@@ -154,6 +158,15 @@ def render_markdown(proposal: dict[str, Any]) -> str:
     summary = proposal.get("benchmark_summary", {})
     for key, value in summary.items():
         lines.append(f"- {key}: {value}")
+    if proposal.get("confidence_intervals"):
+        lines.append("")
+        lines.append("## Confidence Intervals")
+        ci = proposal.get("confidence_intervals", {})
+        overall = ci.get("overall", {}) if isinstance(ci, dict) else {}
+        for metric_name, metric_ci in overall.items():
+            lines.append(
+                f"- {metric_name}: mean={metric_ci.get('mean')}, lower={metric_ci.get('lower')}, upper={metric_ci.get('upper')}, sample_size={metric_ci.get('sample_size')}"
+            )
     lines.append("")
     lines.append("## Interpretation Notes")
     for note in proposal.get("interpretation_notes", []):
@@ -177,7 +190,12 @@ def render_markdown(proposal: dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def write_proposal_artifacts(benchmark_ref: str, output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> ProposalArtifact:
+def write_proposal_artifacts(
+    benchmark_ref: str,
+    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    *,
+    registry_path: str | Path | None = None,
+) -> ProposalArtifact:
     benchmark, source_ref, evidence_available = load_benchmark(benchmark_ref)
     proposal = build_proposal(benchmark, source_ref, evidence_available)
 
@@ -191,6 +209,25 @@ def write_proposal_artifacts(benchmark_ref: str, output_dir: str | Path = DEFAUL
     markdown_path.write_text(render_markdown(proposal), encoding="utf-8")
     json_path.write_text(json.dumps(proposal, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    if registry_path is not None:
+        record_proposal_event(
+            proposal_id=proposal["proposal_id"],
+            status="generated",
+            event_type="generated",
+            index_path=registry_path,
+            source_reference=source_ref,
+            benchmark_version=str(proposal.get("benchmark_version", "unknown")),
+            proposal_path=str(json_path),
+            run_id=proposal["proposal_id"],
+            hypothesis="skill evolution proposal generated",
+            benchmark_evidence=benchmark_ref,
+            notes="proposal artifact generated",
+            metadata={
+                "output_dir": str(output_root),
+                "module_count": len(proposal.get("proposed_actions", [])),
+            },
+        )
+
     return ProposalArtifact(
         proposal_id=proposal_id,
         markdown_path=markdown_path,
@@ -202,9 +239,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate a skill evolution proposal from benchmark evidence.")
     parser.add_argument("--benchmark", required=True, help="Benchmark JSON file or reference string")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for proposal artifacts")
+    parser.add_argument("--registry-path", default="", help="Optional proposal registry JSONL path")
     args = parser.parse_args(argv)
 
-    artifact = write_proposal_artifacts(args.benchmark, args.output_dir)
+    artifact = write_proposal_artifacts(
+        args.benchmark,
+        args.output_dir,
+        registry_path=args.registry_path or None,
+    )
     print(artifact.markdown_path)
     return 0
 
