@@ -30,7 +30,7 @@ def file_lock(path: str | Path, timeout: float = 5.0):
     # Ensure parent directory exists
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
 
     try:
         # Try non-blocking lock first

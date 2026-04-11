@@ -118,8 +118,8 @@ def build_causal_index(
     }
 
     try:
-        with open(causal_file, "w", encoding="utf-8") as f:
-            json.dump(index, f, ensure_ascii=False, indent=2)
+        from safe_io import safe_write_json
+        safe_write_json(causal_file, index)
     except OSError:
         pass
 
@@ -252,8 +252,8 @@ def build_entity_index(
     }
 
     try:
-        with open(entity_file, "w", encoding="utf-8") as f:
-            json.dump(index, f, ensure_ascii=False, indent=2)
+        from safe_io import safe_write_json
+        safe_write_json(entity_file, index)
     except OSError:
         pass
 

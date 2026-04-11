@@ -1,0 +1,2 @@
+# Core dependencies (from pyproject.toml)
+anthropic>=0.18.0

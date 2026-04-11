@@ -202,8 +202,8 @@ def add_to_index(
         "timestamp": datetime.now().strftime("%Y-%m-%d"),
     }
     try:
-        with open(index_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        from safe_io import safe_append_jsonl
+        safe_append_jsonl(index_file, entry)
     except OSError:
         pass
 
@@ -344,8 +344,8 @@ def ensure_memory_exists(filepath: str = DEFAULT_MEMORY_FILE) -> bool:
 ---
 最后更新: {datetime.now().strftime('%Y-%m-%d')}
 """
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(template)
+        from safe_io import safe_write_text
+        safe_write_text(filepath, template)
         return True
     return False
 
@@ -410,8 +410,8 @@ def add_experience(
     # 更新最后更新时间
     content = re.sub(r'最后更新: .+', f'最后更新: {datetime.now().strftime("%Y-%m-%d")}', content)
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
+    from safe_io import safe_write_text
+    safe_write_text(filepath, content)
 
     # 同步写入结构化索引
     add_to_index(
@@ -574,8 +574,8 @@ def add_pattern(pattern_name: str, description: str, filepath: str = DEFAULT_MEM
 
     content = re.sub(r'最后更新: .+', f'最后更新: {datetime.now().strftime("%Y-%m-%d")}', content)
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
+    from safe_io import safe_write_text
+    safe_write_text(filepath, content)
 
     print(f"已添加模式: {pattern_name}")
     return True

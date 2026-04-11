@@ -23,6 +23,7 @@ class SearchResult:
     reliability: str = "C"  # A/B/C/D reliability grade
     url_validated: bool = False
     response_time_ms: int = 0
+    is_degraded: bool = False  # True when result comes from fragile fallback
 
 
 @dataclass
@@ -203,7 +204,8 @@ def _search_ddg(query: str, num_results: int = 5) -> SearchResponse:
                     reliability = classify_source_reliability(url)
                     results.append(SearchResult(
                         title=title, url=url, snippet=snippet,
-                        source="web", reliability=reliability
+                        source="web", reliability=reliability,
+                        is_degraded=True,  # DuckDuckGo HTML is a fragile fallback
                     ))
                     if len(results) >= num_results:
                         break

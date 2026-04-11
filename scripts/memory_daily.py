@@ -56,8 +56,8 @@ def create_daily_log(date: str, memory_dir: str = DEFAULT_MEMORY_DIR) -> bool:
 |------|--------|------|------|
 """
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(template)
+    from safe_io import safe_write_text
+    safe_write_text(filepath, template)
 
     print(f"已创建每日日志: {filepath}")
     return True
@@ -80,8 +80,8 @@ def add_task_record(date: str, task_id: str, description: str, result: str = "",
     # 在表格末尾添加新行
     content = content.rstrip() + '\n' + new_row
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
+    from safe_io import safe_write_text
+    safe_write_text(filepath, content)
 
     print(f"已添加任务记录: [{task_id}] {description}")
     return True
@@ -106,8 +106,8 @@ def add_lesson(date: str, lesson: str, memory_dir: str = DEFAULT_MEMORY_DIR) -> 
     else:
         content += lesson_section
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
+    from safe_io import safe_write_text
+    safe_write_text(filepath, content)
 
     print(f"已添加教训: {lesson}")
     return True

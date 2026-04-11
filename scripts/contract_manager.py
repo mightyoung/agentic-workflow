@@ -327,12 +327,12 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         return True, ""  # Simple tasks skip formal contract gate
 
     if not json_contract_path.exists():
-        return True, ""  # No contract = no gate
+        return False, "Contract file not found - create a contract before completing"
 
     try:
         contract = json_lib.loads(json_contract_path.read_text(encoding="utf-8"))
     except (json_lib.JSONDecodeError, OSError):
-        return True, ""  # Can't read = skip gate
+        return False, "Contract file is corrupted or unreadable"
 
     # Check 1: status must not be draft
     status = contract.get("status", "unknown")
@@ -362,12 +362,13 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
         if not has_real_acceptance:
             return False, "Contract acceptance_criteria are placeholders - fill in actual acceptance criteria"
 
-    # Check 3: If goal_status exists, at least one goal should be fulfilled
+    # Check 3: goal_status must exist and have at least one fulfilled goal
     goal_status = contract.get("goal_status", {})
-    if goal_status:
-        fulfilled_goals = [g for g, s in goal_status.items() if s == "fulfilled"]
-        if not fulfilled_goals:
-            return False, "No goals marked as fulfilled - complete at least one goal before completing"
+    if not goal_status:
+        return False, "No goal_status recorded - track goal completion before finishing"
+    fulfilled_goals = [g for g, s in goal_status.items() if s == "fulfilled"]
+    if not fulfilled_goals:
+        return False, "No goals marked as fulfilled - complete at least one goal before completing"
 
     # Check 4: owned_files should match actual file_changes
     owned_files = contract.get("owned_files", [])
@@ -408,12 +409,13 @@ def validate_contract_gate(workdir: str, state: Any) -> tuple[bool, str]:
     if not rollback_note or any(p.lower() in rollback_note.lower() for p in PLACEHOLDER_PATTERNS):
         return False, "Contract rollback_note is missing or placeholder"
 
-    # Check 6: If verification_results exist, at least one should be passed
+    # Check 6: verification_results must exist and have at least one passed
     verification_results = contract.get("verification_results", {})
-    if verification_results:
-        passed_verifications = [v for v, r in verification_results.items() if r == "passed"]
-        if not passed_verifications:
-            return False, "No verifications passed - run at least one verification successfully"
+    if not verification_results:
+        return False, "No verification_results recorded - run at least one verification before completing"
+    passed_verifications = [v for v, r in verification_results.items() if r == "passed"]
+    if not passed_verifications:
+        return False, "No verifications passed - run at least one verification successfully"
 
     # Check 7: If review_evidence is set, review was completed
     review_evidence = contract.get("review_evidence")

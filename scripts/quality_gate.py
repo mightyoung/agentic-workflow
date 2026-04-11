@@ -168,9 +168,10 @@ def check_typescript(project_dir: str, timeout: int = 60) -> GateResult:
         duration_ms = int((time.time() - start_time) * 1000)
         return GateResult(
             name="typecheck",
-            passed=True,
-            output="No type check configured",
-            duration_ms=duration_ms
+            passed=False,
+            output="No type check configured (tsconfig.json or package.json required)",
+            duration_ms=duration_ms,
+            error="No typecheck tool available"
         )
 
     return GateResult(
@@ -241,9 +242,10 @@ def check_python(project_dir: str, timeout: int = 60) -> GateResult:
     if not checked:
         return GateResult(
             name="typecheck",
-            passed=True,
-            output="No Python type checker found (pyright/mypy/pylint/flake8)",
-            duration_ms=duration_ms
+            passed=False,
+            output="No Python type checker found (install pyright/mypy/pylint/flake8)",
+            duration_ms=duration_ms,
+            error="No Python type checker installed"
         )
 
     return GateResult(
@@ -276,27 +278,37 @@ def check_lint(project_dir: str, timeout: int = 60) -> GateResult:
             duration_ms = int((time.time() - start_time) * 1000)
             return GateResult(
                 name="lint",
-                passed=True,
-                output="No ESLint config found",
-                duration_ms=duration_ms
+                passed=False,
+                output="No ESLint config found (eslint.config.js or .eslintrc.js required)",
+                duration_ms=duration_ms,
+                error="No linter configured for JS/TS project"
             )
     elif os.path.exists(os.path.join(project_dir, "pyproject.toml")):
-        # Python
-        returncode, stdout, stderr, duration_ms = run_command(
-            "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1",
-            timeout=timeout,
-            cwd=project_dir
-        )
+        # Python - try ruff first (faster), fall back to flake8
+        ruff_check = subprocess.run("which ruff", shell=True, capture_output=True, text=True)
+        if ruff_check.returncode == 0:
+            returncode, stdout, stderr, duration_ms = run_command(
+                "ruff check . 2>&1",
+                timeout=timeout,
+                cwd=project_dir
+            )
+        else:
+            returncode, stdout, stderr, duration_ms = run_command(
+                "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1",
+                timeout=timeout,
+                cwd=project_dir
+            )
         passed = returncode == 0
-        output = stdout + stderr if not passed else "Flake8 passed"
-        error = None if passed else "Flake8 errors found"
+        output = stdout + stderr if not passed else "Lint passed"
+        error = None if passed else "Lint errors found"
     else:
         duration_ms = int((time.time() - start_time) * 1000)
         return GateResult(
             name="lint",
-            passed=True,
-            output="No linter configured",
-            duration_ms=duration_ms
+            passed=False,
+            output="No linter configured (pyproject.toml or package.json required)",
+            duration_ms=duration_ms,
+            error="No linter configured"
         )
 
     return GateResult(
@@ -329,9 +341,10 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
             duration_ms = int((time.time() - start_time) * 1000)
             return GateResult(
                 name="test",
-                passed=True,
-                output="No test framework configured (jest/vitest)",
-                duration_ms=duration_ms
+                passed=False,
+                output="No test framework configured (jest/vitest config required)",
+                duration_ms=duration_ms,
+                error="No JS/TS test framework configured"
             )
     elif os.path.exists(os.path.join(project_dir, "pytest.ini")) or \
          os.path.exists(os.path.join(project_dir, "pyproject.toml")) or \
@@ -349,9 +362,10 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
         duration_ms = int((time.time() - start_time) * 1000)
         return GateResult(
             name="test",
-            passed=True,
-            output="No test framework configured",
-            duration_ms=duration_ms
+            passed=False,
+            output="No test framework configured (pytest.ini, pyproject.toml, or tests/ required)",
+            duration_ms=duration_ms,
+            error="No test framework configured"
         )
 
     return GateResult(
@@ -363,7 +377,7 @@ def check_tests(project_dir: str, timeout: int = 120) -> GateResult:
     )
 
 
-def run_quality_gate(project_dir: str, gates: list[str], timeout: int = 60) -> QualityGateReport:
+def run_quality_gate(project_dir: str, gates: list[str], timeout: int = 60, fail_fast: bool = False) -> QualityGateReport:
     """运行完整质量门禁"""
     from datetime import datetime
 
@@ -396,6 +410,8 @@ def run_quality_gate(project_dir: str, gates: list[str], timeout: int = 60) -> Q
             test_timeout = timeout if gate_name != "test" else timeout * 2
             result = gate_func(project_dir, test_timeout)
             report.gate_results.append(result)
+            if fail_fast and not result.passed:
+                break
 
     report.total_duration_ms = sum(r.duration_ms for r in report.gate_results)
     return report
@@ -470,7 +486,7 @@ def main():
         print(f"Error: Directory not found: {project_dir}")
         return 1
 
-    report = run_quality_gate(project_dir, gates, args.timeout)
+    report = run_quality_gate(project_dir, gates, args.timeout, fail_fast=args.fail_fast)
 
     if args.json:
         import json
