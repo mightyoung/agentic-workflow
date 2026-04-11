@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
 """
-Experience Store - 经验存储
+Experience Store - 经验存储 (统计型经验层)
+
+## 内存系统权威架构
+
+本项目包含三个互补的记忆层，各司其职：
+
+  experience_store.py  (本文件)
+    - 存储: .experience_store.json (结构化统计数据)
+    - 职责: 按任务类别记录成功率、步数、奖励等数值统计
+    - 交叉索引: add_experience() 同时写入 .memory_index.jsonl
+    - 适用: 聚合统计查询、技能建议
+
+  memory_longterm.py + experience_ledger.py
+    - 存储: .memory_index.jsonl (MAGMA 主记忆层，JSONL 格式)
+    - 职责: 存储 Reflexion 格式的富文本经验 (Task/Trigger/Mistake/Fix/Signal)
+    - 适用: 模式检索、因果推理 (memory_graph_index.py)
+
+  memory_daily.py
+    - 存储: daily/*.md (按日期的会话日志)
+    - 职责: 人类可读的日常任务记录
+
+canonical 记忆源: .memory_index.jsonl (供 experience_ledger / memory_views / memory_graph_index 消费)
 
 存储和查询执行经验：
 - task_category: 任务类别
 - reasoning_trace: 推理轨迹
 - rewards: 奖励数据
 - success_rate: 成功率
-
-v5.7.1 增强：自进化模式
-- 从成功经验中提取可复用模式
-- 基于历史数据生成技能建议
-- 支持轨迹分析
 
 用法:
     python experience_store.py --op=add --category=DEBUGGING --success=1 --steps=10
