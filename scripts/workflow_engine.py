@@ -215,18 +215,20 @@ def _build_runtime_profile(prompt: str, workdir: str) -> dict[str, Any]:
         skill_context = ""
         tokens_expected = 500
         use_skill = False
+        skill_activation_level = 0
     else:
         use_skill = should_use_skill_for_phase(current_phase, complexity, trigger_type, prompt)
+        # Compute activation level FIRST — it drives tier-based prompt assembly
+        skill_activation_level = (
+            skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
+        )
         if use_skill:
-            # Build skill context inline using sunk PHASE_PROMPTS
-            skill_context, tokens_expected = build_skill_context(current_phase, complexity)
+            skill_context, tokens_expected = build_skill_context(
+                current_phase, complexity, activation_level=skill_activation_level,
+            )
         else:
             skill_context = ""
             tokens_expected = 500
-
-    skill_activation_level = (
-        skill_activation_level_for_phase(current_phase, complexity, trigger_type, prompt) if use_skill else 0
-    )
 
     profile: dict[str, Any] = {
         "trigger_type": trigger_type,

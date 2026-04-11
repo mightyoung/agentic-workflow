@@ -1,0 +1,13 @@
+name: reviewing
+version: 1.2.0
+phase: REVIEWING
+status: implemented
+description: Code quality, security and performance review with two-stage review process
+tags: [phase, reviewing]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob]

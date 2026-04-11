@@ -1,0 +1,13 @@
+name: planning
+version: 1.3.0
+phase: PLANNING
+status: implemented
+description: Task decomposition and plan creation using spec-kit chain, tasks.md and .contract.json
+tags: [phase, planning]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob]

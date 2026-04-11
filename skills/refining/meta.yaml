@@ -1,0 +1,13 @@
+name: refining
+version: 1.0.0
+phase: REFINING
+status: implemented
+description: Iterative refinement with discover-analyze-fix-verify feedback loop for problem detection and resolution
+tags: [phase, feedback, iteration]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Read, Write, Grep, Glob, Bash, Agent]

@@ -1,0 +1,13 @@
+name: complete
+version: 1.2.0
+phase: COMPLETE
+status: implemented
+description: Wrap-up work, self-reflection and state updates with summary reuse from earlier phases
+tags: [phase, complete]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Bash, Read, Write, Grep, Glob]

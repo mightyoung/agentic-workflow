@@ -1,0 +1,13 @@
+name: exploring
+version: 1.0.0
+phase: EXPLORING
+status: implemented
+description: Deep exploration through Socratic questioning to uncover user's deeper thoughts and assumptions
+tags: [phase, exploration, socratic, deep-dive]
+tiers:
+  - tier_core
+  - tier_process
+  - tier_full
+  - tier_reference
+requires:
+  tools: [Read, Write, AskUserQuestion]
